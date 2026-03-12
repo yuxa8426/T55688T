@@ -1118,12 +1118,20 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 const API = '';
 
 // ── 全域工具函式 ──────────────────────────────────────
-// setEl：給先行指標、大戶籌碼等外部模組用（非 updateAI 內部 scope）
 function setEl(id, val, color){
   const el = document.getElementById(id);
   if(!el) return;
   if(val !== undefined) el.textContent = val;
   if(color) el.style.color = color;
+}
+
+// AbortSignal.timeout() 在部分環境（Cloudflare Pages, iOS WebView）
+// 無法被 clone，改用 AbortController + setTimeout 實作
+function fetchWithTimeout(url, ms=10000, opts={}){
+  const ctrl = new AbortController();
+  const tid  = setTimeout(()=>ctrl.abort(), ms);
+  return fetch(url, {...opts, signal: ctrl.signal})
+    .finally(()=>clearTimeout(tid));
 }
 
 // ── 趨勢股常數（需在所有函式之前宣告）──────────────────
@@ -1377,7 +1385,7 @@ function scheduleAutoRefresh(){
 async function fmFetch(params, timeout=12000){
   const url = FM_BASE + '?' + new URLSearchParams({ ...params, token: FM_TOKEN });
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+    const res = await fetchWithTimeout(url, timeout);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const json = await res.json();
     if(json.status !== 200) throw new Error(json.msg || 'FinMind error');
@@ -1448,7 +1456,7 @@ async function fetchIntraday(stockId){
   ];
   for(const proxyUrl of proxies){
     try{
-      const res  = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+      const res  = await fetchWithTimeout(proxyUrl, 10000);
       const wrap = await res.json();
       // allorigins 把 body 包在 .contents，corsproxy 直接回 JSON
       const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
@@ -1689,7 +1697,7 @@ async function fmTWSEIndex(){
   ];
   for(const proxy of proxies){
     try{
-      const res  = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+      const res  = await fetchWithTimeout(proxy, 8000);
       const wrap = await res.json();
       const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
       const item = body?.msgArray?.[0];
@@ -4668,173 +4676,226 @@ function closeAddWatchlist(){ document.getElementById('wlModal').style.display='
 // 投資組合 — localStorage + FinMind 即時損益
 // ════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════
-// 警示股模組
-// Tab：趨勢股 / 熱門股 / 風險股（注意股）/ 處置中 / 出閘
+// 警示股模組 v2
+// Tab：趨勢股 / 熱門股 / 風險股 / 處置中 / 出閘
 // 資料來源：
-//   - 注意/處置/出閘：TWSE openapi（公開）
-//   - 趨勢股：沿用 _trendCache
-//   - 熱門股：FinMind 近日成交量前排
-//   - 風險股：注意股 + 成交量異常
+//   趨勢/熱門：FinMind（已有快取）
+//   風險/處置/出閘：TWSE rwd API（真實公開資料）
 // ════════════════════════════════════════════════════
 
-let _alertData   = null; // { trend, hot, risk, dispose, release }
+let _alertData   = null;
 let _alertTab    = 'trend';
 let _alertLoaded = false;
 
-// TWSE 公開 API proxy
-async function twseGet(url){
+// ── TWSE rwd API（注意/處置股）────────────────────────
+// 正確端點：www.twse.com.tw/rwd/zh/announcement/...
+// 透過 allorigins/corsproxy 繞過 CORS
+async function twseRwdGet(path){
+  const url = 'https://www.twse.com.tw' + path;
   const proxies = [
     'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?',
+    'https://corsproxy.io/?url=',
+    'https://thingproxy.freeboard.io/fetch/',
   ];
-  for(const p of proxies){
+  for(const px of proxies){
     try{
-      const r = await fetch(p + encodeURIComponent(url), {signal: AbortSignal.timeout(8000)});
+      const r = await fetchWithTimeout(px + encodeURIComponent(url), 10000);
       if(!r.ok) continue;
       const text = await r.text();
-      const json = JSON.parse(text);
-      return json;
-    }catch(e){ continue; }
+      // TWSE 回傳可能是 JSON 或 HTML
+      if(text.trim().startsWith('{')||text.trim().startsWith('[')){
+        return JSON.parse(text);
+      }
+      console.warn('[TWSE] Non-JSON response from', px);
+    }catch(e){ console.warn('[TWSE proxy fail]', px, e.message); }
   }
   return null;
 }
 
-// 取注意/處置/出閘股清單（TWSE openapi）
-async function fetchTwseAlertList(){
-  // TWSE 公開 API：注意股票
-  const BASE = 'https://openapi.twse.com.tw/v1';
-  try{
-    const [noticeRes, disposeRes] = await Promise.all([
-      twseGet(BASE+'/announcement/notice'),       // 注意股
-      twseGet(BASE+'/announcement/disposition'),   // 處置股
-    ]);
-    return { noticeRes, disposeRes };
-  }catch(e){
-    console.warn('[Alert] TWSE API error:', e.message);
-    return { noticeRes: null, disposeRes: null };
-  }
+// 解析 TWSE rwd 注意股 JSON
+// 端點：/rwd/zh/announcement/noticeStkInfo?response=json
+// 欄位：sto_no(代號), sto_nm(名稱), date(公告日), count(次數), reason
+async function fetchNoticeStocks(){
+  const res = await twseRwdGet('/rwd/zh/announcement/noticeStkInfo?response=json');
+  if(!res) return [];
+  // TWSE 格式：{ stat, data:[[欄位...]], fields:[...] }
+  const fields = res.fields || [];
+  const rows   = res.data   || [];
+  if(!rows.length) return [];
+
+  // 找欄位索引
+  const fi = (name) => fields.findIndex(f=>f.includes(name));
+  const iCode  = fi('股票代號') !== -1 ? fi('股票代號') : 0;
+  const iName  = fi('股票名稱') !== -1 ? fi('股票名稱') : 1;
+  const iDate  = fi('公告日期') !== -1 ? fi('公告日期') : 2;
+  const iCount = fi('次數')     !== -1 ? fi('次數')     : 3;
+  const iNote  = fi('原因')     !== -1 ? fi('原因')     : fields.length-1;
+
+  return rows.map(r=>({
+    id:     (r[iCode]||'').replace(/\s/g,''),
+    name:   (r[iName]||'').replace(/\s/g,''),
+    date:   r[iDate]||'',
+    count:  parseInt(r[iCount])||0,
+    reason: r[iNote]||'',
+    type:   'notice',
+  })).filter(d=>d.id && d.name);
 }
 
-// 為注意/處置股補抓即時行情
-async function enrichWithQuote(list, maxItems=20){
-  const top = list.slice(0, maxItems);
+// 解析 TWSE rwd 處置股 JSON
+// 端點：/rwd/zh/announcement/disposalStockInfo?response=json
+async function fetchDisposeStocks(){
+  const res = await twseRwdGet('/rwd/zh/announcement/disposalStockInfo?response=json');
+  if(!res) return { disposeList:[], releaseList:[] };
+
+  const fields = res.fields || [];
+  const rows   = res.data   || [];
+  if(!rows.length) return { disposeList:[], releaseList:[] };
+
+  const fi = (name) => fields.findIndex(f=>f.includes(name));
+  const iCode   = fi('股票代號') !== -1 ? fi('股票代號') : 0;
+  const iName   = fi('股票名稱') !== -1 ? fi('股票名稱') : 1;
+  const iStart  = fi('開始日期') !== -1 ? fi('開始日期') : 2;
+  const iEnd    = fi('結束日期') !== -1 ? fi('結束日期') : 3;
+  const iType   = fi('處置方式') !== -1 ? fi('處置方式') : 4;
+  const iReason = fi('原因')     !== -1 ? fi('原因')     : fields.length-1;
+
+  // 今日（民國年格式 TWSE 用西元 yyyymmdd 或民國 yyymmdd）
+  const todayRoc = (() => {
+    const d = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const roc = d.getFullYear()-1911;
+    return String(roc).padStart(3,'0')
+      + String(d.getMonth()+1).padStart(2,'0')
+      + String(d.getDate()).padStart(2,'0');
+  })();
+
+  const disposeList = [], releaseList = [];
+  rows.forEach(r=>{
+    const item = {
+      id:        (r[iCode]||'').replace(/\s/g,''),
+      name:      (r[iName]||'').replace(/\s/g,''),
+      startDate: r[iStart]||'',
+      endDate:   r[iEnd]||'',
+      disposeType: r[iType]||'',
+      reason:    r[iReason]||'',
+      type:      'dispose',
+    };
+    if(!item.id||!item.name) return;
+    // 結束日期 < 今天 → 出閘
+    const endStr = (item.endDate||'').replace(/\//g,'').replace(/\s/g,'');
+    if(endStr && endStr < todayRoc)
+      releaseList.push({...item, type:'release'});
+    else
+      disposeList.push(item);
+  });
+  return { disposeList, releaseList };
+}
+
+// 為注意/處置股補抓 FinMind 即時行情（每筆間隔200ms）
+async function enrichWithQuote(list, maxItems=15){
   const results = [];
-  for(let i=0; i<top.length; i++){
-    const item = top[i];
+  for(let i=0; i<Math.min(list.length, maxItems); i++){
+    const item = list[i];
     try{
       const q = await fmQuote(item.id);
-      await new Promise(r=>setTimeout(r,150));
-      results.push({ ...item, price: q?.price||null, changePct: q?.changePct||null, volume: q?.volume||null });
+      await new Promise(r=>setTimeout(r,200));
+      results.push({
+        ...item,
+        price:     q?.price     ?? null,
+        changePct: q?.changePct ?? null,
+      });
     }catch(e){
-      results.push({ ...item, price: null, changePct: null });
+      results.push({...item, price:null, changePct:null});
     }
   }
   return results;
 }
 
+// ── 主要更新函式 ──────────────────────────────────────
 async function refreshAlertStocks(manual=false){
   if(manual) showToast('🔄 更新警示股資料…');
 
   const listEl = document.getElementById('alertList');
   const noteEl = document.getElementById('alertDataNote');
-  if(listEl) listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 載入中（約20秒）…</div>`;
+  if(listEl) listEl.innerHTML =
+    `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 載入中（約15秒）…</div>`;
 
-  // ── A. 取注意/處置/出閘清單 ─────────────────────────
-  const { noticeRes, disposeRes } = await fetchTwseAlertList();
+  // ── 平行抓取：TWSE注意股、TWSE處置股 ────────────────
+  const [noticeList, { disposeList, releaseList }] = await Promise.all([
+    fetchNoticeStocks(),
+    fetchDisposeStocks(),
+  ]);
+  console.log('[Alert] notice:', noticeList.length, 'dispose:', disposeList.length, 'release:', releaseList.length);
 
-  // 解析注意股
-  let noticeList = [];
-  if(Array.isArray(noticeRes)){
-    noticeList = noticeRes.map(d=>({
-      id:   d.Code||d.StockCode||d.code||'',
-      name: d.Name||d.StockName||d.name||'',
-      reason: d.Reason||d.reason||d.Note||'',
-      count:  parseInt(d.NoticeCount||d.Count||d.count||0)||0,
-      date:   d.Date||d.date||'',
-      type:   'notice',
-    })).filter(d=>d.id && d.name);
-  }
+  // ── 注意股補行情（取前12筆）──────────────────────────
+  const noticeWithQ = noticeList.length
+    ? await enrichWithQuote(noticeList, 12)
+    : [];
 
-  // 解析處置股（含出閘）
-  let disposeList = [], releaseList = [];
-  if(Array.isArray(disposeRes)){
-    disposeRes.forEach(d=>{
-      const item = {
-        id:    d.Code||d.StockCode||d.code||'',
-        name:  d.Name||d.StockName||d.name||'',
-        reason:d.Reason||d.reason||d.Note||'',
-        disposeType: d.DisposalType||d.Type||'',
-        startDate:   d.DisposalStartDate||d.StartDate||'',
-        endDate:     d.DisposalEndDate||d.EndDate||'',
-        sessions:    d.DisposalSessions||d.Sessions||'',
-        type: 'dispose',
-      };
-      if(!item.id || !item.name) return;
-      // 若結束日期已過或含「出閘」字眼
-      if(item.endDate && item.endDate < new Date().toISOString().slice(0,10).replace(/-/g,''))
-        releaseList.push({...item, type:'release'});
-      else
-        disposeList.push(item);
-    });
-  }
+  // ── 風險股：注意3次以上 或 漲跌幅 >5% ───────────────
+  const riskList = noticeWithQ.filter(d =>
+    d.count >= 3 || (d.changePct != null && Math.abs(d.changePct) > 5)
+  );
 
-  // ── B. 熱門股：近日成交量最大的股票 ─────────────────
-  // 從趨勢候選池取成交量倍數最高者
+  // ── 熱門股：用趨勢快取按量能排，或fallback FinMind ──
   let hotList = [];
   if(_trendCache && _trendCache.length){
-    hotList = [..._trendCache].sort((a,b)=>parseFloat(b.volRatio)-parseFloat(a.volRatio));
+    hotList = [..._trendCache].sort((a,b)=>
+      parseFloat(b.volRatio||0)-parseFloat(a.volRatio||0));
   } else {
-    // fallback：用族群代表股
-    const hotIds = ['2330','2454','2317','2382','2603','2609','6770','3661'];
-    for(const id of hotIds){
-      const q = await fmQuote(id);
-      if(q) hotList.push({id, name: q.name||id, price:q.price, changePct:q.changePct, volRatio:1, signals:[], sector:'—'});
+    // 趨勢還未跑完，用固定代表股補行情
+    const fallbackIds = [
+      {id:'2603',name:'長榮',sector:'航運'},
+      {id:'2609',name:'陽明',sector:'航運'},
+      {id:'2330',name:'台積電',sector:'半導體'},
+      {id:'2454',name:'聯發科',sector:'IC設計'},
+      {id:'2382',name:'廣達',sector:'AI伺服器'},
+      {id:'3661',name:'世芯-KY',sector:'IC設計'},
+    ];
+    for(const s of fallbackIds){
+      const q = await fmQuote(s.id);
       await new Promise(r=>setTimeout(r,150));
+      if(q) hotList.push({...s, price:q.price, changePct:q.changePct,
+        volRatio:'—', signals:[], gain5:null, inst5:0});
     }
   }
 
-  // ── C. 風險股：注意股中成交量異常或短期大漲 ─────────
-  let riskList = [];
-  if(noticeList.length){
-    // 補行情給前20筆注意股
-    const enriched = await enrichWithQuote(noticeList, 20);
-    // 風險定義：changePct > 5% 或 count >= 3次注意
-    riskList = enriched.filter(d=>(d.count>=3) || (d.changePct && Math.abs(d.changePct)>5));
-    noticeList = enriched; // 更新 noticeList 帶上行情
-  }
+  // ── 趨勢股：直接用 _trendCache ───────────────────────
+  const trendList = _trendCache || [];
 
-  // ── D. 資料整合 ──────────────────────────────────────
+  // ── 整合 ────────────────────────────────────────────
   _alertData = {
-    trend:   _trendCache || [],
+    trend:   trendList,
     hot:     hotList,
-    risk:    riskList.length ? riskList : noticeList.slice(0,10),
+    risk:    riskList.length ? riskList : noticeWithQ.slice(0,8),
     dispose: disposeList,
     release: releaseList,
-    noticeAll: noticeList,
   };
   _alertLoaded = true;
 
-  // 更新 Tab 計數
-  setEl('cnt-trend',   _alertData.trend.length   || '—');
-  setEl('cnt-hot',     _alertData.hot.length      || '—');
-  setEl('cnt-risk',    _alertData.risk.length      || '—');
-  setEl('cnt-dispose', _alertData.dispose.length   || '—');
-  setEl('cnt-release', _alertData.release.length   || '—');
+  // Tab 計數
+  setEl('cnt-trend',   trendList.length   || 0);
+  setEl('cnt-hot',     hotList.length      || 0);
+  setEl('cnt-risk',    (riskList.length||noticeWithQ.length) || 0);
+  setEl('cnt-dispose', disposeList.length  || 0);
+  setEl('cnt-release', releaseList.length  || 0);
 
-  // 更新時間
+  // 時間戳
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  const ts  = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   setEl('alertUpdateTime', ts+' 更新');
 
-  // 顯示資料說明
   if(noteEl){
-    noteEl.style.display = 'block';
-    noteEl.textContent = 'ⓘ 注意/處置股資料來源：TWSE 公開資訊觀測站。趨勢/熱門股每5分鐘更新，注意/處置股為當日最新。';
+    noteEl.style.display='block';
+    const src = noticeList.length
+      ? `已載入 ${noticeList.length} 筆注意股、${disposeList.length} 筆處置股`
+      : 'TWSE 資料載入中，趨勢/熱門股正常顯示';
+    noteEl.textContent = 'ⓘ '+src+'。來源：TWSE 公開資訊觀測站 + FinMind。';
   }
 
   renderAlertList(_alertTab);
 }
 
+// ── Tab 切換 ──────────────────────────────────────────
 function switchAlertTab(tab, btn){
   _alertTab = tab;
   document.querySelectorAll('.alert-tab').forEach(b=>b.classList.remove('active'));
@@ -4843,77 +4904,95 @@ function switchAlertTab(tab, btn){
   else refreshAlertStocks();
 }
 
+// ── 渲染卡片列表 ──────────────────────────────────────
 function renderAlertList(tab){
   const el = document.getElementById('alertList');
   if(!el || !_alertData) return;
-
   const data = _alertData[tab] || [];
+
   if(!data.length){
-    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">
-      ${tab==='dispose'?'目前無處置股':tab==='release'?'目前無出閘股':tab==='risk'?'目前無風險訊號':'暫無資料'}</div>`;
+    const msgs = {
+      trend:'趨勢分析執行中，請稍後…',
+      hot:'熱門股載入中…',
+      risk:'目前無風險警示股',
+      dispose:'目前無處置股',
+      release:'目前無出閘股',
+    };
+    el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">${msgs[tab]||'暫無資料'}</div>`;
     return;
   }
 
   el.innerHTML = data.map(s=>{
     const isUp   = (s.changePct??0) >= 0;
-    const color  = s.price ? (isUp?'var(--red)':'var(--green)') : 'var(--text3)';
-    const pctStr = s.changePct != null
-      ? (isUp?'▲+':'▼')+Math.abs(s.changePct).toFixed(2)+'%' : '—';
+    const color  = s.price!=null ? (isUp?'var(--red)':'var(--green)') : 'var(--text3)';
+    const pctStr = s.changePct!=null
+      ? (isUp?'▲+':'▼')+Math.abs(Number(s.changePct)).toFixed(2)+'%' : '—';
+    const priceStr = s.price!=null ? fmt(s.price) : '—';
 
     // 標籤
     let badges = '';
-    if(tab==='trend')   badges = (s.signals||[]).slice(0,2).map(sig=>
-      `<span class="abadge hot">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
-    if(tab==='hot')     badges = `<span class="abadge hot">📊 量${parseFloat(s.volRatio||1).toFixed(1)}倍</span>`;
-    if(tab==='risk')    badges = `<span class="abadge notice">⚠️ 注意${s.count?s.count+'次':''}</span>`;
-    if(tab==='dispose') badges = `<span class="abadge dispose">🔒 處置中</span>`
-      +(s.sessions?`<span class="abadge dispose">${s.sessions}</span>`:'');
-    if(tab==='release') badges = `<span class="abadge dayrade">🔓 出閘</span>`;
+    if(tab==='trend')
+      badges = (s.signals||[]).slice(0,2).map(sig=>
+        `<span class="abadge hot">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
+    if(tab==='hot')
+      badges = `<span class="abadge hot">📊 量${parseFloat(s.volRatio||0)||'—'}倍</span>`;
+    if(tab==='risk')
+      badges = `<span class="abadge notice">⚠️ 注意${s.count?s.count+'次':''}</span>`;
+    if(tab==='dispose')
+      badges = `<span class="abadge dispose">🔒 處置中</span>`;
+    if(tab==='release')
+      badges = `<span class="abadge dayrade">🔓 出閘</span>`;
 
-    // 副資訊
-    let meta = '';
-    if(tab==='trend' || tab==='hot'){
-      meta = `<span>${s.sector||'—'}</span>`;
-      if(s.gain5) meta += `<span>5日 ${parseFloat(s.gain5)>=0?'+':''}${s.gain5}%</span>`;
-      if(s.inst5 && s.inst5>0) meta += `<span>法人+${Math.round(s.inst5/1000)}千張</span>`;
-    }
-    if(tab==='risk' || tab==='dispose' || tab==='release'){
-      if(s.date||s.startDate) meta += `<span>📅 ${s.date||s.startDate}</span>`;
-      if(s.endDate) meta += `<span>至 ${s.endDate}</span>`;
-    }
+    // 副標籤列
+    let metaHtml = '';
+    const metaItems = [];
+    if((tab==='trend'||tab==='hot') && s.sector) metaItems.push(s.sector);
+    if(s.gain5!=null) metaItems.push(`5日${parseFloat(s.gain5)>=0?'+':''}${s.gain5}%`);
+    if(s.inst5>0) metaItems.push(`法人+${Math.round(s.inst5/1000)}千張`);
+    if(s.date) metaItems.push(`📅${s.date}`);
+    if(s.startDate) metaItems.push(`📅${s.startDate}`);
+    if(s.endDate) metaItems.push(`至${s.endDate}`);
+    if(metaItems.length)
+      metaHtml=`<div class="acard-meta">${metaItems.map(m=>`<span>${m}</span>`).join('')}</div>`;
 
-    // 警告原因
-    const warn = (s.reason||s.disposeType)
-      ? `<div class="acard-warn">⚠ ${s.reason||s.disposeType}</div>` : '';
+    // 原因
+    const warnText = s.reason||s.disposeType||'';
+    const warnHtml = warnText
+      ? `<div class="acard-warn">⚠ ${warnText}</div>` : '';
 
-    return `<div class="acard" onclick="pickAlertStock('${s.name}','${s.id}')">
+    // 安全轉義名稱（避免單引號破壞 onclick）
+    const safeName = (s.name||'').replace(/'/g,"\'");
+    const safeId   = (s.id||'').replace(/'/g,"\'");
+
+    return `<div class="acard" onclick="pickAlertStock('${safeName}','${safeId}')">
       <div class="acard-top">
-        <div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="acard-name">${s.name}</span>
-            ${badges}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+            <span class="acard-name">${s.name||'—'}</span>${badges}
           </div>
-          <div class="acard-id">${s.id} ${s.sector&&(tab==='trend'||tab==='hot')?'· '+s.sector:''}</div>
+          <div class="acard-id">${s.id||''}${s.sector&&(tab==='trend'||tab==='hot')?' · '+s.sector:''}</div>
         </div>
         <div class="acard-price">
-          <div class="ap" style="color:${color}">${s.price?fmt(s.price):'—'}</div>
+          <div class="ap" style="color:${color}">${priceStr}</div>
           <div class="ac" style="color:${color}">${pctStr}</div>
         </div>
       </div>
-      ${meta?`<div class="acard-meta">${meta}</div>`:''}
-      ${warn}
+      ${metaHtml}${warnHtml}
     </div>`;
   }).join('');
 }
 
 async function pickAlertStock(name, id){
-  if(!id||id==='—') return;
+  if(!id) return;
   switchPage('home');
   await selectStock(null, name, id+'.TW');
 }
 
-// 頁面切換時觸發
-function renderPortfolio(){ if(!_alertLoaded) refreshAlertStocks(); else renderAlertList(_alertTab); }
+// switchPage 時呼叫
+function renderPortfolio(){
+  if(!_alertLoaded) refreshAlertStocks();
+  else renderAlertList(_alertTab);
+}
 
 // ════════════════════════════════════════════════════
 // 我的頁面 — localStorage 個人設定
