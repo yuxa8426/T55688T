@@ -250,9 +250,11 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .acard-warn{margin-top:8px;font-size:11px;color:#f5c842;line-height:1.5}
 .abadge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px}
 .abadge.notice{background:rgba(245,200,66,.15);color:#f5c842;border:1px solid rgba(245,200,66,.3)}
-.abadge.dispose{background:rgba(255,76,106,.15);color:#ff4c6a;border:1px solid rgba(255,76,106,.3)}
+.abadge.dispose{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
 .abadge.dayrade{background:rgba(124,92,252,.15);color:#a080ff;border:1px solid rgba(124,92,252,.3)}
-.abadge.hot{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
+.abadge.hot{background:rgba(255,76,106,.15);color:#ff4c6a;border:1px solid rgba(255,76,106,.3)}
+.abadge.bullish{background:rgba(255,76,106,.15);color:#ff4c6a;border:1px solid rgba(255,76,106,.3)}
+.abadge.bearish{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
 .profile-hero{padding:30px 16px 20px;text-align:center}
 .prof-av{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--green));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;margin:0 auto 12px}
 .pref-item{display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border-radius:12px;margin:0 16px 10px;border:1px solid var(--border);cursor:pointer;transition:background .15s}
@@ -1125,13 +1127,11 @@ function setEl(id, val, color){
   if(color) el.style.color = color;
 }
 
-// AbortSignal.timeout() 在部分環境（Cloudflare Pages, iOS WebView）
-// 無法被 clone，改用 AbortController + setTimeout 實作
+// fetch timeout：用 Promise.race，不依賴 AbortSignal（Cloudflare Pages 相容）
 function fetchWithTimeout(url, ms=10000, opts={}){
-  const ctrl = new AbortController();
-  const tid  = setTimeout(()=>ctrl.abort(), ms);
-  return fetch(url, {...opts, signal: ctrl.signal})
-    .finally(()=>clearTimeout(tid));
+  const fetchP   = fetch(url, opts);
+  const timeoutP = new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms));
+  return Promise.race([fetchP, timeoutP]);
 }
 
 // ── 趨勢股常數（需在所有函式之前宣告）──────────────────
@@ -4691,24 +4691,38 @@ let _alertLoaded = false;
 // 正確端點：www.twse.com.tw/rwd/zh/announcement/...
 // 透過 allorigins/corsproxy 繞過 CORS
 async function twseRwdGet(path){
-  const url = 'https://www.twse.com.tw' + path;
-  const proxies = [
-    'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?url=',
-    'https://thingproxy.freeboard.io/fetch/',
+  // TWSE 有兩組端點，優先嘗試 openapi（有 CORS header）
+  const urls = [
+    'https://openapi.twse.com.tw/v1' + path.replace('/rwd/zh/announcement/','announcement/').replace('?response=json',''),
+    'https://www.twse.com.tw' + path,
+    'https://www.twse.com.tw' + path.replace('rwd/zh','exchangeReport'),
   ];
-  for(const px of proxies){
-    try{
-      const r = await fetchWithTimeout(px + encodeURIComponent(url), 10000);
-      if(!r.ok) continue;
-      const text = await r.text();
-      // TWSE 回傳可能是 JSON 或 HTML
-      if(text.trim().startsWith('{')||text.trim().startsWith('[')){
-        return JSON.parse(text);
-      }
-      console.warn('[TWSE] Non-JSON response from', px);
-    }catch(e){ console.warn('[TWSE proxy fail]', px, e.message); }
+  const proxies = [
+    '',                                      // 直連（openapi 有 CORS）
+    'https://corsproxy.io/?url=',
+    'https://api.allorigins.win/raw?url=',
+    'https://api.codetabs.com/v1/proxy?quest=',
+  ];
+
+  for(const baseUrl of urls){
+    for(const px of proxies){
+      if(px==='' && !baseUrl.includes('openapi')) continue; // 直連只試 openapi
+      try{
+        const target = px ? px + encodeURIComponent(baseUrl) : baseUrl;
+        const r = await fetchWithTimeout(target, 8000);
+        if(!r.ok){ console.warn('[TWSE]', r.status, target.slice(0,60)); continue; }
+        const text = await r.text();
+        const trimmed = text.trim();
+        if(trimmed.startsWith('{') || trimmed.startsWith('[')){
+          const json = JSON.parse(trimmed);
+          console.log('[TWSE OK]', target.slice(0,60), '→ keys:', Object.keys(json).join(','));
+          return json;
+        }
+        console.warn('[TWSE non-JSON]', trimmed.slice(0,80));
+      }catch(e){ console.warn('[TWSE fail]', px.slice(0,30)||'direct', e.message); }
+    }
   }
+  console.error('[TWSE] all proxies failed for', path);
   return null;
 }
 
@@ -4717,77 +4731,136 @@ async function twseRwdGet(path){
 // 欄位：sto_no(代號), sto_nm(名稱), date(公告日), count(次數), reason
 async function fetchNoticeStocks(){
   const res = await twseRwdGet('/rwd/zh/announcement/noticeStkInfo?response=json');
-  if(!res) return [];
-  // TWSE 格式：{ stat, data:[[欄位...]], fields:[...] }
+  if(!res){ console.warn('[Notice] no response'); return []; }
+
+  // 支援兩種格式：
+  // 格式A（openapi/rwd）: { stat, fields:[...], data:[[...]] }
+  // 格式B（openapi v1 array）: [{Code,Name,Reason,...}, ...]
+  if(Array.isArray(res)){
+    console.log('[Notice] array format, rows:', res.length);
+    return res.map(d=>({
+      id:     String(d.Code||d.StockNo||d.code||'').trim(),
+      name:   String(d.Name||d.StockName||d.name||'').trim(),
+      date:   d.Date||d.date||d.PublishDate||'',
+      count:  parseInt(d.Count||d.NoticeCount||d.count||0)||0,
+      reason: d.Reason||d.reason||d.Note||'',
+      type:   'notice',
+    })).filter(d=>d.id&&d.name);
+  }
+
   const fields = res.fields || [];
   const rows   = res.data   || [];
+  console.log('[Notice] table format, fields:', fields, 'rows:', rows.length);
   if(!rows.length) return [];
 
-  // 找欄位索引
-  const fi = (name) => fields.findIndex(f=>f.includes(name));
-  const iCode  = fi('股票代號') !== -1 ? fi('股票代號') : 0;
-  const iName  = fi('股票名稱') !== -1 ? fi('股票名稱') : 1;
-  const iDate  = fi('公告日期') !== -1 ? fi('公告日期') : 2;
-  const iCount = fi('次數')     !== -1 ? fi('次數')     : 3;
-  const iNote  = fi('原因')     !== -1 ? fi('原因')     : fields.length-1;
+  const fi = (names) => {
+    for(const n of names){
+      const i = fields.findIndex(f=>f.includes(n));
+      if(i!==-1) return i;
+    }
+    return -1;
+  };
+  const iCode  = fi(['股票代號','代號','Code']) !== -1 ? fi(['股票代號','代號','Code']) : 0;
+  const iName  = fi(['股票名稱','名稱','Name']) !== -1 ? fi(['股票名稱','名稱','Name']) : 1;
+  const iDate  = fi(['公告日期','日期','Date']) !== -1 ? fi(['公告日期','日期','Date']) : 2;
+  const iCount = fi(['次數','Count','累積'])    !== -1 ? fi(['次數','Count','累積'])    : 3;
+  const iNote  = fi(['原因','Reason','說明'])   !== -1 ? fi(['原因','Reason','說明'])   : fields.length-1;
 
   return rows.map(r=>({
-    id:     (r[iCode]||'').replace(/\s/g,''),
-    name:   (r[iName]||'').replace(/\s/g,''),
+    id:     String(r[iCode]||'').replace(/\s/g,''),
+    name:   String(r[iName]||'').replace(/\s/g,''),
     date:   r[iDate]||'',
     count:  parseInt(r[iCount])||0,
     reason: r[iNote]||'',
     type:   'notice',
-  })).filter(d=>d.id && d.name);
+  })).filter(d=>d.id&&d.name);
 }
 
 // 解析 TWSE rwd 處置股 JSON
 // 端點：/rwd/zh/announcement/disposalStockInfo?response=json
 async function fetchDisposeStocks(){
   const res = await twseRwdGet('/rwd/zh/announcement/disposalStockInfo?response=json');
-  if(!res) return { disposeList:[], releaseList:[] };
+  if(!res){ console.warn('[Dispose] no response'); return { disposeList:[], releaseList:[] }; }
 
+  // 今日台灣時間（西元 yyyymmdd 和民國 yyymmdd 都算）
+  const twDate = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const todayYmd = twDate.getFullYear()*10000+(twDate.getMonth()+1)*100+twDate.getDate();
+  const todayRoc = (twDate.getFullYear()-1911)*10000+(twDate.getMonth()+1)*100+twDate.getDate();
+
+  function parseRows(fields, rows){
+    const fi = (names) => {
+      for(const n of names){
+        const i = fields.findIndex(f=>f.includes(n));
+        if(i!==-1) return i;
+      }
+      return -1;
+    };
+    const iCode   = fi(['股票代號','代號']);
+    const iName   = fi(['股票名稱','名稱']);
+    const iStart  = fi(['開始日期','起始','開始']);
+    const iEnd    = fi(['結束日期','結束','終止']);
+    const iType   = fi(['處置方式','方式','種類']);
+    const iReason = fi(['原因','備註','說明']);
+    console.log('[Dispose] fields:', fields, 'iCode:', iCode, 'iName:', iName);
+
+    const disposeList=[], releaseList=[];
+    rows.forEach(r=>{
+      const endRaw = String(r[iEnd>=0?iEnd:3]||'').replace(/[\/\s]/g,'');
+      // 解析結束日期（可能是民國或西元）
+      const endNum = parseInt(endRaw)||0;
+      const isRoc  = endNum > 0 && endNum < 1200000; // 民國年
+      const endCmp = isRoc ? endNum : endNum - 19110000; // 統一轉民國年比較
+      const todayCmp = todayRoc;
+      const isReleased = endNum > 0 && endCmp < todayCmp;
+
+      const item = {
+        id:          String(r[iCode>=0?iCode:0]||'').replace(/\s/g,''),
+        name:        String(r[iName>=0?iName:1]||'').replace(/\s/g,''),
+        startDate:   r[iStart>=0?iStart:2]||'',
+        endDate:     r[iEnd>=0?iEnd:3]||'',
+        disposeType: r[iType>=0?iType:4]||'',
+        reason:      r[iReason>=0?iReason:fields.length-1]||'',
+        type: isReleased ? 'release' : 'dispose',
+      };
+      if(!item.id||!item.name) return;
+      if(isReleased) releaseList.push(item);
+      else disposeList.push(item);
+    });
+    return { disposeList, releaseList };
+  }
+
+  // 格式A：array of objects
+  if(Array.isArray(res)){
+    console.log('[Dispose] array format, rows:', res.length, 'sample:', res[0]);
+    const disposeList=[], releaseList=[];
+    res.forEach(d=>{
+      const endRaw = String(d.EndDate||d.DisposalEndDate||d.endDate||'').replace(/[\/\s-]/g,'');
+      const endNum  = parseInt(endRaw)||0;
+      const isRoc   = endNum>0 && endNum<1200000;
+      const endCmp  = isRoc ? endNum : endNum-19110000;
+      const isReleased = endNum>0 && endCmp < todayRoc;
+      const item = {
+        id:          String(d.Code||d.StockNo||d.code||'').trim(),
+        name:        String(d.Name||d.StockName||d.name||'').trim(),
+        startDate:   d.StartDate||d.DisposalStartDate||'',
+        endDate:     d.EndDate||d.DisposalEndDate||'',
+        disposeType: d.DisposalType||d.Type||d.type||'',
+        reason:      d.Reason||d.reason||'',
+        type: isReleased ? 'release' : 'dispose',
+      };
+      if(!item.id||!item.name) return;
+      if(isReleased) releaseList.push(item);
+      else disposeList.push(item);
+    });
+    return { disposeList, releaseList };
+  }
+
+  // 格式B：table { fields, data }
   const fields = res.fields || [];
   const rows   = res.data   || [];
+  console.log('[Dispose] table format, fields:', fields, 'rows:', rows.length);
   if(!rows.length) return { disposeList:[], releaseList:[] };
-
-  const fi = (name) => fields.findIndex(f=>f.includes(name));
-  const iCode   = fi('股票代號') !== -1 ? fi('股票代號') : 0;
-  const iName   = fi('股票名稱') !== -1 ? fi('股票名稱') : 1;
-  const iStart  = fi('開始日期') !== -1 ? fi('開始日期') : 2;
-  const iEnd    = fi('結束日期') !== -1 ? fi('結束日期') : 3;
-  const iType   = fi('處置方式') !== -1 ? fi('處置方式') : 4;
-  const iReason = fi('原因')     !== -1 ? fi('原因')     : fields.length-1;
-
-  // 今日（民國年格式 TWSE 用西元 yyyymmdd 或民國 yyymmdd）
-  const todayRoc = (() => {
-    const d = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const roc = d.getFullYear()-1911;
-    return String(roc).padStart(3,'0')
-      + String(d.getMonth()+1).padStart(2,'0')
-      + String(d.getDate()).padStart(2,'0');
-  })();
-
-  const disposeList = [], releaseList = [];
-  rows.forEach(r=>{
-    const item = {
-      id:        (r[iCode]||'').replace(/\s/g,''),
-      name:      (r[iName]||'').replace(/\s/g,''),
-      startDate: r[iStart]||'',
-      endDate:   r[iEnd]||'',
-      disposeType: r[iType]||'',
-      reason:    r[iReason]||'',
-      type:      'dispose',
-    };
-    if(!item.id||!item.name) return;
-    // 結束日期 < 今天 → 出閘
-    const endStr = (item.endDate||'').replace(/\//g,'').replace(/\s/g,'');
-    if(endStr && endStr < todayRoc)
-      releaseList.push({...item, type:'release'});
-    else
-      disposeList.push(item);
-  });
-  return { disposeList, releaseList };
+  return parseRows(fields, rows);
 }
 
 // 為注意/處置股補抓 FinMind 即時行情（每筆間隔200ms）
@@ -4933,13 +5006,13 @@ function renderAlertList(tab){
     let badges = '';
     if(tab==='trend')
       badges = (s.signals||[]).slice(0,2).map(sig=>
-        `<span class="abadge hot">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
+        `<span class="abadge bullish">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
     if(tab==='hot')
       badges = `<span class="abadge hot">📊 量${parseFloat(s.volRatio||0)||'—'}倍</span>`;
     if(tab==='risk')
       badges = `<span class="abadge notice">⚠️ 注意${s.count?s.count+'次':''}</span>`;
     if(tab==='dispose')
-      badges = `<span class="abadge dispose">🔒 處置中</span>`;
+      badges = `<span class="abadge bearish">🔒 處置中</span>`;
     if(tab==='release')
       badges = `<span class="abadge dayrade">🔓 出閘</span>`;
 
