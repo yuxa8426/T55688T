@@ -4704,21 +4704,32 @@ let _alertLoaded = false;
 //  資料池 → TREND_POOL(30支) + 熱門族群代表股共約50支
 // ══════════════════════════════════════════════════════════
 
-// 廣義池：TREND_POOL + 各族群代表股
+// 廣義池：TREND_POOL + 各族群代表股 + 中小型高波動股
 function getAlertPool(){
   const extra = [
-    // 電子/科技
+    // 電子大型
     {id:'2303',name:'聯電'},{id:'2308',name:'台達電'},{id:'2317',name:'鴻海'},
     {id:'2345',name:'智邦'},{id:'2356',name:'英業達'},{id:'2379',name:'瑞昱'},
     {id:'2382',name:'廣達'},{id:'2395',name:'研華'},{id:'2408',name:'南亞科'},
-    {id:'2412',name:'中華電'},{id:'2881',name:'富邦金'},{id:'2882',name:'國泰金'},
+    {id:'2412',name:'中華電'},{id:'2357',name:'華碩'},{id:'2376',name:'技嘉'},
+    // 金融
+    {id:'2881',name:'富邦金'},{id:'2882',name:'國泰金'},
     {id:'2884',name:'玉山金'},{id:'2886',name:'兆豐金'},{id:'2891',name:'中信金'},
-    // 傳產/中小型
+    {id:'2890',name:'永豐金'},{id:'2892',name:'第一金'},
+    // 傳產
     {id:'1301',name:'台塑'},{id:'1303',name:'南亞'},{id:'1326',name:'台化'},
-    {id:'2002',name:'中鋼'},{id:'2207',name:'和泰車'},{id:'2357',name:'華碩'},
+    {id:'2002',name:'中鋼'},{id:'2207',name:'和泰車'},
+    // 航運（高波動）
+    {id:'2603',name:'長榮'},{id:'2609',name:'陽明'},{id:'2615',name:'萬海'},
+    // 中小型高波動
     {id:'3008',name:'大立光'},{id:'3034',name:'聯詠'},{id:'3443',name:'創意'},
     {id:'4904',name:'遠傳'},{id:'5871',name:'中租-KY'},{id:'6669',name:'緯穎'},
-    {id:'8069',name:'元太'},{id:'6415',name:'矽力-KY'},{id:'2376',name:'技嘉'},
+    {id:'8069',name:'元太'},{id:'6415',name:'矽力-KY'},{id:'6770',name:'力積電'},
+    {id:'2458',name:'義隆'},{id:'3711',name:'日月投控'},{id:'6669',name:'緯穎'},
+    {id:'4938',name:'和碩'},{id:'2049',name:'上銀'},{id:'1590',name:'亞德客-KY'},
+    {id:'6533',name:'晶心科'},{id:'3037',name:'欣興'},{id:'2301',name:'光寶科'},
+    {id:'3044',name:'健鼎'},{id:'4961',name:'天鈺'},{id:'6274',name:'台燿'},
+    {id:'2337',name:'旺宏'},{id:'5269',name:'祥碩'},{id:'3081',name:'聯亞'},
   ];
   const pool = [...(window.TREND_POOL||[])];
   const ids = new Set(pool.map(s=>s.id));
@@ -4726,58 +4737,91 @@ function getAlertPool(){
   return pool;
 }
 
-// 用 FinMind 日K 判斷注意/處置/出閘條件
+// FinMind TaiwanStockPrice 欄位：
+//   date, stock_id, Trading_Volume, Trading_money,
+//   open, max, min, close, spread(漲跌價差), Trading_turnover
+//
+// 判斷策略（免費帳號可用，盤後資料每日21:00更新）：
+//   處置：近20日漲停≥3 或跌停≥2 或量暴衝≥3次
+//   注意：近20日漲停≥1 或跌停≥1 或量暴衝≥2次 或近10日累積漲跌>20%
+//   出閘：前期(10日前)有處置信號，近5日已恢復正常
 async function calcAlertStatus(stockId, stockName){
   try{
     const today = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const d14 = new Date(today); d14.setDate(d14.getDate()-14);
-    const startDate = `${d14.getFullYear()}-${String(d14.getMonth()+1).padStart(2,'0')}-${String(d14.getDate()).padStart(2,'0')}`;
+    const d30 = new Date(today); d30.setDate(d30.getDate()-30);
+    const startDate = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
 
     const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FM_TOKEN}`;
-    const r = await fetchWithTimeout(url, 8000);
+    const r = await fetchWithTimeout(url, 9000);
     if(!r.ok) return null;
     const json = await r.json();
-    const rows = (json.data||[]).slice(-10); // 近10交易日
-    if(rows.length < 3) return null;
+    if(json.msg && json.msg !== 'success') return null;
+    const allRows = (json.data||[]);
+    if(allRows.length < 5) return null;
+
+    // FinMind: spread = 今收 - 昨收（漲跌差）
+    // 漲跌幅 pct = spread / prevClose = spread / (close - spread)
+    function calcPct(d){
+      const sp = parseFloat(d.spread||0);
+      const cl = parseFloat(d.close||0);
+      if(!cl) return 0;
+      const prevClose = cl - sp;
+      return prevClose > 0 ? (sp / prevClose) * 100 : 0;
+    }
+
+    const rows20 = allRows.slice(-20);   // 近20交易日
+    const rows10 = allRows.slice(-10);   // 近10交易日
+    const rows5  = allRows.slice(-5);    // 近5交易日
+
+    // 量能：以近20日均量為基準
+    const avgVol20 = rows20.slice(0,-1).reduce((s,d)=>s+Number(d.Trading_Volume||0),0) / Math.max(rows20.length-1,1);
 
     let limitUpCnt=0, limitDnCnt=0, volSpikeCnt=0;
-    const avgVol = rows.slice(0,-1).reduce((s,d)=>s+(d.Trading_Volume||0),0) / Math.max(rows.length-1,1);
-
-    rows.forEach((d,i)=>{
-      const chg = parseFloat(d.Change||0);
-      const pct  = d.close>0 ? chg/d.close*100 : 0;
-      const vol  = d.Trading_Volume||0;
-      if(pct >= 9.5)  limitUpCnt++;
-      if(pct <= -9.5) limitDnCnt++;
-      if(avgVol>0 && vol >= avgVol*2.5) volSpikeCnt++;
+    rows20.forEach(d=>{
+      const pct = calcPct(d);
+      const vol = Number(d.Trading_Volume||0);
+      if(pct >= 9.3)  limitUpCnt++;
+      if(pct <= -9.3) limitDnCnt++;
+      if(avgVol20>0 && vol >= avgVol20*2.0) volSpikeCnt++;
     });
 
-    const last = rows[rows.length-1];
-    const lastChg = parseFloat(last.Change||0);
-    const lastPct = last.close>0 ? lastChg/last.close*100 : 0;
+    // 近10日累積漲幅絕對值
+    const totalMove10 = rows10.reduce((s,d)=>s+Math.abs(calcPct(d)), 0);
+    // 近5日有無強勢（單日漲幅>5%）
+    const bigMoveCnt5 = rows5.filter(d=>Math.abs(calcPct(d))>=5).length;
 
-    // 處置：近10日漲停 ≥3 或跌停 ≥2 或量暴衝 ≥3次 或今日漲停
-    const isDispose = limitUpCnt>=3 || limitDnCnt>=2 || volSpikeCnt>=3 || lastPct>=9.5;
-    // 注意：近10日漲停 ≥1 或量暴衝 ≥2次 或近5日漲跌超過±5%累計
-    const recent5 = rows.slice(-5);
-    const totalMove = recent5.reduce((s,d)=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return s+Math.abs(p);},0);
-    const isNotice  = !isDispose && (limitUpCnt>=1 || volSpikeCnt>=2 || totalMove>15);
+    const last = allRows[allRows.length-1];
+    const lastPct = calcPct(last);
 
-    // 出閘：近期(今日)無漲跌停且量正常，但3日前有處置信號
-    const prevRows = rows.slice(0,-3);
-    const prevLimitUp  = prevRows.filter(d=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return p>=9.5; }).length;
-    const prevLimitDn  = prevRows.filter(d=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return p<=-9.5; }).length;
-    const isRelease = !isDispose && !isNotice && (prevLimitUp>=2 || prevLimitDn>=1);
+    // ── 判斷等級 ─────────────────────────────────────────
+    // 處置：近20日漲停≥3 或跌停≥2 或量暴衝≥3次
+    const isDispose = limitUpCnt>=3 || limitDnCnt>=2 || volSpikeCnt>=3;
+
+    // 注意：漲停≥1 或跌停≥1 或量暴衝≥2次 或 近10日累積波幅>20% 或 近5日大波動≥2次
+    const isNotice = !isDispose && (
+      limitUpCnt>=1 || limitDnCnt>=1 || volSpikeCnt>=2 ||
+      totalMove10 > 20 || bigMoveCnt5 >= 2
+    );
+
+    // 出閘：近5日正常（無漲跌停、無量暴衝），但更早的10-20日區間有異常
+    const prevRows = allRows.slice(-20,-5);
+    const prevLimitUp = prevRows.filter(d=>calcPct(d)>=9.3).length;
+    const prevLimitDn = prevRows.filter(d=>calcPct(d)<=-9.3).length;
+    const prevSpike   = prevRows.filter(d=>{ const v=Number(d.Trading_Volume||0); return avgVol20>0 && v>=avgVol20*2; }).length;
+    const recentNormal = limitUpCnt===0 && limitDnCnt===0 && volSpikeCnt<=1;
+    const isRelease = !isDispose && !isNotice && recentNormal &&
+      (prevLimitUp>=2 || prevLimitDn>=1 || prevSpike>=2);
 
     if(!isDispose && !isNotice && !isRelease) return null;
 
-    const price     = last.close;
+    const price = parseFloat(last.close||0);
     const changePct = lastPct;
-    const reason    = isDispose
-      ? `近10日漲停${limitUpCnt}次 跌停${limitDnCnt}次 量暴衝${volSpikeCnt}次`
+
+    const reason = isDispose
+      ? `近20日漲停${limitUpCnt}次、跌停${limitDnCnt}次、量暴衝${volSpikeCnt}次`
       : isRelease
-      ? `已解除（前期漲跌停${prevLimitUp+prevLimitDn}次）`
-      : `近5日累積波幅${totalMove.toFixed(1)}%`;
+      ? `前期異常（漲停${prevLimitUp}跌停${prevLimitDn}量暴衝${prevSpike}次），近期已恢復`
+      : `近10日累積波幅${totalMove10.toFixed(1)}%，大波動${bigMoveCnt5}次`;
 
     return {
       id: stockId,
@@ -4796,20 +4840,30 @@ async function calcAlertStatus(stockId, stockName){
   }
 }
 
-// 批次計算全池注意/處置/出閘（分批避免 API 超限）
+// 批次計算全池注意/處置/出閘（分批，避免 API rate limit）
 async function fetchAlertStocksFromFinMind(){
   const pool = getAlertPool();
   const results = [];
-  const BATCH = 4;
+  const BATCH = 3;   // 每批3支
+  const DELAY = 500; // 批次間隔 ms
+  let tried = 0;
   for(let i=0; i<pool.length; i+=BATCH){
     const batch = pool.slice(i, i+BATCH);
-    const batchResults = await Promise.all(
+    const batchResults = await Promise.allSettled(
       batch.map(s => calcAlertStatus(s.id, s.name))
     );
-    batchResults.forEach(r=>{ if(r) results.push(r); });
-    if(i+BATCH < pool.length) await new Promise(r=>setTimeout(r, 600));
+    batchResults.forEach(r=>{
+      if(r.status==='fulfilled' && r.value) results.push(r.value);
+    });
+    tried += batch.length;
+    // 即時更新提示
+    const listEl = document.getElementById('alertList');
+    if(listEl && listEl.innerHTML.includes('分析中')){
+      listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 分析中… ${tried}/${pool.length} 支（已發現 ${results.length} 筆異常）</div>`;
+    }
+    if(i+BATCH < pool.length) await new Promise(r=>setTimeout(r, DELAY));
   }
-  console.log('[Alert FinMind] total found:', results.length);
+  console.log('[Alert FinMind] total found:', results.length, 'from', pool.length, 'stocks');
   return results;
 }
 
