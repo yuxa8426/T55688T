@@ -4690,232 +4690,163 @@ let _alertLoaded = false;
 // ── TWSE rwd API（注意/處置股）────────────────────────
 // 正確端點：www.twse.com.tw/rwd/zh/announcement/...
 // 透過 allorigins/corsproxy 繞過 CORS
-async function twseRwdGet(path){
-  // TWSE 有兩組端點，優先嘗試 openapi（有 CORS header）
-  const urls = [
-    'https://openapi.twse.com.tw/v1' + path.replace('/rwd/zh/announcement/','announcement/').replace('?response=json',''),
-    'https://www.twse.com.tw' + path,
-    'https://www.twse.com.tw' + path.replace('rwd/zh','exchangeReport'),
-  ];
-  const proxies = [
-    '',                                      // 直連（openapi 有 CORS）
-    'https://corsproxy.io/?url=',
-    'https://api.allorigins.win/raw?url=',
-    'https://api.codetabs.com/v1/proxy?quest=',
-  ];
+// ══════════════════════════════════════════════════════════
+// 注意股 / 處置股 / 出閘 資料來源研究結論（2026-03）
+// ──────────────────────────────────────────────────────────
+// TWSE rwd/zh/announcement/ ：有 CORS 保護，所有 proxy 均被封鎖
+// openapi.twse.com.tw        ：沒有注意/處置端點（官方付費商品）
+// FinMind TaiwanStockDispositionSecuritiesPeriod：需 backer/sponsor 付費帳號
+//
+// 可用免費策略：
+//  處置股 → FinMind TaiwanStockPrice 計算「近10日漲停 ≥3 或跌停 ≥2 或量暴衝 ≥3倍」
+//  注意股 → 同上，條件較寬（近5日有任一漲跌停或量暴衝 ≥2倍）
+//  出閘   → 近期剛脫離以上條件的股票
+//  資料池 → TREND_POOL(30支) + 熱門族群代表股共約50支
+// ══════════════════════════════════════════════════════════
 
-  for(const baseUrl of urls){
-    for(const px of proxies){
-      if(px==='' && !baseUrl.includes('openapi')) continue; // 直連只試 openapi
-      try{
-        const target = px ? px + encodeURIComponent(baseUrl) : baseUrl;
-        const r = await fetchWithTimeout(target, 8000);
-        if(!r.ok){ console.warn('[TWSE]', r.status, target.slice(0,60)); continue; }
-        const text = await r.text();
-        const trimmed = text.trim();
-        if(trimmed.startsWith('{') || trimmed.startsWith('[')){
-          const json = JSON.parse(trimmed);
-          console.log('[TWSE OK]', target.slice(0,60), '→ keys:', Object.keys(json).join(','));
-          return json;
-        }
-        console.warn('[TWSE non-JSON]', trimmed.slice(0,80));
-      }catch(e){ console.warn('[TWSE fail]', px.slice(0,30)||'direct', e.message); }
-    }
-  }
-  console.error('[TWSE] all proxies failed for', path);
-  return null;
+// 廣義池：TREND_POOL + 各族群代表股
+function getAlertPool(){
+  const extra = [
+    // 電子/科技
+    {id:'2303',name:'聯電'},{id:'2308',name:'台達電'},{id:'2317',name:'鴻海'},
+    {id:'2345',name:'智邦'},{id:'2356',name:'英業達'},{id:'2379',name:'瑞昱'},
+    {id:'2382',name:'廣達'},{id:'2395',name:'研華'},{id:'2408',name:'南亞科'},
+    {id:'2412',name:'中華電'},{id:'2881',name:'富邦金'},{id:'2882',name:'國泰金'},
+    {id:'2884',name:'玉山金'},{id:'2886',name:'兆豐金'},{id:'2891',name:'中信金'},
+    // 傳產/中小型
+    {id:'1301',name:'台塑'},{id:'1303',name:'南亞'},{id:'1326',name:'台化'},
+    {id:'2002',name:'中鋼'},{id:'2207',name:'和泰車'},{id:'2357',name:'華碩'},
+    {id:'3008',name:'大立光'},{id:'3034',name:'聯詠'},{id:'3443',name:'創意'},
+    {id:'4904',name:'遠傳'},{id:'5871',name:'中租-KY'},{id:'6669',name:'緯穎'},
+    {id:'8069',name:'元太'},{id:'6415',name:'矽力-KY'},{id:'2376',name:'技嘉'},
+  ];
+  const pool = [...(window.TREND_POOL||[])];
+  const ids = new Set(pool.map(s=>s.id));
+  extra.forEach(s=>{ if(!ids.has(s.id)) pool.push(s); });
+  return pool;
 }
 
-// 解析 TWSE rwd 注意股 JSON
-// 端點：/rwd/zh/announcement/noticeStkInfo?response=json
-// 欄位：sto_no(代號), sto_nm(名稱), date(公告日), count(次數), reason
-async function fetchNoticeStocks(){
-  const res = await twseRwdGet('/rwd/zh/announcement/noticeStkInfo?response=json');
-  if(!res){ console.warn('[Notice] no response'); return []; }
+// 用 FinMind 日K 判斷注意/處置/出閘條件
+async function calcAlertStatus(stockId, stockName){
+  try{
+    const today = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const d14 = new Date(today); d14.setDate(d14.getDate()-14);
+    const startDate = `${d14.getFullYear()}-${String(d14.getMonth()+1).padStart(2,'0')}-${String(d14.getDate()).padStart(2,'0')}`;
 
-  // 支援兩種格式：
-  // 格式A（openapi/rwd）: { stat, fields:[...], data:[[...]] }
-  // 格式B（openapi v1 array）: [{Code,Name,Reason,...}, ...]
-  if(Array.isArray(res)){
-    console.log('[Notice] array format, rows:', res.length);
-    return res.map(d=>({
-      id:     String(d.Code||d.StockNo||d.code||'').trim(),
-      name:   String(d.Name||d.StockName||d.name||'').trim(),
-      date:   d.Date||d.date||d.PublishDate||'',
-      count:  parseInt(d.Count||d.NoticeCount||d.count||0)||0,
-      reason: d.Reason||d.reason||d.Note||'',
-      type:   'notice',
-    })).filter(d=>d.id&&d.name);
-  }
+    const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FM_TOKEN}`;
+    const r = await fetchWithTimeout(url, 8000);
+    if(!r.ok) return null;
+    const json = await r.json();
+    const rows = (json.data||[]).slice(-10); // 近10交易日
+    if(rows.length < 3) return null;
 
-  const fields = res.fields || [];
-  const rows   = res.data   || [];
-  console.log('[Notice] table format, fields:', fields, 'rows:', rows.length);
-  if(!rows.length) return [];
+    let limitUpCnt=0, limitDnCnt=0, volSpikeCnt=0;
+    const avgVol = rows.slice(0,-1).reduce((s,d)=>s+(d.Trading_Volume||0),0) / Math.max(rows.length-1,1);
 
-  const fi = (names) => {
-    for(const n of names){
-      const i = fields.findIndex(f=>f.includes(n));
-      if(i!==-1) return i;
-    }
-    return -1;
-  };
-  const iCode  = fi(['股票代號','代號','Code']) !== -1 ? fi(['股票代號','代號','Code']) : 0;
-  const iName  = fi(['股票名稱','名稱','Name']) !== -1 ? fi(['股票名稱','名稱','Name']) : 1;
-  const iDate  = fi(['公告日期','日期','Date']) !== -1 ? fi(['公告日期','日期','Date']) : 2;
-  const iCount = fi(['次數','Count','累積'])    !== -1 ? fi(['次數','Count','累積'])    : 3;
-  const iNote  = fi(['原因','Reason','說明'])   !== -1 ? fi(['原因','Reason','說明'])   : fields.length-1;
+    rows.forEach((d,i)=>{
+      const chg = parseFloat(d.Change||0);
+      const pct  = d.close>0 ? chg/d.close*100 : 0;
+      const vol  = d.Trading_Volume||0;
+      if(pct >= 9.5)  limitUpCnt++;
+      if(pct <= -9.5) limitDnCnt++;
+      if(avgVol>0 && vol >= avgVol*2.5) volSpikeCnt++;
+    });
 
-  return rows.map(r=>({
-    id:     String(r[iCode]||'').replace(/\s/g,''),
-    name:   String(r[iName]||'').replace(/\s/g,''),
-    date:   r[iDate]||'',
-    count:  parseInt(r[iCount])||0,
-    reason: r[iNote]||'',
-    type:   'notice',
-  })).filter(d=>d.id&&d.name);
-}
+    const last = rows[rows.length-1];
+    const lastChg = parseFloat(last.Change||0);
+    const lastPct = last.close>0 ? lastChg/last.close*100 : 0;
 
-// 解析 TWSE rwd 處置股 JSON
-// 端點：/rwd/zh/announcement/disposalStockInfo?response=json
-async function fetchDisposeStocks(){
-  const res = await twseRwdGet('/rwd/zh/announcement/disposalStockInfo?response=json');
-  if(!res){ console.warn('[Dispose] no response'); return { disposeList:[], releaseList:[] }; }
+    // 處置：近10日漲停 ≥3 或跌停 ≥2 或量暴衝 ≥3次 或今日漲停
+    const isDispose = limitUpCnt>=3 || limitDnCnt>=2 || volSpikeCnt>=3 || lastPct>=9.5;
+    // 注意：近10日漲停 ≥1 或量暴衝 ≥2次 或近5日漲跌超過±5%累計
+    const recent5 = rows.slice(-5);
+    const totalMove = recent5.reduce((s,d)=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return s+Math.abs(p);},0);
+    const isNotice  = !isDispose && (limitUpCnt>=1 || volSpikeCnt>=2 || totalMove>15);
 
-  // 今日台灣時間（西元 yyyymmdd 和民國 yyymmdd 都算）
-  const twDate = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const todayYmd = twDate.getFullYear()*10000+(twDate.getMonth()+1)*100+twDate.getDate();
-  const todayRoc = (twDate.getFullYear()-1911)*10000+(twDate.getMonth()+1)*100+twDate.getDate();
+    // 出閘：近期(今日)無漲跌停且量正常，但3日前有處置信號
+    const prevRows = rows.slice(0,-3);
+    const prevLimitUp  = prevRows.filter(d=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return p>=9.5; }).length;
+    const prevLimitDn  = prevRows.filter(d=>{ const p=d.close>0?parseFloat(d.Change||0)/d.close*100:0; return p<=-9.5; }).length;
+    const isRelease = !isDispose && !isNotice && (prevLimitUp>=2 || prevLimitDn>=1);
 
-  function parseRows(fields, rows){
-    const fi = (names) => {
-      for(const n of names){
-        const i = fields.findIndex(f=>f.includes(n));
-        if(i!==-1) return i;
-      }
-      return -1;
+    if(!isDispose && !isNotice && !isRelease) return null;
+
+    const price     = last.close;
+    const changePct = lastPct;
+    const reason    = isDispose
+      ? `近10日漲停${limitUpCnt}次 跌停${limitDnCnt}次 量暴衝${volSpikeCnt}次`
+      : isRelease
+      ? `已解除（前期漲跌停${prevLimitUp+prevLimitDn}次）`
+      : `近5日累積波幅${totalMove.toFixed(1)}%`;
+
+    return {
+      id: stockId,
+      name: stockName,
+      price,
+      changePct,
+      reason,
+      type: isDispose ? 'dispose' : isRelease ? 'release' : 'notice',
+      limitUpCnt,
+      limitDnCnt,
+      volSpikeCnt,
     };
-    const iCode   = fi(['股票代號','代號']);
-    const iName   = fi(['股票名稱','名稱']);
-    const iStart  = fi(['開始日期','起始','開始']);
-    const iEnd    = fi(['結束日期','結束','終止']);
-    const iType   = fi(['處置方式','方式','種類']);
-    const iReason = fi(['原因','備註','說明']);
-    console.log('[Dispose] fields:', fields, 'iCode:', iCode, 'iName:', iName);
-
-    const disposeList=[], releaseList=[];
-    rows.forEach(r=>{
-      const endRaw = String(r[iEnd>=0?iEnd:3]||'').replace(/[\/\s]/g,'');
-      // 解析結束日期（可能是民國或西元）
-      const endNum = parseInt(endRaw)||0;
-      const isRoc  = endNum > 0 && endNum < 1200000; // 民國年
-      const endCmp = isRoc ? endNum : endNum - 19110000; // 統一轉民國年比較
-      const todayCmp = todayRoc;
-      const isReleased = endNum > 0 && endCmp < todayCmp;
-
-      const item = {
-        id:          String(r[iCode>=0?iCode:0]||'').replace(/\s/g,''),
-        name:        String(r[iName>=0?iName:1]||'').replace(/\s/g,''),
-        startDate:   r[iStart>=0?iStart:2]||'',
-        endDate:     r[iEnd>=0?iEnd:3]||'',
-        disposeType: r[iType>=0?iType:4]||'',
-        reason:      r[iReason>=0?iReason:fields.length-1]||'',
-        type: isReleased ? 'release' : 'dispose',
-      };
-      if(!item.id||!item.name) return;
-      if(isReleased) releaseList.push(item);
-      else disposeList.push(item);
-    });
-    return { disposeList, releaseList };
+  }catch(e){
+    console.warn('[Alert calc]', stockId, e.message);
+    return null;
   }
+}
 
-  // 格式A：array of objects
-  if(Array.isArray(res)){
-    console.log('[Dispose] array format, rows:', res.length, 'sample:', res[0]);
-    const disposeList=[], releaseList=[];
-    res.forEach(d=>{
-      const endRaw = String(d.EndDate||d.DisposalEndDate||d.endDate||'').replace(/[\/\s-]/g,'');
-      const endNum  = parseInt(endRaw)||0;
-      const isRoc   = endNum>0 && endNum<1200000;
-      const endCmp  = isRoc ? endNum : endNum-19110000;
-      const isReleased = endNum>0 && endCmp < todayRoc;
-      const item = {
-        id:          String(d.Code||d.StockNo||d.code||'').trim(),
-        name:        String(d.Name||d.StockName||d.name||'').trim(),
-        startDate:   d.StartDate||d.DisposalStartDate||'',
-        endDate:     d.EndDate||d.DisposalEndDate||'',
-        disposeType: d.DisposalType||d.Type||d.type||'',
-        reason:      d.Reason||d.reason||'',
-        type: isReleased ? 'release' : 'dispose',
-      };
-      if(!item.id||!item.name) return;
-      if(isReleased) releaseList.push(item);
-      else disposeList.push(item);
-    });
-    return { disposeList, releaseList };
+// 批次計算全池注意/處置/出閘（分批避免 API 超限）
+async function fetchAlertStocksFromFinMind(){
+  const pool = getAlertPool();
+  const results = [];
+  const BATCH = 4;
+  for(let i=0; i<pool.length; i+=BATCH){
+    const batch = pool.slice(i, i+BATCH);
+    const batchResults = await Promise.all(
+      batch.map(s => calcAlertStatus(s.id, s.name))
+    );
+    batchResults.forEach(r=>{ if(r) results.push(r); });
+    if(i+BATCH < pool.length) await new Promise(r=>setTimeout(r, 600));
   }
-
-  // 格式B：table { fields, data }
-  const fields = res.fields || [];
-  const rows   = res.data   || [];
-  console.log('[Dispose] table format, fields:', fields, 'rows:', rows.length);
-  if(!rows.length) return { disposeList:[], releaseList:[] };
-  return parseRows(fields, rows);
+  console.log('[Alert FinMind] total found:', results.length);
+  return results;
 }
 
 // 為注意/處置股補抓 FinMind 即時行情（每筆間隔200ms）
 async function enrichWithQuote(list, maxItems=15){
-  const results = [];
-  for(let i=0; i<Math.min(list.length, maxItems); i++){
-    const item = list[i];
-    try{
-      const q = await fmQuote(item.id);
-      await new Promise(r=>setTimeout(r,200));
-      results.push({
-        ...item,
-        price:     q?.price     ?? null,
-        changePct: q?.changePct ?? null,
-      });
-    }catch(e){
-      results.push({...item, price:null, changePct:null});
-    }
-  }
-  return results;
+  // 已有 price/changePct，直接回傳（calcAlertStatus 已帶入）
+  return list.slice(0, maxItems);
 }
 
 // ── 主要更新函式 ──────────────────────────────────────
 async function refreshAlertStocks(manual=false){
-  if(manual) showToast('🔄 更新警示股資料…');
+  if(manual) showToast('🔄 計算警示股資料…');
 
   const listEl = document.getElementById('alertList');
   const noteEl = document.getElementById('alertDataNote');
   if(listEl) listEl.innerHTML =
-    `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 載入中（約15秒）…</div>`;
+    `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 分析中（掃描約50支股票，約20秒）…</div>`;
 
-  // ── 平行抓取：TWSE注意股、TWSE處置股 ────────────────
-  const [noticeList, { disposeList, releaseList }] = await Promise.all([
-    fetchNoticeStocks(),
-    fetchDisposeStocks(),
-  ]);
+  // ── FinMind 計算注意/處置/出閘 ────────────────────────
+  const allAlerts = await fetchAlertStocksFromFinMind();
+  const noticeList  = allAlerts.filter(d=>d.type==='notice');
+  const disposeList = allAlerts.filter(d=>d.type==='dispose');
+  const releaseList = allAlerts.filter(d=>d.type==='release');
   console.log('[Alert] notice:', noticeList.length, 'dispose:', disposeList.length, 'release:', releaseList.length);
 
-  // ── 注意股補行情（取前12筆）──────────────────────────
-  const noticeWithQ = noticeList.length
-    ? await enrichWithQuote(noticeList, 12)
-    : [];
+  // ── 風險股：處置 + 注意次數多 ───────────────────────
+  const riskList = [
+    ...disposeList,
+    ...noticeList.filter(d=>d.limitUpCnt>=2||d.volSpikeCnt>=2),
+  ].filter((v,i,a)=>a.findIndex(x=>x.id===v.id)===i); // 去重
 
-  // ── 風險股：注意3次以上 或 漲跌幅 >5% ───────────────
-  const riskList = noticeWithQ.filter(d =>
-    d.count >= 3 || (d.changePct != null && Math.abs(d.changePct) > 5)
-  );
-
-  // ── 熱門股：用趨勢快取按量能排，或fallback FinMind ──
+  // ── 熱門股：用趨勢快取按量能排 ───────────────────────
   let hotList = [];
   if(_trendCache && _trendCache.length){
     hotList = [..._trendCache].sort((a,b)=>
       parseFloat(b.volRatio||0)-parseFloat(a.volRatio||0));
   } else {
-    // 趨勢還未跑完，用固定代表股補行情
     const fallbackIds = [
       {id:'2603',name:'長榮',sector:'航運'},
       {id:'2609',name:'陽明',sector:'航運'},
@@ -4932,37 +4863,32 @@ async function refreshAlertStocks(manual=false){
     }
   }
 
-  // ── 趨勢股：直接用 _trendCache ───────────────────────
   const trendList = _trendCache || [];
 
-  // ── 整合 ────────────────────────────────────────────
+  // ── 整合 ─────────────────────────────────────────────
   _alertData = {
     trend:   trendList,
     hot:     hotList,
-    risk:    riskList.length ? riskList : noticeWithQ.slice(0,8),
+    risk:    riskList.length ? riskList : noticeList.slice(0,8),
     dispose: disposeList,
     release: releaseList,
   };
   _alertLoaded = true;
 
-  // Tab 計數
   setEl('cnt-trend',   trendList.length   || 0);
   setEl('cnt-hot',     hotList.length      || 0);
-  setEl('cnt-risk',    (riskList.length||noticeWithQ.length) || 0);
+  setEl('cnt-risk',    riskList.length     || 0);
   setEl('cnt-dispose', disposeList.length  || 0);
   setEl('cnt-release', releaseList.length  || 0);
 
-  // 時間戳
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const ts  = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   setEl('alertUpdateTime', ts+' 更新');
 
   if(noteEl){
     noteEl.style.display='block';
-    const src = noticeList.length
-      ? `已載入 ${noticeList.length} 筆注意股、${disposeList.length} 筆處置股`
-      : 'TWSE 資料載入中，趨勢/熱門股正常顯示';
-    noteEl.textContent = 'ⓘ '+src+'。來源：TWSE 公開資訊觀測站 + FinMind。';
+    const total = allAlerts.length;
+    noteEl.textContent = `ⓘ 自動掃描約50支股票，發現 ${total} 筆異常（注意${noticeList.length}、處置${disposeList.length}、出閘${releaseList.length}）。來源：FinMind 日K計算。`;
   }
 
   renderAlertList(_alertTab);
@@ -5009,8 +4935,11 @@ function renderAlertList(tab){
         `<span class="abadge bullish">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
     if(tab==='hot')
       badges = `<span class="abadge hot">📊 量${parseFloat(s.volRatio||0)||'—'}倍</span>`;
-    if(tab==='risk')
-      badges = `<span class="abadge notice">⚠️ 注意${s.count?s.count+'次':''}</span>`;
+    if(tab==='risk'){
+      const sig = s.limitUpCnt>=3||s.limitDnCnt>=2 ? '🔴 異常強警' : s.volSpikeCnt>=2 ? '📊 量暴衝' : '⚠️ 注意';
+      const cntBadge = (s.limitUpCnt||0)+(s.limitDnCnt||0)+(s.volSpikeCnt||0);
+      badges = `<span class="abadge notice">${sig}${cntBadge?' '+cntBadge+'次':''}</span>`;
+    }
     if(tab==='dispose')
       badges = `<span class="abadge bearish">🔒 處置中</span>`;
     if(tab==='release')
@@ -5025,6 +4954,9 @@ function renderAlertList(tab){
     if(s.date) metaItems.push(`📅${s.date}`);
     if(s.startDate) metaItems.push(`📅${s.startDate}`);
     if(s.endDate) metaItems.push(`至${s.endDate}`);
+    if(s.limitUpCnt>0) metaItems.push(`漲停${s.limitUpCnt}次`);
+    if(s.limitDnCnt>0) metaItems.push(`跌停${s.limitDnCnt}次`);
+    if(s.volSpikeCnt>0) metaItems.push(`量暴衝${s.volSpikeCnt}次`);
     if(metaItems.length)
       metaHtml=`<div class="acard-meta">${metaItems.map(m=>`<span>${m}</span>`).join('')}</div>`;
 
