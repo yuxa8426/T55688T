@@ -1,0 +1,60 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>body{background:#111;color:#eee;font-family:monospace;padding:16px}
+.ok{color:#0f0}.err{color:#f44}.warn{color:#fa0}pre{background:#1a1a1a;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px}</style>
+</head><body>
+<h2>FinMind API 資料集探測工具</h2>
+<div id="out"></div>
+<script>
+const TOKEN='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0xMCAxNDowNzo0NSIsInVzZXJfaWQiOiJ5dXhhODQyNiIsImVtYWlsIjoieXV4YTg0MjZAZ21haWwuY29tIiwiaXAiOiIyMjMuMTM5Ljk0LjE3NSJ9.tiYFgiur-vqVIPiLIDjC3jeVQgk1ajX0Zfv4CyETxVM';
+const BASE='https://api.finmindtrade.com/api/v4/data';
+const out=document.getElementById('out');
+
+function log(msg,cls=''){
+  const d=document.createElement('div'); d.className=cls; d.innerHTML=msg; out.appendChild(d);
+}
+
+async function probe(dataset, extra={}, days=20){
+  const start=new Date(Date.now()-days*86400000).toISOString().slice(0,10);
+  const end=new Date().toISOString().slice(0,10);
+  const params=new URLSearchParams({dataset,start_date:start,end_date:end,token:TOKEN,...extra});
+  try{
+    const r=await fetch(BASE+'?'+params);
+    const j=await r.json();
+    const rows=j.data||[];
+    if(rows.length){
+      log(`✅ <b>${dataset}</b> ${extra.data_id||''} → ${rows.length} rows`,'ok');
+      log(`<pre>keys: ${Object.keys(rows[0]).join(', ')}\nsample: ${JSON.stringify(rows[0])}</pre>`);
+      if(rows.length>1) log(`<pre>last:  ${JSON.stringify(rows[rows.length-1])}</pre>`);
+    } else {
+      log(`⚠️ <b>${dataset}</b> ${extra.data_id||''} → 0 rows (status=${j.status})`,'warn');
+    }
+  }catch(e){
+    log(`❌ <b>${dataset}</b> ERROR: ${e.message}`,'err');
+  }
+}
+
+async function run(){
+  log('<h3>📊 選擇權</h3>');
+  await probe('TaiwanOptionInstitutionalInvestors',{data_id:'TXO'});
+  await probe('TaiwanOptionInstitutionalInvestors',{data_id:'TX1'});
+
+  log('<h3>📈 期貨</h3>');
+  await probe('TaiwanFuturesInstitutionalInvestors',{data_id:'TX'});
+  await probe('TaiwanFuturesInstitutionalInvestors',{data_id:'MTX'});
+
+  log('<h3>💳 融資融券</h3>');
+  await probe('TaiwanStockMarginPurchaseSummary',{},{15});
+  await probe('TaiwanStockMarginPurchaseShortSale',{data_id:'2330'},{10});
+
+  log('<h3>🏠 大戶籌碼</h3>');
+  await probe('TaiwanStockShareholding',{data_id:'2330'},{20});
+
+  log('<h3>📉 VIX / 指標</h3>');
+  for(const ds of ['CBOE_VIX','TaiwanVIX','TaiwanDailyShortSaleBalances','TaiwanStockTradingDailyReport']){
+    await probe(ds,{});
+  }
+
+  log('<hr><b>探測完成</b>');
+}
+run();
+</script></body></html>

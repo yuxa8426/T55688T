@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>股析 API 診斷工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#f0f0f8;font-family:-apple-system,sans-serif;padding:20px;max-width:600px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:6px;color:#00d4aa}
+p{font-size:13px;color:#8888aa;margin-bottom:24px}
+.test{background:#1e1e2a;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid rgba(255,255,255,.08)}
+.test-name{font-size:14px;font-weight:700;margin-bottom:4px}
+.test-url{font-size:11px;color:#555570;margin-bottom:10px;word-break:break-all}
+.status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700}
+.status.wait{background:rgba(255,255,255,.08);color:#8888aa}
+.status.ok{background:rgba(0,212,170,.15);color:#00d4aa}
+.status.fail{background:rgba(255,76,106,.15);color:#ff4c6a}
+.status.warn{background:rgba(245,200,66,.15);color:#f5c842}
+.detail{margin-top:8px;font-size:12px;color:#8888aa;line-height:1.6;display:none}
+.detail.show{display:block}
+.dot{width:8px;height:8px;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{opacity:.2}from{opacity:1}}
+.result-box{background:#111118;border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:#6688aa;word-break:break-all;max-height:80px;overflow:auto;font-family:monospace;display:none}
+.result-box.show{display:block}
+button{background:#00d4aa;color:#000;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:24px}
+.summary{background:#1e1e2a;border-radius:12px;padding:16px;border:1px solid rgba(0,212,170,.2);display:none}
+.summary.show{display:block}
+.summary h2{font-size:16px;font-weight:700;margin-bottom:12px}
+.sum-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+.sum-row:last-child{border:none}
+.advice{margin-top:12px;font-size:12px;color:#8888aa;line-height:1.7;background:#111118;border-radius:8px;padding:12px}
+</style>
+</head>
+<body>
+<h1>📡 股析 API 診斷工具 v3</h1>
+<p>全面改用 <strong style="color:#00d4aa">FinMind API</strong>（直連，無 proxy）。約需 20 秒。</p>
+
+<button onclick="runAll()">🚀 開始測試所有 API</button>
+
+<div class="test" id="t1">
+  <div class="test-name">① FinMind 台股即時股價（台積電 2330）</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockPrice（直連，無 proxy）</div>
+  <span class="status wait" id="s1"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d1"></div>
+  <div class="result-box" id="r1"></div>
+</div>
+
+<div class="test" id="t2">
+  <div class="test-name">② FinMind K線歷史（60日）</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockPrice（直連）</div>
+  <span class="status wait" id="s2"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d2"></div>
+  <div class="result-box" id="r2"></div>
+</div>
+
+<div class="test" id="t3">
+  <div class="test-name">③ FinMind 三大法人買賣超</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockInstitutionalInvestorsBuySell</div>
+  <span class="status wait" id="s3"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d3"></div>
+  <div class="result-box" id="r3"></div>
+</div>
+
+<div class="test" id="t4">
+  <div class="test-name">④ FinMind 大戶籌碼集中度（股權分散）</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockShareholding</div>
+  <span class="status wait" id="s4"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d4"></div>
+  <div class="result-box" id="r4"></div>
+</div>
+
+<div class="test" id="t5">
+  <div class="test-name">⑤ FinMind 加權指數（TAIEX）</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockPrice TAIEX</div>
+  <span class="status wait" id="s5"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d5"></div>
+  <div class="result-box" id="r5"></div>
+</div>
+
+<div class="test" id="t6">
+  <div class="test-name">⑥ FinMind Token 有效性驗證</div>
+  <div class="test-url">api.finmindtrade.com → TaiwanStockInfo</div>
+  <span class="status wait" id="s6"><span class="dot" style="background:#8888aa"></span> 等待中</span>
+  <div class="detail" id="d6"></div>
+  <div class="result-box" id="r6"></div>
+</div>
+
+<div class="summary" id="summary">
+  <h2>📊 測試結果總結</h2>
+  <div id="sumRows"></div>
+  <div class="advice" id="advice"></div>
+</div>
+
+<script>
+const FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0xMCAxNDowNzo0NSIsInVzZXJfaWQiOiJ5dXhhODQyNiIsImVtYWlsIjoieXV4YTg0MjZAZ21haWwuY29tIiwiaXAiOiIyMjMuMTM5Ljk0LjE3NSJ9.tiYFgiur-vqVIPiLIDjC3jeVQgk1ajX0Zfv4CyETxVM';
+const FM_BASE  = 'https://api.finmindtrade.com/api/v4/data';
+
+function todayStr(){ const d=new Date(); const day=d.getDay(); if(day===0)d.setDate(d.getDate()-2); if(day===6)d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
+function nDaysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+
+async function fmGet(params){
+  const url = FM_BASE + '?' + new URLSearchParams({...params, token: FM_TOKEN});
+  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const json = await res.json();
+  if(json.status !== 200) throw new Error(json.msg || 'status '+json.status);
+  return json.data || [];
+}
+
+const TESTS = [
+  {
+    id: 1,
+    name: 'FinMind 台股即時股價（台積電 2330）',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockPrice', data_id:'2330', start_date: nDaysAgo(5), end_date: todayStr() });
+      if(!data.length) throw new Error('無資料（可能是非交易日）');
+      const latest = data[data.length-1];
+      return { ok:true, msg:`台積電收盤：${latest.close} 元，日期：${latest.date}`, preview: JSON.stringify(latest) };
+    }
+  },
+  {
+    id: 2,
+    name: 'FinMind K線歷史（60日）',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockPrice', data_id:'2330', start_date: nDaysAgo(65), end_date: todayStr() });
+      if(!data.length) throw new Error('無歷史資料');
+      return { ok:true, msg:`取得 ${data.length} 筆日K，最新：${data[data.length-1].date}`, preview: JSON.stringify(data.slice(-2)) };
+    }
+  },
+  {
+    id: 3,
+    name: 'FinMind 三大法人買賣超',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockInstitutionalInvestorsBuySell', data_id:'2330', start_date: nDaysAgo(5), end_date: todayStr() });
+      if(!data.length) throw new Error('無資料（可能是非交易日）');
+      const latest = data[data.length-1];
+      return { ok:true, msg:`${data.length} 筆，最新日期：${latest.date}，${latest.name}：買${latest.buy} 賣${latest.sell}`, preview: JSON.stringify(data.slice(-3)) };
+    }
+  },
+  {
+    id: 4,
+    name: 'FinMind 大戶籌碼集中度（股權分散）',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockShareholding', data_id:'2330', start_date: nDaysAgo(14), end_date: todayStr() });
+      if(!data.length) throw new Error('無資料');
+      const latest = data[data.length-1];
+      return { ok:true, msg:`${data.length} 筆，最新：${latest.date}，level ${latest.HoldingLevel}`, preview: JSON.stringify(data.slice(-3)) };
+    }
+  },
+  {
+    id: 5,
+    name: 'FinMind 加權指數（TAIEX）',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockPrice', data_id:'TAIEX', start_date: nDaysAgo(5), end_date: todayStr() });
+      if(!data.length) throw new Error('無加權指數資料');
+      const latest = data[data.length-1];
+      return { ok:true, msg:`加權指數：${latest.close}，日期：${latest.date}`, preview: JSON.stringify(latest) };
+    }
+  },
+  {
+    id: 6,
+    name: 'FinMind Token 有效性驗證',
+    run: async () => {
+      const data = await fmGet({ dataset:'TaiwanStockInfo', data_id:'2330' });
+      if(!data.length) throw new Error('Token 無效或 API 異常');
+      return { ok:true, msg:`Token 有效！${data[0].stock_name || data[0].industry_category || 'OK'}`, preview: JSON.stringify(data[0]) };
+    }
+  },
+];
+
+function setStatus(id, type, msg){
+  const el = document.getElementById('s'+id);
+  const icons = { loading:'⏳', ok:'✅', fail:'❌', warn:'⚠️' };
+  const cls   = { loading:'wait', ok:'ok', fail:'fail', warn:'warn' };
+  el.className = 'status ' + cls[type];
+  el.innerHTML = `${icons[type]} ${msg}`;
+}
+
+function setDetail(id, msg, preview){
+  const d = document.getElementById('d'+id);
+  d.textContent = msg;
+  d.classList.add('show');
+  if(preview){
+    const r = document.getElementById('r'+id);
+    r.textContent = preview;
+    r.classList.add('show');
+  }
+}
+
+let results = {};
+
+async function runTest(t){
+  setStatus(t.id, 'loading', '測試中…');
+  try {
+    const r = await t.run();
+    if(r.warn){
+      setStatus(t.id, 'warn', r.msg);
+      setDetail(t.id, '資料格式需處理，功能受限', r.preview||'');
+      results[t.id] = 'warn';
+    } else {
+      setStatus(t.id, 'ok', r.msg);
+      if(r.preview) setDetail(t.id, '回傳資料預覽：', r.preview);
+      results[t.id] = 'ok';
+    }
+  } catch(e){
+    setStatus(t.id, 'fail', e.message || '連線失敗');
+    setDetail(t.id, '錯誤：' + e.message, '');
+    results[t.id] = 'fail';
+  }
+}
+
+async function runAll(){
+  document.querySelector('button').disabled = true;
+  document.querySelector('button').textContent = '🔄 測試中…';
+  results = {};
+
+  // 並行執行，但 TDCC 放最後（檔案較大）
+  await Promise.all([
+    runTest(TESTS[0]),
+    runTest(TESTS[1]),
+    runTest(TESTS[2]),
+    runTest(TESTS[3]),
+    runTest(TESTS[5]),
+  ]);
+  await runTest(TESTS[4]); // TDCC 單獨最後跑
+
+  showSummary();
+  document.querySelector('button').disabled = false;
+  document.querySelector('button').textContent = '🔁 重新測試';
+}
+
+function showSummary(){
+  const names = ['Yahoo 股價','Yahoo K線','VIX','TWSE 三大法人','TDCC 大戶籌碼','TWSE 大盤指數'];
+  const rows = Object.entries(results).map(([id,status],i)=>{
+    const icon = status==='ok'?'✅':status==='warn'?'⚠️':'❌';
+    const label = status==='ok'?'<span style="color:#00d4aa">可用</span>':status==='warn'?'<span style="color:#f5c842">部分可用</span>':'<span style="color:#ff4c6a">無法使用</span>';
+    return `<div class="sum-row"><span>${names[i]}</span><span>${icon} ${label}</span></div>`;
+  }).join('');
+
+  const okCount  = Object.values(results).filter(v=>v==='ok').length;
+  const failIds  = Object.entries(results).filter(([,v])=>v==='fail').map(([k])=>parseInt(k));
+
+  let advice = '';
+  if(okCount === 6){
+    advice = '🎉 所有 API 均正常！直接上傳 index.html 即可使用真實資料。';
+  } else {
+    advice = `共 ${okCount}/6 項可用。`;
+    if(failIds.includes(1)||failIds.includes(2)||failIds.includes(3)){
+      advice += '\n\n⚠️ Yahoo Finance（股價/K線/VIX）失敗：allorigins.win proxy 可能暫時過載，重試或換用其他 proxy（corsproxy.io）。';
+    }
+    if(failIds.includes(4)||failIds.includes(6)){
+      advice += '\n\n⚠️ TWSE API 失敗：可能是非交易日（週末假日）無資料，或 TWSE 暫時維護。';
+    }
+    if(failIds.includes(5)){
+      advice += '\n\n⚠️ TDCC 大戶籌碼失敗：這個 API 檔案較大（約 2MB），可能 timeout，或需要部署 Cloudflare Worker 才能穩定抓取。暫時使用模擬資料不影響其他功能。';
+    }
+  }
+
+  document.getElementById('sumRows').innerHTML = rows;
+  document.getElementById('advice').innerHTML = advice.replace(/\n/g,'<br>');
+  document.getElementById('summary').classList.add('show');
+}
+</script>
+</body>
+</html>
