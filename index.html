@@ -1830,8 +1830,7 @@ function updateStockTrendBar(stockId, histData, instData){
 
   // tooltip 說明（點擊顯示依據）
   bar.onclick = () => {
-    const desc = tags.map(t=>`${TREND_SIGNALS[t.sig].label}：${t.tip}`).join('
-');
+    const desc = tags.map(t=>`${TREND_SIGNALS[t.sig].label}：${t.tip}`).join('\n');
     showToast('📊 趨勢依據：'+tags.map(t=>TREND_SIGNALS[t.sig].label.replace(/[🚀📊🏦📈]/g,'')).join('、'));
     // 顯示詳細 tooltip
     const tip = document.getElementById('trendTip');
