@@ -230,15 +230,29 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .trend-tag.momentum{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
 /* 股票頁趨勢條 */
 .stock-trend-bar{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;min-height:20px}
-.pnl-card{background:linear-gradient(135deg,#0f2027,#151f35);border-radius:16px;margin:0 16px 14px;padding:20px;border:1px solid rgba(0,212,170,.2)}
-.pnl-label{font-size:11px;color:var(--text2);font-weight:600;margin-bottom:4px}
-.pnl-val{font-size:36px;font-weight:800;letter-spacing:-1px}
-.holding-row{display:flex;align-items:center;padding:14px;background:var(--card);border-radius:12px;margin:0 16px 10px;border:1px solid var(--border)}
-.holding-row .ht{font-size:14px;font-weight:700}
-.holding-row .hs{font-size:12px;color:var(--text2);margin-top:2px}
-.hright{text-align:right;margin-left:auto}
-.hright .hv{font-size:15px;font-weight:700}
-.hright .hp{font-size:12px;font-weight:600;margin-top:2px}
+/* 警示股頁面 */
+.alert-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:0;overflow-x:auto;scrollbar-width:none}
+.alert-tabs::-webkit-scrollbar{display:none}
+.alert-tab{flex:1;min-width:56px;padding:10px 4px 9px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;font-family:inherit;transition:color .15s}
+.alert-tab.active{color:var(--green);border-bottom-color:var(--green)}
+.alert-tab .at-count{display:block;font-size:17px;font-weight:800;margin-bottom:2px}
+.alert-tab.active .at-count{color:var(--green)}
+.acard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+.acard:active{background:var(--surface)}
+.acard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.acard-name{font-size:16px;font-weight:700}
+.acard-id{font-size:11px;color:var(--text3);margin-top:2px}
+.acard-price{text-align:right;flex-shrink:0}
+.acard-price .ap{font-size:17px;font-weight:800}
+.acard-price .ac{font-size:12px;font-weight:600;margin-top:2px}
+.acard-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:11px;color:var(--text2)}
+.acard-meta span{background:var(--surface);border-radius:6px;padding:2px 7px}
+.acard-warn{margin-top:8px;font-size:11px;color:#f5c842;line-height:1.5}
+.abadge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px}
+.abadge.notice{background:rgba(245,200,66,.15);color:#f5c842;border:1px solid rgba(245,200,66,.3)}
+.abadge.dispose{background:rgba(255,76,106,.15);color:#ff4c6a;border:1px solid rgba(255,76,106,.3)}
+.abadge.dayrade{background:rgba(124,92,252,.15);color:#a080ff;border:1px solid rgba(124,92,252,.3)}
+.abadge.hot{background:rgba(0,212,170,.15);color:#00d4aa;border:1px solid rgba(0,212,170,.3)}
 .profile-hero{padding:30px 16px 20px;text-align:center}
 .prof-av{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--green));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;margin:0 auto 12px}
 .pref-item{display:flex;align-items:center;gap:14px;padding:16px;background:var(--card);border-radius:12px;margin:0 16px 10px;border:1px solid var(--border);cursor:pointer;transition:background .15s}
@@ -1021,42 +1035,37 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   </div>
 </div>
 
-<!-- ═══ PAGE: 投組 ═══ -->
+<!-- ═══ PAGE: 警示股 ═══ -->
 <div class="page" id="page-portfolio">
   <div class="header">
-    <div><h1>投資組合</h1><p>持股損益追蹤</p></div>
-    <button onclick="openAddHolding()" style="background:var(--green);color:#000;border:none;border-radius:10px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">＋ 新增</button>
-  </div>
-  <div class="pnl-card" id="portfolioSummary">
-    <div class="pnl-label">總市值</div>
-    <div class="pnl-val" id="totalMV">—</div>
-    <div style="font-size:13px;margin-top:4px" id="totalPnL">更新中…</div>
-  </div>
-  <div class="sec"><h2>持股明細</h2></div>
-  <div id="holdingList"></div>
-  <!-- 新增持股 Modal -->
-  <div id="holdingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
-    <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto">
-      <div style="font-size:17px;font-weight:700;margin-bottom:14px">新增持股</div>
-      <input id="hStockInput" type="text" placeholder="股票代號，例如 2330"
-        style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:16px;font-family:inherit;outline:none;margin-bottom:10px"
-        oninput="onHoldingSearch(this.value)">
-      <div id="hStockResults" style="margin-bottom:10px;max-height:120px;overflow:auto"></div>
-      <div style="display:flex;gap:10px;margin-bottom:10px">
-        <div style="flex:1">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:4px">持有張數</div>
-          <input id="hLots" type="number" placeholder="5" min="0.01" step="0.01"
-            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:15px;font-family:inherit;outline:none">
-        </div>
-        <div style="flex:1">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:4px">買入成本（元）</div>
-          <input id="hCost" type="number" placeholder="950" min="0"
-            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:15px;font-family:inherit;outline:none">
-        </div>
-      </div>
-      <button onclick="confirmAddHolding()" style="width:100%;background:var(--green);color:#000;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px">確認新增</button>
-      <button onclick="closeAddHolding()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text2);font-size:15px;cursor:pointer;font-family:inherit">取消</button>
+    <div><h1>警示股</h1><p>注意 · 處置 · 風險監控</p></div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="alertUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+      <button onclick="refreshAlertStocks(true)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 10px;font-family:inherit">↻</button>
     </div>
+  </div>
+  <!-- 資料時間說明 -->
+  <div id="alertDataNote" style="margin:0 16px 12px;padding:8px 12px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);border-radius:10px;font-size:11px;color:#f5c842;line-height:1.6;display:none"></div>
+  <!-- Tab 列 -->
+  <div class="alert-tabs" id="alertTabs">
+    <button class="alert-tab active" onclick="switchAlertTab('trend',this)">
+      <span class="at-count" id="cnt-trend">—</span>趨勢股
+    </button>
+    <button class="alert-tab" onclick="switchAlertTab('hot',this)">
+      <span class="at-count" id="cnt-hot">—</span>熱門股
+    </button>
+    <button class="alert-tab" onclick="switchAlertTab('risk',this)">
+      <span class="at-count" id="cnt-risk">—</span>風險股
+    </button>
+    <button class="alert-tab" onclick="switchAlertTab('dispose',this)">
+      <span class="at-count" id="cnt-dispose">—</span>處置中
+    </button>
+    <button class="alert-tab" onclick="switchAlertTab('release',this)">
+      <span class="at-count" id="cnt-release">—</span>出閘
+    </button>
+  </div>
+  <div style="padding:12px 16px 80px" id="alertList">
+    <div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 載入中…</div>
   </div>
 </div>
 
@@ -1091,7 +1100,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>總覽</span></button>
   <button class="nav-btn" id="nb-explore" onclick="switchPage('explore')"><span>🔍</span><span>探索</span></button>
   <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>⭐</span><span>自選</span></button>
-  <button class="nav-btn" id="nb-portfolio" onclick="switchPage('portfolio')"><span>💼</span><span>投組</span></button>
+  <button class="nav-btn" id="nb-portfolio" onclick="switchPage('portfolio')"><span>⚠️</span><span>警示</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
 <div class="toast" id="toast"></div>
@@ -1203,7 +1212,7 @@ function switchPage(n){
   window.scrollTo(0,0);
   // 切換頁面時載入對應資料
   if(n==='watchlist') setTimeout(()=>renderWatchlist(),50);
-  if(n==='portfolio') setTimeout(()=>renderPortfolio(),50);
+  if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
 }
 
 // ── Toast ────────────────────────────────────────────
@@ -3592,25 +3601,6 @@ function onWlSearch(v){
     </div>`).join('');
 }
 
-// ── 投組新增搜尋 ─────────────────────────────────────
-function onHoldingSearch(v){
-  const el = document.getElementById('hStockResults');
-  if(!v.trim()){ el.innerHTML=''; return; }
-  const m = searchStocks(v, 5);
-  if(!m.length){
-    el.innerHTML=`<div style="padding:8px 14px;color:var(--text2);font-size:13px">${_stockListLoaded?'查無股票':'資料庫載入中…'}</div>`;
-    return;
-  }
-  el.innerHTML = m.map(s=>`
-    <div onclick="selectHoldingStock('${s.t}','${s.n}')"
-      style="padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between">
-      <div>
-        <span style="font-weight:600">${s.n}</span>
-        <span style="color:var(--text2);font-size:12px"> ${s.t} · ${s.s||'—'}</span>
-      </div>
-      <span style="color:var(--green);font-size:12px">選擇</span>
-    </div>`).join('');
-}
 // ════════════════════════════════════════════════════
 // 產業族群資料庫 + 完整實裝
 // ════════════════════════════════════════════════════
@@ -4677,109 +4667,253 @@ function closeAddWatchlist(){ document.getElementById('wlModal').style.display='
 // ════════════════════════════════════════════════════
 // 投資組合 — localStorage + FinMind 即時損益
 // ════════════════════════════════════════════════════
-const PORT_KEY = 'stockai_portfolio';
+// ════════════════════════════════════════════════════
+// 警示股模組
+// Tab：趨勢股 / 熱門股 / 風險股（注意股）/ 處置中 / 出閘
+// 資料來源：
+//   - 注意/處置/出閘：TWSE openapi（公開）
+//   - 趨勢股：沿用 _trendCache
+//   - 熱門股：FinMind 近日成交量前排
+//   - 風險股：注意股 + 成交量異常
+// ════════════════════════════════════════════════════
 
-function getPortfolio(){ try{ return JSON.parse(localStorage.getItem(PORT_KEY)) || []; }catch(e){ return []; } }
-function savePortfolio(p){ localStorage.setItem(PORT_KEY, JSON.stringify(p)); }
+let _alertData   = null; // { trend, hot, risk, dispose, release }
+let _alertTab    = 'trend';
+let _alertLoaded = false;
 
-async function renderPortfolio(){
-  const port = getPortfolio();
-  const listEl = document.getElementById('holdingList');
-  if(!port.length){
-    listEl.innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">尚無持股<br>點擊右上角新增</div>';
-    document.getElementById('totalMV').textContent='—';
-    document.getElementById('totalPnL').textContent='點擊右上角新增持股';
+// TWSE 公開 API proxy
+async function twseGet(url){
+  const proxies = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?',
+  ];
+  for(const p of proxies){
+    try{
+      const r = await fetch(p + encodeURIComponent(url), {signal: AbortSignal.timeout(8000)});
+      if(!r.ok) continue;
+      const text = await r.text();
+      const json = JSON.parse(text);
+      return json;
+    }catch(e){ continue; }
+  }
+  return null;
+}
+
+// 取注意/處置/出閘股清單（TWSE openapi）
+async function fetchTwseAlertList(){
+  // TWSE 公開 API：注意股票
+  const BASE = 'https://openapi.twse.com.tw/v1';
+  try{
+    const [noticeRes, disposeRes] = await Promise.all([
+      twseGet(BASE+'/announcement/notice'),       // 注意股
+      twseGet(BASE+'/announcement/disposition'),   // 處置股
+    ]);
+    return { noticeRes, disposeRes };
+  }catch(e){
+    console.warn('[Alert] TWSE API error:', e.message);
+    return { noticeRes: null, disposeRes: null };
+  }
+}
+
+// 為注意/處置股補抓即時行情
+async function enrichWithQuote(list, maxItems=20){
+  const top = list.slice(0, maxItems);
+  const results = [];
+  for(let i=0; i<top.length; i++){
+    const item = top[i];
+    try{
+      const q = await fmQuote(item.id);
+      await new Promise(r=>setTimeout(r,150));
+      results.push({ ...item, price: q?.price||null, changePct: q?.changePct||null, volume: q?.volume||null });
+    }catch(e){
+      results.push({ ...item, price: null, changePct: null });
+    }
+  }
+  return results;
+}
+
+async function refreshAlertStocks(manual=false){
+  if(manual) showToast('🔄 更新警示股資料…');
+
+  const listEl = document.getElementById('alertList');
+  const noteEl = document.getElementById('alertDataNote');
+  if(listEl) listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 載入中（約20秒）…</div>`;
+
+  // ── A. 取注意/處置/出閘清單 ─────────────────────────
+  const { noticeRes, disposeRes } = await fetchTwseAlertList();
+
+  // 解析注意股
+  let noticeList = [];
+  if(Array.isArray(noticeRes)){
+    noticeList = noticeRes.map(d=>({
+      id:   d.Code||d.StockCode||d.code||'',
+      name: d.Name||d.StockName||d.name||'',
+      reason: d.Reason||d.reason||d.Note||'',
+      count:  parseInt(d.NoticeCount||d.Count||d.count||0)||0,
+      date:   d.Date||d.date||'',
+      type:   'notice',
+    })).filter(d=>d.id && d.name);
+  }
+
+  // 解析處置股（含出閘）
+  let disposeList = [], releaseList = [];
+  if(Array.isArray(disposeRes)){
+    disposeRes.forEach(d=>{
+      const item = {
+        id:    d.Code||d.StockCode||d.code||'',
+        name:  d.Name||d.StockName||d.name||'',
+        reason:d.Reason||d.reason||d.Note||'',
+        disposeType: d.DisposalType||d.Type||'',
+        startDate:   d.DisposalStartDate||d.StartDate||'',
+        endDate:     d.DisposalEndDate||d.EndDate||'',
+        sessions:    d.DisposalSessions||d.Sessions||'',
+        type: 'dispose',
+      };
+      if(!item.id || !item.name) return;
+      // 若結束日期已過或含「出閘」字眼
+      if(item.endDate && item.endDate < new Date().toISOString().slice(0,10).replace(/-/g,''))
+        releaseList.push({...item, type:'release'});
+      else
+        disposeList.push(item);
+    });
+  }
+
+  // ── B. 熱門股：近日成交量最大的股票 ─────────────────
+  // 從趨勢候選池取成交量倍數最高者
+  let hotList = [];
+  if(_trendCache && _trendCache.length){
+    hotList = [..._trendCache].sort((a,b)=>parseFloat(b.volRatio)-parseFloat(a.volRatio));
+  } else {
+    // fallback：用族群代表股
+    const hotIds = ['2330','2454','2317','2382','2603','2609','6770','3661'];
+    for(const id of hotIds){
+      const q = await fmQuote(id);
+      if(q) hotList.push({id, name: q.name||id, price:q.price, changePct:q.changePct, volRatio:1, signals:[], sector:'—'});
+      await new Promise(r=>setTimeout(r,150));
+    }
+  }
+
+  // ── C. 風險股：注意股中成交量異常或短期大漲 ─────────
+  let riskList = [];
+  if(noticeList.length){
+    // 補行情給前20筆注意股
+    const enriched = await enrichWithQuote(noticeList, 20);
+    // 風險定義：changePct > 5% 或 count >= 3次注意
+    riskList = enriched.filter(d=>(d.count>=3) || (d.changePct && Math.abs(d.changePct)>5));
+    noticeList = enriched; // 更新 noticeList 帶上行情
+  }
+
+  // ── D. 資料整合 ──────────────────────────────────────
+  _alertData = {
+    trend:   _trendCache || [],
+    hot:     hotList,
+    risk:    riskList.length ? riskList : noticeList.slice(0,10),
+    dispose: disposeList,
+    release: releaseList,
+    noticeAll: noticeList,
+  };
+  _alertLoaded = true;
+
+  // 更新 Tab 計數
+  setEl('cnt-trend',   _alertData.trend.length   || '—');
+  setEl('cnt-hot',     _alertData.hot.length      || '—');
+  setEl('cnt-risk',    _alertData.risk.length      || '—');
+  setEl('cnt-dispose', _alertData.dispose.length   || '—');
+  setEl('cnt-release', _alertData.release.length   || '—');
+
+  // 更新時間
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  setEl('alertUpdateTime', ts+' 更新');
+
+  // 顯示資料說明
+  if(noteEl){
+    noteEl.style.display = 'block';
+    noteEl.textContent = 'ⓘ 注意/處置股資料來源：TWSE 公開資訊觀測站。趨勢/熱門股每5分鐘更新，注意/處置股為當日最新。';
+  }
+
+  renderAlertList(_alertTab);
+}
+
+function switchAlertTab(tab, btn){
+  _alertTab = tab;
+  document.querySelectorAll('.alert-tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(_alertLoaded) renderAlertList(tab);
+  else refreshAlertStocks();
+}
+
+function renderAlertList(tab){
+  const el = document.getElementById('alertList');
+  if(!el || !_alertData) return;
+
+  const data = _alertData[tab] || [];
+  if(!data.length){
+    el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">
+      ${tab==='dispose'?'目前無處置股':tab==='release'?'目前無出閘股':tab==='risk'?'目前無風險訊號':'暫無資料'}</div>`;
     return;
   }
-  listEl.innerHTML = port.map((h,i)=>`
-    <div class="holding-row" id="hold-${i}">
-      <div style="flex:1">
-        <div class="ht">${h.name} × ${h.lots}張</div>
-        <div class="hs" id="hs-${i}">成本 ${h.cost} → 載入中…</div>
+
+  el.innerHTML = data.map(s=>{
+    const isUp   = (s.changePct??0) >= 0;
+    const color  = s.price ? (isUp?'var(--red)':'var(--green)') : 'var(--text3)';
+    const pctStr = s.changePct != null
+      ? (isUp?'▲+':'▼')+Math.abs(s.changePct).toFixed(2)+'%' : '—';
+
+    // 標籤
+    let badges = '';
+    if(tab==='trend')   badges = (s.signals||[]).slice(0,2).map(sig=>
+      `<span class="abadge hot">${TREND_SIGNALS[sig]?.label||sig}</span>`).join('');
+    if(tab==='hot')     badges = `<span class="abadge hot">📊 量${parseFloat(s.volRatio||1).toFixed(1)}倍</span>`;
+    if(tab==='risk')    badges = `<span class="abadge notice">⚠️ 注意${s.count?s.count+'次':''}</span>`;
+    if(tab==='dispose') badges = `<span class="abadge dispose">🔒 處置中</span>`
+      +(s.sessions?`<span class="abadge dispose">${s.sessions}</span>`:'');
+    if(tab==='release') badges = `<span class="abadge dayrade">🔓 出閘</span>`;
+
+    // 副資訊
+    let meta = '';
+    if(tab==='trend' || tab==='hot'){
+      meta = `<span>${s.sector||'—'}</span>`;
+      if(s.gain5) meta += `<span>5日 ${parseFloat(s.gain5)>=0?'+':''}${s.gain5}%</span>`;
+      if(s.inst5 && s.inst5>0) meta += `<span>法人+${Math.round(s.inst5/1000)}千張</span>`;
+    }
+    if(tab==='risk' || tab==='dispose' || tab==='release'){
+      if(s.date||s.startDate) meta += `<span>📅 ${s.date||s.startDate}</span>`;
+      if(s.endDate) meta += `<span>至 ${s.endDate}</span>`;
+    }
+
+    // 警告原因
+    const warn = (s.reason||s.disposeType)
+      ? `<div class="acard-warn">⚠ ${s.reason||s.disposeType}</div>` : '';
+
+    return `<div class="acard" onclick="pickAlertStock('${s.name}','${s.id}')">
+      <div class="acard-top">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="acard-name">${s.name}</span>
+            ${badges}
+          </div>
+          <div class="acard-id">${s.id} ${s.sector&&(tab==='trend'||tab==='hot')?'· '+s.sector:''}</div>
+        </div>
+        <div class="acard-price">
+          <div class="ap" style="color:${color}">${s.price?fmt(s.price):'—'}</div>
+          <div class="ac" style="color:${color}">${pctStr}</div>
+        </div>
       </div>
-      <div class="hright">
-        <div class="hv" id="hv-${i}">—</div>
-        <div class="hp" id="hp2-${i}">—</div>
-      </div>
-      <div onclick="removeHolding(${i})" style="padding:8px 4px 8px 12px;color:var(--text3);font-size:20px;cursor:pointer">✕</div>
-    </div>`).join('');
-
-  let totalMV=0, totalCost=0;
-  for(let i=0; i<port.length; i++){
-    const h = port[i];
-    const d = await fmQuote(h.id);
-    await new Promise(r=>setTimeout(r,200));
-    const price = d?.price || h.cost;
-    const mv    = price * h.lots * 1000;
-    const cost  = h.cost * h.lots * 1000;
-    const pnl   = mv - cost;
-    const pnlPct= (pnl/cost*100);
-    const isUp  = pnl >= 0;
-    totalMV   += mv;
-    totalCost += cost;
-    document.getElementById(`hs-${i}`).textContent = `成本 ${h.cost} → 現價 ${fmt(price)}`;
-    document.getElementById(`hv-${i}`).textContent = '$'+Math.round(mv).toLocaleString();
-    document.getElementById(`hp2-${i}`).textContent= (isUp?'+':'')+pnlPct.toFixed(1)+'%';
-    document.getElementById(`hp2-${i}`).className  = 'hp '+(isUp?'up':'dn');
-  }
-  const totalPnL = totalMV - totalCost;
-  const totalPct = (totalPnL/totalCost*100);
-  const isUp = totalPnL>=0;
-  document.getElementById('totalMV').textContent = '$'+Math.round(totalMV).toLocaleString();
-  document.getElementById('totalMV').className = 'pnl-val '+(isUp?'up':'dn');
-  document.getElementById('totalPnL').textContent = `${isUp?'▲':'▼'} 損益 ${isUp?'+':''}${Math.round(totalPnL).toLocaleString()} (${isUp?'+':''}${totalPct.toFixed(1)}%)`;
-  document.getElementById('totalPnL').className = isUp?'up':'dn';
+      ${meta?`<div class="acard-meta">${meta}</div>`:''}
+      ${warn}
+    </div>`;
+  }).join('');
 }
 
-function removeHolding(i){
-  const port = getPortfolio();
-  const name = port[i]?.name||'';
-  if(!confirm('確定移除 '+name+'？')) return;
-  port.splice(i,1);
-  savePortfolio(port);
-  renderPortfolio();
-  showToast('已移除 '+name);
+async function pickAlertStock(name, id){
+  if(!id||id==='—') return;
+  switchPage('home');
+  await selectStock(null, name, id+'.TW');
 }
 
-let _holdingStockId = '', _holdingStockName = '';
-
-function openAddHolding(){
-  document.getElementById('holdingModal').style.display='flex';
-  document.getElementById('hStockInput').value='';
-  document.getElementById('hStockResults').innerHTML='';
-  document.getElementById('hLots').value='';
-  document.getElementById('hCost').value='';
-  _holdingStockId=''; _holdingStockName='';
-}
-function closeAddHolding(){ document.getElementById('holdingModal').style.display='none'; }
-
-function selectHoldingStock(id, name){
-  _holdingStockId=id; _holdingStockName=name;
-  document.getElementById('hStockInput').value=name+' ('+id+')';
-  document.getElementById('hStockResults').innerHTML='';
-}
-
-function confirmAddHolding(){
-  if(!_holdingStockId){ showToast('請先選擇股票'); return; }
-  const lots=parseFloat(document.getElementById('hLots').value);
-  const cost=parseFloat(document.getElementById('hCost').value);
-  if(!lots||!cost){ showToast('請填寫張數與成本'); return; }
-  const port=getPortfolio();
-  const exist=port.findIndex(h=>h.id===_holdingStockId);
-  if(exist>=0){
-    // 合併計算均價
-    const old=port[exist];
-    const newLots=old.lots+lots;
-    const newCost=(old.cost*old.lots+cost*lots)/newLots;
-    port[exist]={...old,lots:newLots,cost:+newCost.toFixed(2)};
-  } else {
-    port.push({id:_holdingStockId,name:_holdingStockName,lots,cost});
-  }
-  savePortfolio(port);
-  closeAddHolding();
-  renderPortfolio();
-  showToast('已新增 '+_holdingStockName);
-}
+// 頁面切換時觸發
+function renderPortfolio(){ if(!_alertLoaded) refreshAlertStocks(); else renderAlertList(_alertTab); }
 
 // ════════════════════════════════════════════════════
 // 我的頁面 — localStorage 個人設定
@@ -4813,7 +4947,7 @@ function saveProfile(){
 
 function clearAllData(){
   if(!confirm('確定清除所有資料（自選股、投組、設定）？')) return;
-  [WL_KEY, PORT_KEY, PROF_KEY].forEach(k=>localStorage.removeItem(k));
+  [WL_KEY, PROF_KEY].forEach(k=>localStorage.removeItem(k));
   loadProfile();
   renderWatchlist();
   renderHomeWatchlist();
