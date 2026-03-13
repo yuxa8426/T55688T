@@ -1345,15 +1345,18 @@ function scheduleAutoRefresh(){
   const isWeekend= now.getDay()===0||now.getDay()===6;
   const inSession= !isWeekend && totalMin>=555 && totalMin<=810;
 
-  const interval = inSession ? 60000 : 300000; // 盤中1分鐘，盤外5分鐘
+  const interval = inSession ? 60000 : 600000; // 盤中1分鐘，盤外10分鐘
   _autoRefreshTimer = setTimeout(async ()=>{
     if(currentTicker && currentName){
       const stockId = currentTicker.replace('.TW','');
-      const [q, h, inst] = await Promise.all([
+      // autoRefresh：只重抓最新報價（5天）+ 法人，歷史已有 fmFetch cache
+      const [q, inst] = await Promise.all([
         fmQuote(stockId),
-        fmHistory(stockId, 250),
         fmInstitutional(stockId),
       ]);
+      // 從 cache 取歷史（不重新 fetch）
+      const hCached = await fmHistory(stockId, 250);
+      const h = hCached;
       if(q){
         const isUp = q.changePct>=0;
         renderStockHeader(currentName, currentTicker, q.price, q.changePct, isUp);
@@ -1382,35 +1385,80 @@ function scheduleAutoRefresh(){
 }
 
 // 通用 FinMind fetch
+// ── fmFetch：帶快取 + in-flight dedup ────────────────
+// 同一 URL 30秒內回傳快取，並行請求自動共用同一個 Promise
+const _fmCache   = new Map(); // url → {data, ts, ttl}
+const _fmFlight  = new Map(); // url → Promise（in-flight dedup）
+// 每 5 分鐘清除過期 cache，防記憶體持續增長
+setInterval(()=>{
+  const now = Date.now();
+  _fmCache.forEach((v,k)=>{
+    const ttl = FM_CACHE_TTL_MAP[k.split('dataset=')[1]?.split('&')[0]] ?? FM_CACHE_DEFAULT;
+    if(now-v.ts > ttl*2) _fmCache.delete(k);
+  });
+  _newsCache.forEach((v,k)=>{ if(now-v.ts > NEWS_CACHE_TTL*2) _newsCache.delete(k); });
+  _intradayCache.forEach((v,k)=>{ if(now-v.ts > INTRADAY_TTL*10) _intradayCache.delete(k); });
+}, 5*60*1000);
+// 依資料集的快取時效（毫秒）
+const FM_CACHE_TTL_MAP = {
+  TaiwanStockPrice:              30 * 1000,  // 即時報價：30秒
+  TaiwanStockInstitutionalInvestorsBuySell: 5*60*1000, // 法人：5分鐘
+  TaiwanStockShareholding:       10*60*1000, // 大戶持股：10分鐘
+  TaiwanStockTotalInstitutionalInvestors:   5*60*1000,
+  TaiwanStockTotalMarginPurchaseShortSale:  5*60*1000,
+  TaiwanOptionInstitutionalInvestors:       5*60*1000,
+  TaiwanFuturesInstitutionalInvestors:      5*60*1000,
+  TaiwanMarginPurchaseShortSale:            5*60*1000,
+  TaiwanStockNews:               5*60*1000,  // 新聞：5分鐘
+  CBOE_VIX:                      3*60*1000,  // VIX：3分鐘
+  TaiwanStockInfo:              60*60*1000,  // 股票清單：60分鐘
+};
+const FM_CACHE_DEFAULT = 30 * 1000;
+
 async function fmFetch(params, timeout=12000){
-  const url = FM_BASE + '?' + new URLSearchParams({ ...params, token: FM_TOKEN });
-  try {
-    const res = await fetchWithTimeout(url, timeout);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const json = await res.json();
-    if(json.status !== 200) throw new Error(json.msg || 'FinMind error');
-    return json.data || [];
-  } catch(e){
-    console.warn('FinMind failed:', params.dataset, e.message);
-    return null;
-  }
+  const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
+  const url = FM_BASE + '?' + new URLSearchParams({ ...apiParams, token: FM_TOKEN });
+  const ttl = _ttl ?? FM_CACHE_TTL_MAP[params.dataset] ?? FM_CACHE_DEFAULT;
+
+  // 快取命中
+  const hit = _fmCache.get(url);
+  if(hit && Date.now()-hit.ts < ttl) return hit.data;
+
+  // in-flight dedup：同一請求已在飛行中，等它完成
+  if(_fmFlight.has(url)) return _fmFlight.get(url);
+
+  const p = (async()=>{
+    try{
+      const res = await fetchWithTimeout(url, timeout);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+      if(json.status !== 200) throw new Error(json.msg||'FinMind error');
+      const data = json.data||[];
+      _fmCache.set(url, {data, ts:Date.now()});
+      return data;
+    }catch(e){
+      console.warn('FinMind failed:', params.dataset, e.message);
+      return null;
+    }finally{
+      _fmFlight.delete(url);
+    }
+  })();
+
+  _fmFlight.set(url, p);
+  return p;
 }
 
-// ── 1. 即時股價 ───────────────────────────────────────
-// FinMind TaiwanStockPrice: 最近 2 天資料，取最後一筆
-async function fmQuote(stockId){
-  const data = await fmFetch({
-    dataset:  'TaiwanStockPrice',
-    data_id:  stockId,
-    start_date: nDaysAgo(5),
-    end_date:   todayStr(),
-  });
-  if(!data || !data.length) return null;
-  const row = data[data.length-1]; // 最新一筆
+// ── 1. 個股行情（合併版）────────────────────────────
+// fmStockData(id, days)：一次 API 同時取「即時報價」與「歷史日K」
+// fmQuote / fmHistory 保留為薄包裝，供現有呼叫點使用（不需改呼叫處）
+function _parseQuote(data, stockId){
+  if(!data||!data.length) return null;
+  const row  = data[data.length-1];
   const prev = data.length>1 ? data[data.length-2].close : row.open;
   const price = parseFloat(row.close);
   const change = price - parseFloat(prev);
-  const result = {
+  markFresh('quote');
+  return {
     stockId,
     price,
     open:      parseFloat(row.open),
@@ -1419,29 +1467,44 @@ async function fmQuote(stockId){
     volume:    parseInt(row.Trading_Volume),
     prevClose: parseFloat(prev),
     change,
-    changePct: (change / parseFloat(prev)) * 100,
-    longName:  NAME_MAP[stockId] || stockId,
+    changePct: prev>0 ? (change/parseFloat(prev))*100 : 0,
+    longName:  NAME_MAP[stockId]||stockId,
     date:      row.date,
   };
-  markFresh('quote');
-  return result;
 }
-async function fmHistory(stockId, days=60){
-  const data = await fmFetch({
-    dataset:    'TaiwanStockPrice',
-    data_id:    stockId,
-    start_date: nDaysAgo(days),
-    end_date:   todayStr(),
-  });
-  if(!data || !data.length) return null;
+function _parseHistory(data){
+  if(!data||!data.length) return null;
   return {
     close:  data.map(r=>parseFloat(r.close)),
     open:   data.map(r=>parseFloat(r.open)),
     high:   data.map(r=>parseFloat(r.max)),
     low:    data.map(r=>parseFloat(r.min)),
     volume: data.map(r=>parseInt(r.Trading_Volume)),
+    spread: data.map(r=>parseFloat(r.spread||0)),
     dates:  data.map(r=>r.date),
+    raw:    data,
   };
+}
+
+// 核心：一次抓 days 天，同時供 quote 與 history 使用
+async function fmStockData(stockId, days=250){
+  const data = await fmFetch({
+    dataset:    'TaiwanStockPrice',
+    data_id:    stockId,
+    start_date: nDaysAgo(days),
+    end_date:   todayStr(),
+  });
+  return data;
+}
+
+// 薄包裝：向後相容（有 fmFetch cache 保證不重複 HTTP 請求）
+async function fmQuote(stockId){
+  const data = await fmStockData(stockId, 5);
+  return _parseQuote(data, stockId);
+}
+async function fmHistory(stockId, days=60){
+  const data = await fmStockData(stockId, days);
+  return _parseHistory(data);
 }
 
 // ── 盤中分鐘K（Yahoo Finance v8，via CORS proxy）─────────
@@ -1480,7 +1543,9 @@ async function fetchIntraday(stockId){
       }
       if(pts.length < 3) continue;
       console.log('[Intraday] OK', pts.length, 'pts via', proxyUrl.slice(0,30));
-      return { pts, times, source:'Yahoo' };
+      const result2 = { pts, times, source:'Yahoo' };
+      _intradayCache.set(stockId, {data: result2, ts: Date.now()});
+      return result2;
     }catch(e){
       console.warn('[Intraday] proxy failed:', e.message);
     }
@@ -4273,12 +4338,13 @@ async function selectStock(el, name, ticker){
   setLoading('chartSvg', true);
   showToast('🔄 載入 '+name+'…');
 
-  // 並行抓：股價 + 歷史（250天=約一年，供短/中/長期分析）+ 個股法人
-  const [quoteData, histData, instData] = await Promise.all([
-    fmQuote(stockId),
-    fmHistory(stockId, 250),
+  // 一次 API：TaiwanStockPrice(250天) 同時取報價+歷史，搭配法人平行進行
+  const [rawPrice, instData] = await Promise.all([
+    fmStockData(stockId, 250),
     fmInstitutional(stockId),
   ]);
+  const quoteData = _parseQuote(rawPrice, stockId);
+  const histData  = _parseHistory(rawPrice);
 
   setLoading('chartSvg', false);
 
@@ -4325,6 +4391,10 @@ const NEWS_CAT = { '台積電':'tech','聯發科':'tech','鴻海':'tech','外資
 // 讓手動重新整理按鈕可用
 function refreshNews(){ loadNews(currentTicker.replace('.TW','')); }
 
+// 新聞快取（同一股票 5 分鐘內不重抓）
+const _newsCache = new Map(); // stockId → {html, ts}
+const NEWS_CACHE_TTL = 5*60*1000;
+
 async function loadNews(stockId){
   const id   = stockId || currentTicker.replace('.TW','');
   const name = currentName || id;
@@ -4333,8 +4403,16 @@ async function loadNews(stockId){
   const banner = document.getElementById('stockNewsBanner');
 
   if(tag) tag.textContent = name + ' & 市場';
-  if(el)  el.innerHTML = `<div class="nitem"><div style="flex:1"><div class="nt" style="color:var(--text3)">🔍 載入 ${name} 相關消息…</div></div></div>`;
   if(banner) banner.style.display = 'none';
+
+  // 快取命中：直接渲染，無需 loading 狀態
+  const cached = _newsCache.get(id);
+  if(cached && Date.now()-cached.ts < NEWS_CACHE_TTL){
+    if(el) el.innerHTML = cached.html;
+    return;
+  }
+
+  if(el) el.innerHTML = `<div class="nitem"><div style="flex:1"><div class="nt" style="color:var(--text3)">🔍 載入 ${name} 相關消息…</div></div></div>`;
 
   // 並行抓：個股新聞 + 大盤通用新聞（2330 作為市場代表）
   const [stockNews, marketNews] = await Promise.all([
@@ -4403,6 +4481,8 @@ async function loadNews(stockId){
     return newsItem(n.title||'—', n.description||'FinMind', cat, n.link||'', n._isStock, n.date||'');
   }).join('');
 
+  // 存入快取
+  _newsCache.set(id, {html: el.innerHTML, ts: Date.now()});
   markFresh('news');
 }
 
@@ -4617,18 +4697,18 @@ async function renderWatchlist(){
       <div onclick="removeFromWatchlist('${s.id}')" style="padding:8px 4px 8px 12px;color:var(--text3);font-size:20px;cursor:pointer;flex-shrink:0">✕</div>
     </div>`).join('');
 
-  // 背景載入價格
-  for(const s of wl){
-    const d = await fmQuote(s.id);
-    await new Promise(r=>setTimeout(r,200));
-    if(!d) continue;
+  // 並行載入：全部股票同時 fetch（fmFetch cache 保護，不重複打 API）
+  await Promise.all(wl.map(async s=>{
+    const raw = await fmStockData(s.id, 15); // 一次取報價 + sparkline
+    if(!raw||!raw.length) return;
+    const d    = _parseQuote(raw, s.id);
+    const hist = _parseHistory(raw);
+    if(!d) return;
     const isUp = d.changePct>=0;
     const el2 = document.getElementById('wpr-'+s.id);
     const el3 = document.getElementById('wch-'+s.id);
     if(el2) el2.textContent = fmt(d.price);
     if(el3){ el3.textContent = fmtPct(d.changePct); el3.className='wc '+(isUp?'up':'dn'); }
-    // 更新 sparkline（用歷史10日）
-    const hist = await fmHistory(s.id, 12);
     if(hist?.close){
       const pts = hist.close.filter(v=>v!=null);
       if(pts.length>1){
@@ -4639,7 +4719,7 @@ async function renderWatchlist(){
         if(line){ line.setAttribute('points',points); line.setAttribute('stroke',isUp?'#ff4c6a':'#00d4aa'); }
       }
     }
-  }
+  }));
 }
 
 async function renderHomeWatchlist(){
@@ -4652,15 +4732,29 @@ async function renderHomeWatchlist(){
       <div class="wmini"><svg viewBox="0 0 50 32"><polyline id="hwl-${s.id}" points="0,16 25,16 50,16" stroke="#8888aa" stroke-width="1.5" fill="none"/></svg></div>
       <div class="wr"><div class="wp" id="hwp-${s.id}">—</div><div class="wc" id="hwc-${s.id}">—</div></div>
     </div>`).join('');
-  for(const s of wl){
-    const d = await fmQuote(s.id);
-    await new Promise(r=>setTimeout(r,200));
-    if(!d) continue;
+  await Promise.all(wl.map(async s=>{
+    const raw = await fmStockData(s.id, 15);
+    if(!raw||!raw.length) return;
+    const d = _parseQuote(raw, s.id);
+    if(!d) return;
     const isUp=d.changePct>=0;
     const pe=document.getElementById('hwp-'+s.id), ce=document.getElementById('hwc-'+s.id);
     if(pe) pe.textContent=fmt(d.price);
     if(ce){ ce.textContent=fmtPct(d.changePct); ce.className='wc '+(isUp?'up':'dn'); }
-  }
+    // sparkline
+    const lne=document.getElementById('hwl-'+s.id);
+    if(lne){
+      const hist2 = _parseHistory(raw);
+      const pts=(hist2?.close||[]).filter(v=>v!=null);
+      if(pts.length>1){
+        const mn=Math.min(...pts),mx=Math.max(...pts),rng=mx-mn||1;
+        const W=50,H=32,pad=4;
+        const points=pts.map((v,i)=>`${(i/(pts.length-1)*W).toFixed(1)},${(H-pad-((v-mn)/rng*(H-pad*2))).toFixed(1)}`).join(' ');
+        lne.setAttribute('points',points);
+        lne.setAttribute('stroke',isUp?'#ff4c6a':'#00d4aa');
+      }
+    }
+  }));
 }
 
 function openAddWatchlist(){
@@ -4751,12 +4845,13 @@ async function calcAlertStatus(stockId, stockName){
     const d30 = new Date(today); d30.setDate(d30.getDate()-30);
     const startDate = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
 
-    const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${startDate}&token=${FM_TOKEN}`;
-    const r = await fetchWithTimeout(url, 9000);
-    if(!r.ok) return null;
-    const json = await r.json();
-    if(json.msg && json.msg !== 'success') return null;
-    const allRows = (json.data||[]);
+    // 使用 fmFetch（帶快取），若同支股票已被其他地方抓過，直接命中 cache
+    const allRows = await fmFetch({
+      dataset:    'TaiwanStockPrice',
+      data_id:    stockId,
+      start_date: startDate,
+      end_date:   todayStr(),
+    }, 9000);
     if(allRows.length < 5) return null;
 
     // FinMind: spread = 今收 - 昨收（漲跌差）
