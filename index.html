@@ -1396,9 +1396,8 @@ function scheduleAutoRefresh(){
         fmQuote(stockId),
         fmInstitutional(stockId),
       ]);
-      // 從 cache 取歷史（不重新 fetch）
-      const hCached = await fmHistory(stockId, 250);
-      const h = hCached;
+      // 從 cache 取歷史（60天，已有 cache 直接命中）
+      const h = await fmHistory(stockId, 60);
       if(q){
         const isUp = q.changePct>=0;
         renderStockHeader(currentName, currentTicker, q.price, q.changePct, isUp);
@@ -1439,11 +1438,17 @@ setInterval(()=>{
     if(now-v.ts > ttl*2) _fmCache.delete(k);
   });
   _newsCache.forEach((v,k)=>{ if(now-v.ts > NEWS_CACHE_TTL*2) _newsCache.delete(k); });
-  _intradayCache.forEach((v,k)=>{ if(now-v.ts > INTRADAY_TTL*10) _intradayCache.delete(k); });
+  _intradayCache.forEach((v,k)=>{ if(now-v.ts > INTRADAY_TTL*3) _intradayCache.delete(k); });
 }, 5*60*1000);
 // 依資料集的快取時效（毫秒）
+// 盤中/盤外報價 TTL（盤外報價不變，可 cache 更久）
+function _isTradingSession(){
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const wd = tw.getDay(), tot = tw.getHours()*60+tw.getMinutes();
+  return wd>0 && wd<6 && tot>=555 && tot<=815;
+}
 const FM_CACHE_TTL_MAP = {
-  TaiwanStockPrice:              30 * 1000,  // 即時報價：30秒
+  TaiwanStockPrice:              ()=> _isTradingSession() ? 30*1000 : 5*60*1000,
   TaiwanStockInstitutionalInvestorsBuySell: 5*60*1000, // 法人：5分鐘
   TaiwanStockShareholding:       10*60*1000, // 大戶持股：10分鐘
   TaiwanStockTotalInstitutionalInvestors:   5*60*1000,
@@ -1457,14 +1462,31 @@ const FM_CACHE_TTL_MAP = {
 };
 const FM_CACHE_DEFAULT = 30 * 1000;
 
-async function fmFetch(params, timeout=12000){
+async function fmFetch(params, timeout=6000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
   const url = FM_BASE + '?' + new URLSearchParams({ ...apiParams, token: FM_TOKEN });
-  const ttl = _ttl ?? FM_CACHE_TTL_MAP[params.dataset] ?? FM_CACHE_DEFAULT;
+  const rawTtl = _ttl ?? FM_CACHE_TTL_MAP[params.dataset] ?? FM_CACHE_DEFAULT;
+  const ttl    = typeof rawTtl === 'function' ? rawTtl() : rawTtl;
 
-  // 快取命中
+  // 快取命中（fresh）
   const hit = _fmCache.get(url);
-  if(hit && Date.now()-hit.ts < ttl) return hit.data;
+  const age = hit ? Date.now()-hit.ts : Infinity;
+  if(hit && age < ttl) return hit.data;
+
+  // stale-while-revalidate：資料稍舊但仍可用，先回傳舊值同時背景更新
+  if(hit && age < ttl*4){
+    // 背景悄悄更新（不阻塞目前請求）
+    if(!_fmFlight.has(url)){
+      const bgP = (async()=>{
+        try{
+          const r = await fetchWithTimeout(url, timeout);
+          if(r.ok){ const j=await r.json(); if(j.status===200) _fmCache.set(url,{data:j.data||[],ts:Date.now()}); }
+        }catch(e){}finally{ _fmFlight.delete(url); }
+      })();
+      _fmFlight.set(url, bgP);
+    }
+    return hit.data; // 立即回傳舊資料
+  }
 
   // in-flight dedup：同一請求已在飛行中，等它完成
   if(_fmFlight.has(url)) return _fmFlight.get(url);
@@ -1561,7 +1583,7 @@ async function fetchIntraday(stockId){
   ];
   for(const proxyUrl of proxies){
     try{
-      const res  = await fetchWithTimeout(proxyUrl, 10000);
+      const res  = await fetchWithTimeout(proxyUrl, 5000);
       const wrap = await res.json();
       // allorigins 把 body 包在 .contents，corsproxy 直接回 JSON
       const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
@@ -1677,7 +1699,7 @@ async function fmShareholder(stockId='2330'){
       data_id:    stockId,
       start_date: nDaysAgo(60),
       end_date:   todayStr(),
-    }, 15000).catch(()=>null),
+    }, 8000).catch(()=>null),
     fmFetch({
       dataset:    'TaiwanStockMarginPurchaseShortSale',
       data_id:    stockId,
@@ -2737,8 +2759,10 @@ async function setTab(btn, period){
     }
   } else {
     // ── 其他 Tab：日K ───────────────────────────────────
+    // 月/季 (≤95天) 用 60天 cache 即可命中；半年/年才補抓更多天數
     const days = TAB_DAYS[period] || 60;
-    const histData = await fmHistory(sid, days);
+    const fetchDays = days <= 60 ? 60 : days; // ≤60天直接命中 cache
+    const histData = await fmHistory(sid, fetchDays);
     setLoading('chartSvg', false);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
     const dates = histData?.dates || [];
@@ -3620,7 +3644,7 @@ STOCKS = DEFAULT_STOCKS;
 async function loadStockList(){
   if(_stockListLoaded) return;
   try {
-    const data = await fmFetch({ dataset: 'TaiwanStockInfo' }, 20000);
+    const data = await fmFetch({ dataset: 'TaiwanStockInfo' }, 10000);
     if(!data || !data.length) return;
     STOCKS = data
       .filter(r => r.stock_id && r.stock_name && /^\d{4,5}[A-Z0-9]*$/.test(r.stock_id))
@@ -4115,14 +4139,14 @@ async function loadSectorData(key){
     return;
   }
 
-  // 並行抓每支股票的報價 + 法人（分批，每批4支，避免API限速）
+  // 並行抓每支股票的報價 + 法人（分批4支，interval 200ms）
   const results = [];
-  const batch   = 3; // 每批
+  const batch   = 4;
   for(let i=0; i<sec.stocks.length; i+=batch){
     const slice = sec.stocks.slice(i, i+batch);
     const fetched = await Promise.all(slice.map(async s=>{
       const [raw, inst] = await Promise.all([
-        fmStockData(s.id, 22), // 22天：足夠算 volRatio（今日量 / 20日均量）
+        fmStockData(s.id, 30), // 30天：穩定計算 vol20avg + volRatio
         fmInstitutional(s.id),
       ]);
       const q = _parseQuote(raw, s.id);
@@ -4135,8 +4159,8 @@ async function loadSectorData(key){
       return { ...s, q, inst, isLeader: sec.leader.includes(s.id) };
     }));
     results.push(...fetched);
-    // 即時更新已取得的部分
-    renderSectorStocks(key, results);
+    renderSectorStocks(key, results); // 即時渲染已到的部分
+    if(i+batch < sec.stocks.length) await new Promise(r=>setTimeout(r,200));
   }
 
   // 緩存
@@ -4542,8 +4566,9 @@ async function pickSectorStock(name, id){
 
 async function scoreTrendStock(stock){
   try{
+    // fmHistory(60) 與 selectStock cache 相同 URL → 大機率命中
     const [hist, inst] = await Promise.all([
-      fmHistory(stock.id, 30),
+      fmHistory(stock.id, 60),
       fmInstitutional(stock.id),
     ]);
     if(!hist || hist.close.length < 6) return null;
@@ -4625,7 +4650,7 @@ async function refreshTrendStocks(manual=false){
     const batch = TREND_POOL.slice(i, i+BATCH);
     const scored = await Promise.all(batch.map(s=>scoreTrendStock(s)));
     scored.forEach(r=>{ if(r && r.score>0) results.push(r); });
-    if(i+BATCH < TREND_POOL.length) await new Promise(r=>setTimeout(r,800));
+    if(i+BATCH < TREND_POOL.length) await new Promise(r=>setTimeout(r,300));
   }
 
   // 排序取前8名
@@ -4716,10 +4741,12 @@ async function selectStock(el, name, ticker){
   setLoading('chartSvg', true);
   showToast('🔄 載入 '+name+'…');
 
-  // 一次 API：TaiwanStockPrice(250天) 同時取報價+歷史，搭配法人平行進行
-  const [rawPrice, instData] = await Promise.all([
-    fmStockData(stockId, 250),
+  // 三路並行：報價60天 + 法人 + 分鐘K 同時發出，不互等
+  // 60天足夠：AI分析只用20根，圖表月/季均可，年tab則 lazy load
+  const [rawPrice, instData, intra] = await Promise.all([
+    fmStockData(stockId, 60),
     fmInstitutional(stockId),
+    fetchIntraday(stockId),   // 與日K並行，不再串行等待
   ]);
   const quoteData = _parseQuote(rawPrice, stockId);
   const histData  = _parseHistory(rawPrice);
@@ -4732,8 +4759,7 @@ async function selectStock(el, name, ticker){
     renderVolBars(isUp);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
     const dates = histData?.dates||[];
-    // 初始顯示 1D：優先用分鐘K，fallback 用日K近5日
-    const intra = await fetchIntraday(stockId);
+    // 1D 圖：優先用分鐘K（已並行取得），fallback 用日K近5日
     if(intra && intra.pts.length > 2){
       drawChart(intra.pts, isUp?'#ff4c6a':'#00d4aa', intra.times, '1D');
     } else {
@@ -4747,7 +4773,7 @@ async function selectStock(el, name, ticker){
     updateAI(name, {...quoteData, closes: histData?.close||[], dates: histData?.dates||[], inst: instData});
     updateStockTrendBar(stockId, histData, instData);
     showToast('✅ '+name+' 資料：'+quoteData.date);
-    // 連動更新：籌碼 + 新聞（背景執行，不阻塞主流程）
+    // 背景執行：籌碼 + 新聞（不阻塞主流程）
     const sid = currentTicker.replace('.TW','');
     loadShareholder(sid);
     loadNews(sid);
@@ -5077,7 +5103,8 @@ async function renderWatchlist(){
 
   // 並行載入：全部股票同時 fetch（fmFetch cache 保護，不重複打 API）
   await Promise.all(wl.map(async s=>{
-    const raw = await fmStockData(s.id, 15); // 一次取報價 + sparkline
+    // fmStockData(60) 與主頁 selectStock 共用 cache，通常直接命中
+    const raw = await fmStockData(s.id, 60);
     if(!raw||!raw.length) return;
     const d    = _parseQuote(raw, s.id);
     const hist = _parseHistory(raw);
@@ -5111,7 +5138,7 @@ async function renderHomeWatchlist(){
       <div class="wr"><div class="wp" id="hwp-${s.id}">—</div><div class="wc" id="hwc-${s.id}">—</div></div>
     </div>`).join('');
   await Promise.all(wl.map(async s=>{
-    const raw = await fmStockData(s.id, 15);
+    const raw = await fmStockData(s.id, 60); // 共用 selectStock cache
     if(!raw||!raw.length) return;
     const d = _parseQuote(raw, s.id);
     if(!d) return;
@@ -5219,17 +5246,8 @@ function getAlertPool(){
 //   出閘：前期(10日前)有處置信號，近5日已恢復正常
 async function calcAlertStatus(stockId, stockName){
   try{
-    const today = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const d30 = new Date(today); d30.setDate(d30.getDate()-30);
-    const startDate = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
-
-    // 使用 fmFetch（帶快取），若同支股票已被其他地方抓過，直接命中 cache
-    const allRows = await fmFetch({
-      dataset:    'TaiwanStockPrice',
-      data_id:    stockId,
-      start_date: startDate,
-      end_date:   todayStr(),
-    }, 9000);
+    // 用 fmStockData(60) 共用 selectStock/trend 的 cache，避免重複請求
+    const allRows = await fmStockData(stockId, 60);
     if(allRows.length < 5) return null;
 
     // FinMind: spread = 今收 - 昨收（漲跌差）
@@ -5599,18 +5617,14 @@ window.addEventListener('load', async ()=>{
   // 第 1 波：主圖表（台積電）
   await selectStock(null,'台積電','2330.TW');
 
-  // 第 3 波：先行指標 + 市場脈動 + VIX
-  await new Promise(r=>setTimeout(r,400));
+  // 第 3 波：先行指標 + 市場脈動 + VIX + 指數（全部同時非阻塞發出）
   refreshPulse();
   loadVix();
   loadLeadingIndicators();
-
-  // 第 4 波：指數列
-  await new Promise(r=>setTimeout(r,500));
   loadIndices();
 
-  // 第 5 波：趨勢股（非同步背景執行，不阻塞主流程）
-  setTimeout(()=>refreshTrendStocks(), 2000);
+  // 第 5 波：趨勢股（錯開 1.5s，讓主圖表先完成渲染）
+  setTimeout(()=>refreshTrendStocks(), 1500);
 
 
   // ── 自動定時重整（盤中1分鐘、盤外5分鐘）
