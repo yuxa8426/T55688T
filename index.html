@@ -203,7 +203,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .sb-flow-left{position:absolute;right:50%;top:0;height:100%;border-radius:2px 0 0 2px;transition:width .7s cubic-bezier(.4,0,.2,1);width:0%;background:linear-gradient(270deg,rgba(0,212,170,.5),var(--green))}
 .sb-flow-right{position:absolute;left:50%;top:0;height:100%;border-radius:0 2px 2px 0;transition:width .7s cubic-bezier(.4,0,.2,1);width:0%;background:linear-gradient(90deg,rgba(255,76,106,.5),var(--red))}
 .sb-flow-center{position:absolute;left:50%;top:-1px;width:1px;height:7px;background:var(--border);transform:translateX(-50%)}
-.sb-flow-label{font-size:9px;color:var(--text3);margin-top:3px;display:flex;justify-content:space-between;align-items:center}
+.sb-flow-label{font-size:9px;color:var(--text3);margin-top:3px;display:flex;justify-content:space-between;align-items:center;gap:2px}
+.sb-vol-tag{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(245,200,66,.12);color:#f5c842;flex-shrink:0}
 /* ── 族群底頁 Drawer ── */
 .sector-drawer{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1)}
 .sector-drawer.open{transform:translateY(0)}
@@ -969,6 +970,14 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <button class="sector-btn" onclick="openSector('shipping')"><div class="sb-icon">🚢</div><div class="sb-name">航運物流</div><div class="sb-chg" id="sct-shipping">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-shipping"></div><div class="sb-flow-right" id="sfl-R-shipping"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-shipping" style="color:var(--text3)">載入中</span><span id="sfl-ts-shipping" style="color:var(--text3)">—</span></div></button>
       <button class="sector-btn" onclick="openSector('etf')" style="grid-column:1/-1"><div class="sb-icon">📊</div><div class="sb-name">ETF（指數/主題）</div><div class="sb-chg" id="sct-etf">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-etf"></div><div class="sb-flow-right" id="sfl-R-etf"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-etf" style="color:var(--text3)">載入中</span><span id="sfl-ts-etf" style="color:var(--text3)">—</span></div></button>
     </div>
+
+    <!-- 新興題材 -->
+    <div style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 2px 6px">🌐 新興題材</div>
+    <div class="sector-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <button class="sector-btn" onclick="openSector('satellite')"><div class="sb-icon">🛰️</div><div class="sb-name">低軌衛星</div><div class="sb-chg" id="sct-satellite">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-satellite"></div><div class="sb-flow-right" id="sfl-R-satellite"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-satellite" style="color:var(--text3)">載入中</span><span id="sfl-ts-satellite" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('drone')"><div class="sb-icon">🚁</div><div class="sb-name">無人機</div><div class="sb-chg" id="sct-drone">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-drone"></div><div class="sb-flow-right" id="sfl-R-drone"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-drone" style="color:var(--text3)">載入中</span><span id="sfl-ts-drone" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('ai_chain')"><div class="sb-icon">🧠</div><div class="sb-name">AI產業鏈</div><div class="sb-chg" id="sct-ai_chain">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-ai_chain"></div><div class="sb-flow-right" id="sfl-R-ai_chain"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-ai_chain" style="color:var(--text3)">載入中</span><span id="sfl-ts-ai_chain" style="color:var(--text3)">—</span></div></button>
+    </div>
     <div class="sec" style="padding:12px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <h2>🔥 趨勢股</h2>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1000,28 +1009,32 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   </div>
   <!-- 族群概況列 -->
   <div id="drawerSummary" style="display:flex;gap:0;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0">
-    <div style="flex:1;min-width:72px;padding:10px 10px;text-align:center;border-right:1px solid var(--border)">
+    <div style="flex:1;min-width:64px;padding:10px 8px;text-align:center;border-right:1px solid var(--border)">
       <div style="font-size:9px;color:var(--text3);margin-bottom:2px">均漲幅</div>
       <div style="font-size:15px;font-weight:700" id="drawerAvgChg">—</div>
     </div>
-    <div style="flex:1.4;min-width:90px;padding:10px 10px;text-align:center;border-right:1px solid var(--border)">
+    <div style="flex:1.3;min-width:84px;padding:10px 8px;text-align:center;border-right:1px solid var(--border)">
       <div style="font-size:9px;color:var(--text3);margin-bottom:2px">資金流向</div>
       <div style="font-size:11px;font-weight:700" id="drawerFlowTxt">—</div>
       <div style="height:5px;border-radius:3px;background:var(--surface);margin-top:4px;overflow:hidden">
         <div id="drawerFlowBar" style="height:100%;border-radius:3px;width:0%;transition:width .6s ease"></div>
       </div>
     </div>
-    <div style="flex:1;min-width:66px;padding:10px 10px;text-align:center;border-right:1px solid var(--border)">
-      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人買超</div>
+    <div style="flex:1;min-width:60px;padding:10px 8px;text-align:center;border-right:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">量能</div>
+      <div style="font-size:14px;font-weight:700;color:#f5c842" id="drawerVolRatio">—</div>
+    </div>
+    <div style="flex:1;min-width:58px;padding:10px 8px;text-align:center;border-right:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人買</div>
       <div style="font-size:14px;font-weight:700;color:var(--red)" id="drawerInstBuy">—</div>
     </div>
-    <div style="flex:1;min-width:66px;padding:10px 10px;text-align:center;border-right:1px solid var(--border)">
-      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人賣超</div>
+    <div style="flex:1;min-width:58px;padding:10px 8px;text-align:center;border-right:1px solid var(--border)">
+      <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人賣</div>
       <div style="font-size:14px;font-weight:700;color:var(--green)" id="drawerInstSell">—</div>
     </div>
-    <div style="flex:1;min-width:60px;padding:10px 8px;text-align:center">
+    <div style="flex:1;min-width:54px;padding:10px 6px;text-align:center">
       <div style="font-size:9px;color:var(--text3);margin-bottom:2px">更新</div>
-      <div style="font-size:11px;font-weight:600;color:var(--text2)" id="drawerTime">—</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2)" id="drawerTime">—</div>
     </div>
   </div>
   <!-- 篩選標籤 -->
@@ -3968,6 +3981,72 @@ const SECTORS = {
       {id:'00891',name:'中信關鍵半導體',   note:'半導體主題ETF'},
     ]
   },
+
+  // ── 新興題材 ─────────────────────────────────────
+  satellite: {
+    name:'低軌衛星', icon:'🛰️', color:'#4fc3f7',
+    desc:'SpaceX Starlink、Amazon Kuiper帶動的低軌衛星通訊完整供應鏈',
+    leader: ['3045','6202','2410'],
+    stocks: [
+      // ── 服務營運層 ──
+      {id:'3045',name:'台灣大',     note:'【服務營運】Starlink台灣獨家總代理，5G+衛星雙網融合，B2B/B2C訂閱'},
+      {id:'3682',name:'亞太電信',   note:'【服務營運】NTN非地面網路布局，與國際LEO業者簽MOU漫遊協議'},
+      // ── 地面設備製造層 ──
+      {id:'6202',name:'盛達',       note:'【地面設備】Starlink用戶端平板天線OEM，LEO地面接收設備主力廠'},
+      {id:'2410',name:'正文',       note:'【地面設備】Ka/Ku頻段相位陣列天線模組，衛星射頻前端供應商'},
+      {id:'3062',name:'建漢',       note:'【地面設備】VSAT衛星通訊基站、小型地面站整合製造'},
+      {id:'6224',name:'云辰',       note:'【地面設備】衛星天線鋁合金精密機構件，散熱底座加工'},
+      // ── 關鍵零組件層 ──
+      {id:'3042',name:'晶技',       note:'【關鍵零組件】TCXO/VCTCXO溫補晶振，GPS/LEO衛星定位必用元件'},
+      {id:'3413',name:'京元電子',   note:'【關鍵零組件】RF GaN/GaAs衛星晶片COT測試，封測服務'},
+      {id:'5243',name:'乙盛-KY',    note:'【關鍵零組件】衛星天線碟面精密沖壓件、金屬結構模組'},
+      // ── 系統整合/應用層 ──
+      {id:'6409',name:'旭隼',       note:'【系統整合】衛星通訊設備系統整合，國防/海事衛星應用'},
+    ]
+  },
+  drone: {
+    name:'無人機', icon:'🚁', color:'#ef9a9a',
+    desc:'軍民用無人機本體、飛控、動力、反制系統，國防科技最強題材',
+    leader: ['2634','4999','3529'],
+    stocks: [
+      // ── 整機系統整合層 ──
+      {id:'2634',name:'漢翔',       note:'【整機系統】國防級無人機研發製造，固定翼+旋翼，國軍主力供應商'},
+      {id:'4999',name:'新漢',       note:'【整機系統】無人機飛控電腦、任務電腦，工控+航電整合'},
+      // ── 機體結構/材料層 ──
+      {id:'1569',name:'濱川',       note:'【機體結構】無人機鋁合金/複材機體精密加工件，航太製程'},
+      {id:'6155',name:'鈦鼎',       note:'【機體結構】碳纖維/複合材料無人機機殼，輕量高強度'}  ,
+      {id:'2367',name:'燿華',       note:'【機體結構】無人機軟硬複合PCB板，特殊環境耐候設計'},
+      // ── 動力/電控層 ──
+      {id:'3483',name:'力致',       note:'【動力電控】BLDC無刷馬達驅動IC，無人機旋翼動力核心'},
+      {id:'5299',name:'杰力',       note:'【動力電控】多節鋰電池保護IC/電源管理，無人機電源管理'},
+      {id:'5425',name:'台半',       note:'【動力電控】SBD/Super Junction MOSFET，無人機電源轉換'},
+      // ── 通訊/感測/安全層 ──
+      {id:'3529',name:'力旺',       note:'【通訊安全】NVM嵌入式安全IP，無人機身份認證與防仿冒晶片'},
+      {id:'4904',name:'遠傳',       note:'【通訊應用】5G C2無人機遠端指管鏈路，城市UAM管理平台'},
+    ]
+  },
+  ai_chain: {
+    name:'AI產業鏈', icon:'🧠', color:'#ce93d8',
+    desc:'從AI晶片設計、訓練基礎設施到邊緣推論，覆蓋AI完整價值鏈',
+    leader: ['3661','2382','6669'],
+    stocks: [
+      // ── AI晶片設計層 ──
+      {id:'3661',name:'世芯-KY',    note:'【AI晶片設計】ASIC定製服務龍頭，Nvidia/Microsoft/Amazon AI晶片設計'},
+      {id:'6533',name:'晶心科',     note:'【AI晶片設計】RISC-V AI推論處理器IP授權，端側AI SoC核心'},
+      {id:'2454',name:'聯發科',     note:'【AI晶片設計】天璣9400 on-device AI，NPU效能全球前段班'},
+      // ── AI基礎建設層 ──
+      {id:'2382',name:'廣達',       note:'【AI基礎建設】GB200 NVL72 AI伺服器全球最大出貨商，雲端AI算力'},
+      {id:'6669',name:'緯穎',       note:'【AI基礎建設】超大規模AI伺服器OEM，Meta/Microsoft/OpenAI主力廠'},
+      {id:'3706',name:'神達',       note:'【AI基礎建設】AI邊緣推論伺服器、MEC邊緣運算節點整合'},
+      // ── AI封裝/載板層 ──
+      {id:'3037',name:'欣興',       note:'【AI封裝載板】ABF/HDI載板龍頭，CoWoS HBM高頻寬封裝基板'},
+      {id:'8046',name:'南電',       note:'【AI封裝載板】FC-BGA ABF載板，AI GPU封裝關鍵基材供應商'},
+      // ── AI晶片製造層 ──
+      {id:'6770',name:'力積電',     note:'【AI晶片製造】Cube 3D堆疊晶圓，HBM底層邏輯晶片代工'},
+      // ── AI應用/軟體層 ──
+      {id:'6547',name:'旭然',       note:'【AI應用軟體】工廠AI視覺檢測系統，智慧製造AOI方案'},
+    ]
+  },
 };
 
 // 當前開啟的族群 + 緩存資料
@@ -4042,10 +4121,17 @@ async function loadSectorData(key){
   for(let i=0; i<sec.stocks.length; i+=batch){
     const slice = sec.stocks.slice(i, i+batch);
     const fetched = await Promise.all(slice.map(async s=>{
-      const [q, inst] = await Promise.all([
-        fmQuote(s.id),
+      const [raw, inst] = await Promise.all([
+        fmStockData(s.id, 22), // 22天：足夠算 volRatio（今日量 / 20日均量）
         fmInstitutional(s.id),
       ]);
+      const q = _parseQuote(raw, s.id);
+      // 計算量能倍數（今日量 / 20日均量）
+      if(q && raw && raw.length >= 5){
+        const vols = raw.map(r=>parseInt(r.Trading_Volume)||0).filter(v=>v>0);
+        const avg20 = vols.slice(-21,-1).reduce((a,b)=>a+b,0) / Math.max(vols.slice(-21,-1).length,1);
+        q.volRatio = avg20>0 ? +(vols[vols.length-1]/avg20).toFixed(2) : 1;
+      }
       return { ...s, q, inst, isLeader: sec.leader.includes(s.id) };
     }));
     results.push(...fetched);
@@ -4106,6 +4192,9 @@ function renderSectorStocks(key, stocks){
     if(inst?.trustStreak>=2) badges.push(`<span class="sstock-badge badge-buy">投信連買${inst.trustStreak}日</span>`);
     if(changePct!=null && changePct>=5) badges.push(`<span class="sstock-badge badge-buy">強勢漲停</span>`);
     if(changePct!=null && changePct<=-5) badges.push(`<span class="sstock-badge badge-sell">跌停警示</span>`);
+    const vr = q?.volRatio;
+    if(vr>=2.0) badges.push(`<span class="sstock-badge" style="background:rgba(245,200,66,.15);color:#f5c842;border-color:rgba(245,200,66,.3)">🔥 量${vr.toFixed(1)}倍</span>`);
+    else if(vr>=1.5) badges.push(`<span class="sstock-badge" style="background:rgba(245,200,66,.08);color:#f5c842;border-color:rgba(245,200,66,.2)">📊 量${vr.toFixed(1)}倍</span>`);
 
     return `<div class="sstock-card" onclick="pickSectorStock('${s.name}','${s.id}')">
       <div style="width:46px;height:46px;border-radius:12px;background:${s.isLeader?'rgba(245,200,66,.15)':'var(--surface)'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid ${s.isLeader?'rgba(245,200,66,.3)':'var(--border)'}">
@@ -4177,6 +4266,19 @@ function updateDrawerSummary(stocks){
   if(buyEl)  buyEl.textContent  = buyN+'支';
   if(sellEl) sellEl.textContent = sellN+'支';
 
+  // ── 量能欄：族群平均量能倍數 ──
+  const volEl  = document.getElementById('drawerVolRatio');
+  const withVol = stocks.filter(s=>s.q?.volRatio!=null);
+  if(volEl){
+    if(withVol.length){
+      const avgVR = withVol.reduce((s,v)=>s+parseFloat(v.q.volRatio||1),0)/withVol.length;
+      volEl.textContent = avgVR.toFixed(1)+'x';
+      volEl.style.color = avgVR>=2?'#ff4c6a': avgVR>=1.5?'#f5c842':'var(--text3)';
+    } else {
+      volEl.textContent = '—';
+    }
+  }
+
   if(flowTxtEl){
     const dir   = flowIn ? '資金流入 ▶' : '◀ 資金流出';
     const ratio = `${upCnt}漲 / ${dnCnt}跌`;
@@ -4243,12 +4345,24 @@ function updateSectorBtn(key, stocks){
   const netIn  = withInst.length ? foreignNet>=0 : isUp;
   const flowClr = netIn ? 'var(--red)' : 'var(--green)';
   const flowTxt = netIn ? '▶ 流入' : '◀ 流出';
-  const cntTxt  = withQ.length > 1 ? `${upCnt}↑${dnCnt}↓` : (isUp?'上漲':'下跌');
+  const cntTxt  = withQ.length > 1 ? `${upCnt}↑${dnCnt}↓` : (isUp?'▲':'▼');
+
+  // ── 量能計算 ──
+  // 從 q.volRatio（trendCache 帶入）或 q.volume/avgVol 估算
+  const withVol = stocks.filter(s=>s.q?.volRatio!=null);
+  let volTag = '';
+  if(withVol.length){
+    const avgVolRatio = withVol.reduce((s,v)=>s+parseFloat(v.q.volRatio||1),0)/withVol.length;
+    if(avgVolRatio >= 2.0)       volTag = `🔥${avgVolRatio.toFixed(1)}x`;
+    else if(avgVolRatio >= 1.5)  volTag = `📊${avgVolRatio.toFixed(1)}x`;
+    else if(avgVolRatio <= 0.6)  volTag = `💤${avgVolRatio.toFixed(1)}x`;
+  }
 
   const lblEl = document.getElementById('sfl-lbl-'+key);
   const tsEl  = document.getElementById('sfl-ts-'+key);
   if(lblEl) lblEl.innerHTML =
-    `<span style="color:${flowClr};font-weight:700">${flowTxt}</span><span>${cntTxt}</span>`;
+    `<span style="color:${flowClr};font-weight:700">${flowTxt} ${cntTxt}</span>`+
+    (volTag ? `<span class="sb-vol-tag">${volTag}</span>` : '');
 
   // ── 時間戳（MM/DD HH:MM）──
   if(tsEl){
@@ -4323,7 +4437,7 @@ function tryPreviewFromCache(key){
   fromTrend.forEach(s=>{
     if(!inSector.has(s.id)) allStocks.push({
       id:s.id, name:s.name,
-      q:{ price:s.price, changePct:s.changePct },
+      q:{ price:s.price, changePct:s.changePct, volRatio: parseFloat(s.volRatio)||1 },
       inst:{ foreignShares: s.inst5||0, foreignStreak: (s.inst5||0)>0?1:-1, foreign:0 },
     });
   });
