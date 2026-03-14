@@ -199,11 +199,11 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .sb-icon{font-size:22px;margin-bottom:5px}
 .sb-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
 .sb-chg{font-size:13px;font-weight:700;margin-top:3px}
-.sb-flow{margin-top:6px;height:4px;border-radius:2px;background:var(--surface);overflow:hidden}
-.sb-flow-bar{height:100%;border-radius:2px;transition:width .6s ease;width:0%}
-.sb-flow-bar.flow-in{background:linear-gradient(90deg,rgba(255,76,106,.4),var(--red))}
-.sb-flow-bar.flow-out{background:linear-gradient(90deg,rgba(0,212,170,.4),var(--green))}
-.sb-flow-label{font-size:9px;color:var(--text3);margin-top:3px;display:flex;justify-content:space-between}
+.sb-flow{margin-top:6px;height:5px;border-radius:2px;background:var(--surface);overflow:hidden;position:relative}
+.sb-flow-left{position:absolute;right:50%;top:0;height:100%;border-radius:2px 0 0 2px;transition:width .7s cubic-bezier(.4,0,.2,1);width:0%;background:linear-gradient(270deg,rgba(0,212,170,.5),var(--green))}
+.sb-flow-right{position:absolute;left:50%;top:0;height:100%;border-radius:0 2px 2px 0;transition:width .7s cubic-bezier(.4,0,.2,1);width:0%;background:linear-gradient(90deg,rgba(255,76,106,.5),var(--red))}
+.sb-flow-center{position:absolute;left:50%;top:-1px;width:1px;height:7px;background:var(--border);transform:translateX(-50%)}
+.sb-flow-label{font-size:9px;color:var(--text3);margin-top:3px;display:flex;justify-content:space-between;align-items:center}
 /* ── 族群底頁 Drawer ── */
 .sector-drawer{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1)}
 .sector-drawer.open{transform:translateY(0)}
@@ -934,34 +934,40 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <div style="padding:0 16px">
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <h2>產業族群</h2>
-      <span style="font-size:11px;color:var(--text3)">16 大族群 · 點擊查看即時行情</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="sectorUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+        <button onclick="refreshAllSectorPreviews()" id="sectorRefreshBtn"
+          style="background:none;border:1px solid var(--border);border-radius:6px;
+                 color:var(--text3);font-size:12px;cursor:pointer;padding:2px 7px;
+                 font-family:inherit;line-height:1.4">↻</button>
+      </div>
     </div>
     <!-- 科技板塊 -->
     <div style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 2px 6px">🔷 科技 / AI</div>
     <div class="sector-grid" style="grid-template-columns:1fr 1fr 1fr">
-      <button class="sector-btn" onclick="openSector('semiconductor')"><div class="sb-icon">🔬</div><div class="sb-name">半導體製造</div><div class="sb-chg" id="sct-semiconductor">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-semiconductor"></div></div><div class="sb-flow-label"><span id="sfl-lbl-semiconductor" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('ic')"><div class="sb-icon">💡</div><div class="sb-name">IC設計</div><div class="sb-chg" id="sct-ic">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-ic"></div></div><div class="sb-flow-label"><span id="sfl-lbl-ic" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('ai_server')"><div class="sb-icon">🤖</div><div class="sb-name">AI伺服器</div><div class="sb-chg" id="sct-ai_server">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-ai_server"></div></div><div class="sb-flow-label"><span id="sfl-lbl-ai_server" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('electronic')"><div class="sb-icon">📱</div><div class="sb-name">電子製造</div><div class="sb-chg" id="sct-electronic">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-electronic"></div></div><div class="sb-flow-label"><span id="sfl-lbl-electronic" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('telecom')"><div class="sb-icon">📡</div><div class="sb-name">電信通訊</div><div class="sb-chg" id="sct-telecom">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-telecom"></div></div><div class="sb-flow-label"><span id="sfl-lbl-telecom" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('green_energy')"><div class="sb-icon">☀️</div><div class="sb-name">綠能儲能</div><div class="sb-chg" id="sct-green_energy">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-green_energy"></div></div><div class="sb-flow-label"><span id="sfl-lbl-green_energy" style="color:var(--text3)">資金流向載入中</span></div></button>
+      <button class="sector-btn" onclick="openSector('semiconductor')"><div class="sb-icon">🔬</div><div class="sb-name">半導體製造</div><div class="sb-chg" id="sct-semiconductor">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-semiconductor"></div><div class="sb-flow-right" id="sfl-R-semiconductor"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-semiconductor" style="color:var(--text3)">載入中</span><span id="sfl-ts-semiconductor" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('ic')"><div class="sb-icon">💡</div><div class="sb-name">IC設計</div><div class="sb-chg" id="sct-ic">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-ic"></div><div class="sb-flow-right" id="sfl-R-ic"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-ic" style="color:var(--text3)">載入中</span><span id="sfl-ts-ic" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('ai_server')"><div class="sb-icon">🤖</div><div class="sb-name">AI伺服器</div><div class="sb-chg" id="sct-ai_server">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-ai_server"></div><div class="sb-flow-right" id="sfl-R-ai_server"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-ai_server" style="color:var(--text3)">載入中</span><span id="sfl-ts-ai_server" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('electronic')"><div class="sb-icon">📱</div><div class="sb-name">電子製造</div><div class="sb-chg" id="sct-electronic">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-electronic"></div><div class="sb-flow-right" id="sfl-R-electronic"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-electronic" style="color:var(--text3)">載入中</span><span id="sfl-ts-electronic" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('telecom')"><div class="sb-icon">📡</div><div class="sb-name">電信通訊</div><div class="sb-chg" id="sct-telecom">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-telecom"></div><div class="sb-flow-right" id="sfl-R-telecom"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-telecom" style="color:var(--text3)">載入中</span><span id="sfl-ts-telecom" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('green_energy')"><div class="sb-icon">☀️</div><div class="sb-name">綠能儲能</div><div class="sb-chg" id="sct-green_energy">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-green_energy"></div><div class="sb-flow-right" id="sfl-R-green_energy"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-green_energy" style="color:var(--text3)">載入中</span><span id="sfl-ts-green_energy" style="color:var(--text3)">—</span></div></button>
     </div>
     <!-- 金融/傳統 -->
     <div style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 2px 6px">🔶 金融 / 傳產</div>
     <div class="sector-grid" style="grid-template-columns:1fr 1fr 1fr">
-      <button class="sector-btn" onclick="openSector('finance')"><div class="sb-icon">🏦</div><div class="sb-name">金融保險</div><div class="sb-chg" id="sct-finance">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-finance"></div></div><div class="sb-flow-label"><span id="sfl-lbl-finance" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('petrochemical')"><div class="sb-icon">🏭</div><div class="sb-name">石化塑膠</div><div class="sb-chg" id="sct-petrochemical">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-petrochemical"></div></div><div class="sb-flow-label"><span id="sfl-lbl-petrochemical" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('steel_material')"><div class="sb-icon">⚙️</div><div class="sb-name">鋼鐵原材</div><div class="sb-chg" id="sct-steel_material">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-steel_material"></div></div><div class="sb-flow-label"><span id="sfl-lbl-steel_material" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('consumer')"><div class="sb-icon">🛒</div><div class="sb-name">消費零售</div><div class="sb-chg" id="sct-consumer">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-consumer"></div></div><div class="sb-flow-label"><span id="sfl-lbl-consumer" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('real_estate')"><div class="sb-icon">🏗️</div><div class="sb-name">建設地產</div><div class="sb-chg" id="sct-real_estate">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-real_estate"></div></div><div class="sb-flow-label"><span id="sfl-lbl-real_estate" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('auto_ev')"><div class="sb-icon">🚗</div><div class="sb-name">電動車</div><div class="sb-chg" id="sct-auto_ev">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-auto_ev"></div></div><div class="sb-flow-label"><span id="sfl-lbl-auto_ev" style="color:var(--text3)">資金流向載入中</span></div></button>
+      <button class="sector-btn" onclick="openSector('finance')"><div class="sb-icon">🏦</div><div class="sb-name">金融保險</div><div class="sb-chg" id="sct-finance">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-finance"></div><div class="sb-flow-right" id="sfl-R-finance"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-finance" style="color:var(--text3)">載入中</span><span id="sfl-ts-finance" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('petrochemical')"><div class="sb-icon">🏭</div><div class="sb-name">石化塑膠</div><div class="sb-chg" id="sct-petrochemical">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-petrochemical"></div><div class="sb-flow-right" id="sfl-R-petrochemical"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-petrochemical" style="color:var(--text3)">載入中</span><span id="sfl-ts-petrochemical" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('steel_material')"><div class="sb-icon">⚙️</div><div class="sb-name">鋼鐵原材</div><div class="sb-chg" id="sct-steel_material">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-steel_material"></div><div class="sb-flow-right" id="sfl-R-steel_material"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-steel_material" style="color:var(--text3)">載入中</span><span id="sfl-ts-steel_material" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('consumer')"><div class="sb-icon">🛒</div><div class="sb-name">消費零售</div><div class="sb-chg" id="sct-consumer">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-consumer"></div><div class="sb-flow-right" id="sfl-R-consumer"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-consumer" style="color:var(--text3)">載入中</span><span id="sfl-ts-consumer" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('real_estate')"><div class="sb-icon">🏗️</div><div class="sb-name">建設地產</div><div class="sb-chg" id="sct-real_estate">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-real_estate"></div><div class="sb-flow-right" id="sfl-R-real_estate"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-real_estate" style="color:var(--text3)">載入中</span><span id="sfl-ts-real_estate" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('auto_ev')"><div class="sb-icon">🚗</div><div class="sb-name">電動車</div><div class="sb-chg" id="sct-auto_ev">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-auto_ev"></div><div class="sb-flow-right" id="sfl-R-auto_ev"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-auto_ev" style="color:var(--text3)">載入中</span><span id="sfl-ts-auto_ev" style="color:var(--text3)">—</span></div></button>
     </div>
     <!-- 特殊主題 -->
     <div style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 2px 6px">🔸 特殊主題</div>
     <div class="sector-grid" style="grid-template-columns:1fr 1fr">
-      <button class="sector-btn" onclick="openSector('biotech')"><div class="sb-icon">💊</div><div class="sb-name">生技醫療</div><div class="sb-chg" id="sct-biotech">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-biotech"></div></div><div class="sb-flow-label"><span id="sfl-lbl-biotech" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('shipping')"><div class="sb-icon">🚢</div><div class="sb-name">航運物流</div><div class="sb-chg" id="sct-shipping">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-shipping"></div></div><div class="sb-flow-label"><span id="sfl-lbl-shipping" style="color:var(--text3)">資金流向載入中</span></div></button>
-      <button class="sector-btn" onclick="openSector('etf')" style="grid-column:1/-1"><div class="sb-icon">📊</div><div class="sb-name">ETF（指數/主題）</div><div class="sb-chg" id="sct-etf">—</div><div class="sb-flow"><div class="sb-flow-bar" id="sfl-etf"></div></div><div class="sb-flow-label"><span id="sfl-lbl-etf" style="color:var(--text3)">資金流向載入中</span></div></button>
+      <button class="sector-btn" onclick="openSector('biotech')"><div class="sb-icon">💊</div><div class="sb-name">生技醫療</div><div class="sb-chg" id="sct-biotech">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-biotech"></div><div class="sb-flow-right" id="sfl-R-biotech"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-biotech" style="color:var(--text3)">載入中</span><span id="sfl-ts-biotech" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('shipping')"><div class="sb-icon">🚢</div><div class="sb-name">航運物流</div><div class="sb-chg" id="sct-shipping">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-shipping"></div><div class="sb-flow-right" id="sfl-R-shipping"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-shipping" style="color:var(--text3)">載入中</span><span id="sfl-ts-shipping" style="color:var(--text3)">—</span></div></button>
+      <button class="sector-btn" onclick="openSector('etf')" style="grid-column:1/-1"><div class="sb-icon">📊</div><div class="sb-name">ETF（指數/主題）</div><div class="sb-chg" id="sct-etf">—</div><div class="sb-flow"><div class="sb-flow-left" id="sfl-L-etf"></div><div class="sb-flow-right" id="sfl-R-etf"></div><div class="sb-flow-center"></div></div><div class="sb-flow-label"><span id="sfl-lbl-etf" style="color:var(--text3)">載入中</span><span id="sfl-ts-etf" style="color:var(--text3)">—</span></div></button>
     </div>
     <div class="sec" style="padding:12px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <h2>🔥 趨勢股</h2>
@@ -1236,9 +1242,13 @@ function switchPage(n){
   if(n==='watchlist') setTimeout(()=>renderWatchlist(),50);
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
   if(n==='explore'){
-    // 若概覽未載入（首次切到探索頁），立即觸發預覽（不等4秒延遲）
     const unloaded = Object.keys(SECTORS).filter(k=>!_sectorPreviewCache[k]);
-    if(unloaded.length > 0) loadAllSectorPreviews();
+    if(unloaded.length > 0){
+      loadAllSectorPreviews().then(()=>{
+        updateSectorTimestamp();
+        scheduleSectorAutoRefresh();
+      });
+    }
   }
 }
 
@@ -4181,14 +4191,27 @@ function updateDrawerSummary(stocks){
   }
 }
 
-// ── 更新族群按鈕漲跌幅 + 資金流向 ──────────────────
+// ── 更新族群按鈕漲跌幅 + 雙向比例資金流向條 ──────────
+// 橫條：以中心點為 0%，右側=漲（紅），左側=跌（綠）
+// 寬度比例 = |avgChg| / 5% × 50%（5%=滿格，台股漲停為9.5%）
+// 動態參考值：由所有已更新族群中取最大絕對漲跌幅
+// 確保最強族群的橫條滿格，其他按比例縮放
+const _sectorAvgMap = {}; // key → avg changePct（更新後存入）
+function getSectorRefPct(){
+  const vals = Object.values(_sectorAvgMap).map(Math.abs).filter(v=>v>0);
+  if(!vals.length) return 1;
+  return Math.max(0.3, Math.min(5, Math.max(...vals)));
+}
+
 function updateSectorBtn(key, stocks){
   const withQ = stocks.filter(s=>s.q?.changePct!=null);
   if(!withQ.length) return;
 
-  // ── 漲跌幅（均值）──
-  const avg   = withQ.reduce((a,s)=>a+s.q.changePct,0)/withQ.length;
-  const isUp  = avg >= 0;
+  // ── 均漲跌幅 ──
+  const avg  = withQ.reduce((a,s)=>a+s.q.changePct,0)/withQ.length;
+  const isUp = avg >= 0;
+  _sectorAvgMap[key] = avg; // 存入動態比例池
+
   const chgEl = document.getElementById('sct-'+key);
   const btn   = chgEl?.closest('.sector-btn');
   if(chgEl){
@@ -4200,40 +4223,41 @@ function updateSectorBtn(key, stocks){
     btn.classList.add(isUp?'sb-up':'sb-dn');
   }
 
-  // ── 資金流向（外資法人整體買超 / 賣超金額）──
-  const withInst = stocks.filter(s=>s.inst!=null);
-  const flowEl   = document.getElementById('sfl-'+key);
-  const lblEl    = document.getElementById('sfl-lbl-'+key);
-  if(!flowEl||!lblEl) return;
-
-  if(!withInst.length){
-    lblEl.textContent='法人資料載入中';
-    return;
+  // ── 雙向比例橫條（動態比例） ──
+  // ref = 當前所有族群中最大 |avg|，使最強族群剛好滿格（50%）
+  const ref     = getSectorRefPct();
+  const barHalf = Math.min(50, (Math.abs(avg) / ref) * 50);
+  const lEl = document.getElementById('sfl-L-'+key);
+  const rEl = document.getElementById('sfl-R-'+key);
+  if(lEl && rEl){
+    lEl.style.width = isUp ? '0%' : barHalf.toFixed(1)+'%';
+    rEl.style.width = isUp ? barHalf.toFixed(1)+'%' : '0%';
   }
 
-  // 外資今日買超（張），正=淨買、負=淨賣
-  // foreignShares = 原始股數（正=買超,負=賣超），foreign = 百萬股單位
-  const foreignNet = withInst.reduce((s,st)=>{
-    return s + (st.inst?.foreignShares ?? st.inst?.foreign ?? 0);
-  }, 0);
+  // ── 資金流向文字 ──
+  const withInst   = stocks.filter(s=>s.inst!=null);
+  const foreignNet = withInst.reduce((s,st)=>
+    s+(st.inst?.foreignShares??st.inst?.foreign??0), 0);
+  const upCnt  = withQ.filter(s=>s.q.changePct>=0).length;
+  const dnCnt  = withQ.length - upCnt;
+  const netIn  = withInst.length ? foreignNet>=0 : isUp;
+  const flowClr = netIn ? 'var(--red)' : 'var(--green)';
+  const flowTxt = netIn ? '▶ 流入' : '◀ 流出';
+  const cntTxt  = withQ.length > 1 ? `${upCnt}↑${dnCnt}↓` : (isUp?'上漲':'下跌');
 
-  // 上漲支數 vs 下跌支數（用於流向強度）
-  const upCnt   = withQ.filter(s=>s.q.changePct>=0).length;
-  const dnCnt   = withQ.length - upCnt;
-  const flowPct = Math.round(upCnt/withQ.length*100); // 上漲佔比
+  const lblEl = document.getElementById('sfl-lbl-'+key);
+  const tsEl  = document.getElementById('sfl-ts-'+key);
+  if(lblEl) lblEl.innerHTML =
+    `<span style="color:${flowClr};font-weight:700">${flowTxt}</span><span>${cntTxt}</span>`;
 
-  // 流向條：紅=資金流入（多頭），綠=資金流出（空頭）
-  const netIn   = foreignNet >= 0;
-  const barPct  = Math.min(100, Math.max(5, flowPct));
-  flowEl.className = 'sb-flow-bar '+(netIn?'flow-in':'flow-out');
-  flowEl.style.width = barPct+'%';
-
-  // 標籤文字
-  const upRatio = `${upCnt}漲/${dnCnt}跌`;
-  const flowDir = netIn ? '資金流入' : '資金流出';
-  const instTxt = withInst.some(s=>(s.inst?.foreignStreak??0)>0) ? '外資買' :
-                  withInst.some(s=>(s.inst?.foreignStreak??0)<0) ? '外資賣' : '';
-  lblEl.innerHTML = `<span style="color:${netIn?'var(--red)':'var(--green)'}">${flowDir}</span><span>${upRatio}${instTxt?' · '+instTxt:''}</span>`;
+  // ── 時間戳（MM/DD HH:MM）──
+  if(tsEl){
+    const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const mo = tw.getMonth()+1, dd = tw.getDate();
+    const hh = String(tw.getHours()).padStart(2,'0');
+    const mm = String(tw.getMinutes()).padStart(2,'0');
+    tsEl.textContent = `${mo}/${dd} ${hh}:${mm}`;
+  }
 }
 
 
@@ -4261,6 +4285,23 @@ async function loadAllSectorPreviews(){
   for(const key of missing){
     await loadSectorPreviewFetch(key);
     await new Promise(r=>setTimeout(r, 1500)); // 嚴格間隔，避免 rate limit
+  }
+
+  // Pass 3：所有族群資料到齊後，用最終動態 ref 重新渲染橫條（比例校正）
+  // 僅更新橫條寬度，不重打 API
+  rerenderAllFlowBars();
+}
+
+function rerenderAllFlowBars(){
+  // 以最終的 getSectorRefPct() 重新算所有已知族群的橫條
+  for(const [key, avg] of Object.entries(_sectorAvgMap)){
+    const isUp    = avg >= 0;
+    const ref     = getSectorRefPct();
+    const barHalf = Math.min(50, (Math.abs(avg) / ref) * 50);
+    const lEl     = document.getElementById('sfl-L-'+key);
+    const rEl     = document.getElementById('sfl-R-'+key);
+    if(lEl) lEl.style.width = isUp ? '0%' : barHalf.toFixed(1)+'%';
+    if(rEl) rEl.style.width = isUp ? barHalf.toFixed(1)+'%' : '0%';
   }
 }
 
@@ -4314,6 +4355,56 @@ async function loadSectorPreviewFetch(key){
   }catch(e){
     console.warn('[SectorPreview fetch]', key, e.message);
   }
+}
+
+// ── 手動強制更新所有族群概覽 ────────────────────────
+async function refreshAllSectorPreviews(){
+  const btn = document.getElementById('sectorRefreshBtn');
+  if(btn){ btn.textContent='…'; btn.disabled=true; }
+  // 清除所有族群預覽快取 + fmFetch 中的舊報價
+  Object.keys(SECTORS).forEach(k=>{ delete _sectorPreviewCache[k]; });
+  // 清除 _fmCache 中屬於各族群股票的報價（讓重新抓取最新）
+  _fmCache.forEach((_,url)=>{
+    if(url.includes('TaiwanStockPrice')) _fmCache.delete(url);
+  });
+  await loadAllSectorPreviews();
+  rerenderAllFlowBars();
+  updateSectorTimestamp();
+  if(btn){ btn.textContent='↻'; btn.disabled=false; }
+}
+
+// ── 更新標題時間戳 ────────────────────────────────
+function updateSectorTimestamp(){
+  const el = document.getElementById('sectorUpdateTime');
+  if(!el) return;
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const mo = tw.getMonth()+1, dd = tw.getDate();
+  const hh = String(tw.getHours()).padStart(2,'0');
+  const mm = String(tw.getMinutes()).padStart(2,'0');
+  el.textContent = `${mo}/${dd} ${hh}:${mm} 更新`;
+}
+
+// ── 自動更新排程 ─────────────────────────────────
+let _sectorAutoTimer = null;
+function scheduleSectorAutoRefresh(){
+  clearTimeout(_sectorAutoTimer);
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const tot = tw.getHours()*60+tw.getMinutes();
+  const isWd = tw.getDay()>0 && tw.getDay()<6;
+  // 盤中（9:00-13:35）每3分鐘，盤後每15分鐘
+  const inSession = isWd && tot>=540 && tot<=815;
+  const interval  = inSession ? 3*60*1000 : 15*60*1000;
+  _sectorAutoTimer = setTimeout(async ()=>{
+    // 清除族群預覽快取（讓 loadAllSectorPreviews 重新推算）
+    Object.keys(SECTORS).forEach(k => delete _sectorPreviewCache[k]);
+    // fmFetch cache 自然到期（30s TTL），不需手動清除
+    // 重新推算：優先 _trendCache（若趨勢已刷新），否則補抓
+    await loadAllSectorPreviews();
+    // 全部算完後重校比例橫條
+    rerenderAllFlowBars();
+    updateSectorTimestamp();
+    scheduleSectorAutoRefresh(); // 遞迴排程
+  }, interval);
 }
 
 // ── 點擊族群股票 → 跳到首頁並查詢 ────────────────────
@@ -4430,7 +4521,11 @@ async function refreshTrendStocks(manual=false){
   _trendCache = top8;
   _trendCacheTime = Date.now();
   // 趨勢股資料就緒 → 自動更新族群概覽（零額外 API）
-  setTimeout(()=>loadAllSectorPreviews(), 200);
+  setTimeout(async ()=>{
+    await loadAllSectorPreviews();
+    updateSectorTimestamp();
+    scheduleSectorAutoRefresh();
+  }, 200);
 
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const ts  = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
