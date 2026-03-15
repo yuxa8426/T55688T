@@ -283,7 +283,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 <div class="page active" id="page-home">
   <div class="header">
     <div><h1>股析</h1><p id="hdr-sub">2025年3月5日 · 台灣大盤 ▲0.74%</p></div>
-    <div class="avatar">王</div>
+    <div class="avatar" id="headerAvatar">股</div>
   </div>
   <!-- 常駐免責聲明 -->
   <div style="margin:0 16px 10px;padding:7px 12px;background:rgba(255,255,255,.04);border-radius:8px;border-left:3px solid rgba(245,200,66,.5)">
@@ -5486,12 +5486,19 @@ function renderPortfolio(){
 const PROF_KEY = 'stockai_profile';
 
 function loadProfile(){
-  const p = JSON.parse(localStorage.getItem(PROF_KEY)||'{}');
+  const p    = JSON.parse(localStorage.getItem(PROF_KEY)||'{}');
   const name = p.name||'股析用戶';
   const bio  = p.bio||'點擊編輯個人資料';
+  const initial = name.charAt(0)||'股';
+
+  // 個人頁
   document.getElementById('profName').textContent   = name;
   document.getElementById('profBio').textContent    = bio;
-  document.getElementById('profAvatar').textContent = name.charAt(0)||'股';
+  document.getElementById('profAvatar').textContent = initial;
+
+  // 首頁 header 右上角 avatar — 同步更新
+  const hdr = document.getElementById('headerAvatar');
+  if(hdr) hdr.textContent = initial;
 }
 
 function editProfile(){
