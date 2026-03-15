@@ -3141,135 +3141,71 @@ function renderMarginFallback(){
 // 來源策略（依優先順序）：
 //   1. Yahoo Finance v8 API（via allorigins proxy）— 即時，盤中可用
 //   2. stooq.com CSV（via corsproxy.io）— 每日收盤後
-//   3. FinMind CBOE_VIX — 美股收盤後隔日
+//   3. Yahoo Finance v8（via proxy）— 包含盤中即時價
 let _vixTimer = null;
 
 async function loadVix(manual=false){
   if(manual) showToast('🔄 更新 VIX…');
   let vix=null, changePct=0, vixHistory=[], dataDate='', srcLabel='';
 
-  // ── 來源1：FinMind 美股 VIX（TaiwanStockPrice dataset 支援美股代號）──
-  // FinMind 支援抓 US 指數：dataset=USStockPrice, data_id=^VIX
-  // 台灣時間盤中（09:00~17:00）數據可能較舊，但有歷史
-  try{
-    const fmData = await fmFetch({
-      dataset:    'USStockPrice',
-      data_id:    'VIX',
-      start_date: nDaysAgo(35),
-      end_date:   todayStr(),
-    }, 12000);
-    if(fmData && fmData.length){
-      const latest = fmData[fmData.length-1];
-      const prev   = fmData.length>1 ? fmData[fmData.length-2] : null;
-      const v = parseFloat(latest.Close||latest.close||0);
-      if(v > 0){
-        vix       = v;
-        dataDate  = latest.Date||latest.date||'';
-        changePct = prev ? (vix-parseFloat(prev.Close||prev.close||vix))/parseFloat(prev.Close||prev.close||vix)*100 : 0;
-        vixHistory = fmData.slice(-22).map(r=>parseFloat(r.Close||r.close||0)).filter(v=>v>0);
-        srcLabel  = 'FinMind';
-      }
-    }
-  }catch(e){}
-
-  // ── 來源2：FinMind CBOE_VIX（欄位：vix）───────────────
-  if(!vix || isNaN(vix)){
-    try{
-      const fmData2 = await fmFetch({ dataset:'CBOE_VIX', start_date:nDaysAgo(35), end_date:todayStr() }, 12000);
-      if(fmData2 && fmData2.length){
-        // 嘗試所有可能欄位
-        const latest2 = fmData2[fmData2.length-1];
-        const prev2   = fmData2.length>1 ? fmData2[fmData2.length-2] : null;
-        // 列出所有欄位找數值
-        const keys2   = Object.keys(latest2);
-        let v2 = 0;
-        for(const k of keys2){
-          const val = parseFloat(latest2[k]);
-          if(!isNaN(val) && val > 5 && val < 100){ v2=val; break; }
-        }
-        if(v2 > 0){
-          vix       = v2;
-          dataDate  = latest2.date||'';
-          // 用相同邏輯取 prev 的值
-          if(prev2){
-            for(const k of keys2){
-              const val=parseFloat(prev2[k]);
-              if(!isNaN(val)&&val>5&&val<100){ changePct=(vix-val)/val*100; break; }
-            }
-          }
-          // history
-          vixHistory = fmData2.slice(-22).map(r=>{
-            for(const k of Object.keys(r)){const val=parseFloat(r[k]);if(!isNaN(val)&&val>5&&val<100)return val;}
-            return NaN;
-          }).filter(v=>!isNaN(v));
-          srcLabel = 'FinMind CBOE';
-        }
-      }
-    }catch(e){}
+  // CSV 解析輔助
+  function parseCsvRows(csv, colClose, colDate, minVal){
+    if(!csv || csv.includes('No data') || csv.length<30) return null;
+    const rows = csv.trim().split('\n').slice(1)
+      .map(l=>{ const p=l.split(','); return {date:(p[colDate]||'').trim(), close:parseFloat(p[colClose])}; })
+      .filter(r=>r.date && !isNaN(r.close) && r.close>minVal)
+      .sort((a,b)=>a.date>b.date?1:-1);
+    return rows.length ? rows : null;
+  }
+  function rowsToResult(rows, src){
+    if(!rows) return null;
+    const l=rows[rows.length-1], p=rows.length>1?rows[rows.length-2]:null;
+    return { vix:l.close, chg:p?(l.close-p.close)/p.close*100:0,
+             date:l.date, hist:rows.slice(-22).map(r=>r.close), src };
   }
 
-  // ── 來源3：stooq.com CSV（via allorigins CORS proxy）──
-  if(!vix || isNaN(vix)){
-    const stooqUrl = 'https://stooq.com/q/d/l/?s=%5Evix&i=d';
-    const proxies = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(stooqUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(stooqUrl)}`,
-      `https://thingproxy.freeboard.io/fetch/${stooqUrl}`,
-    ];
-    for(const pUrl of proxies){
-      if(vix) break;
-      try{
-        const resp = await Promise.race([
-          fetch(pUrl, {cache:'no-store'}),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('t')),8000))
-        ]);
-        if(!resp.ok) continue;
-        const csv   = await resp.text();
-        if(csv.includes('No data')||csv.length<30) continue;
-        const lines = csv.trim().split('\n').slice(1).filter(l=>l.trim());
-        // stooq CSV: Date,Open,High,Low,Close,Volume
-        const rows  = lines.map(l=>{const p=l.split(',');return {date:p[0],close:parseFloat(p[4])};})
-                           .filter(r=>!isNaN(r.close)&&r.close>0)
-                           .sort((a,b)=>a.date>b.date?1:-1);
-        if(!rows.length) continue;
-        const latest3 = rows[rows.length-1];
-        const prev3   = rows.length>1?rows[rows.length-2]:null;
-        vix       = latest3.close;
-        dataDate  = latest3.date;
-        changePct = prev3?(vix-prev3.close)/prev3.close*100:0;
-        vixHistory = rows.slice(-22).map(r=>r.close);
-        srcLabel  = 'stooq';
-        break;
-      }catch(e){}
+  const PX = ['https://corsproxy.io/?url=', 'https://api.allorigins.win/raw?url='];
+
+  // A: FRED（免費，有 CORS，格式 DATE,VIXCLS）
+  const fredP = fetchWithTimeout(
+    'https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS', 5000)
+    .then(r=>r.ok?r.text():Promise.reject('bad'))
+    .then(csv=>rowsToResult(parseCsvRows(csv,1,0,5),'FRED'))
+    .catch(()=>null);
+
+  // B: stooq（via proxy，格式 Date,O,H,L,Close,Vol）
+  const stooqUrl = 'https://stooq.com/q/d/l/?s=%5Evix&i=d';
+  const stooqPs  = PX.map(px=>
+    fetchWithTimeout(px+encodeURIComponent(stooqUrl), 5000)
+      .then(r=>r.ok?r.text():Promise.reject())
+      .then(csv=>rowsToResult(parseCsvRows(csv,4,0,5),'stooq'))
+      .catch(()=>null));
+
+  // C: Yahoo Finance v8（via proxy）
+  const yhUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=1mo&interval=1d';
+  const yhPs  = PX.map(px=>
+    fetchWithTimeout(px+encodeURIComponent(yhUrl), 5000)
+      .then(r=>r.ok?r.text():Promise.reject())
+      .then(txt=>{
+        const j=JSON.parse(txt), meta=j?.chart?.result?.[0]?.meta;
+        if(!meta?.regularMarketPrice) return null;
+        const prev=meta.chartPreviousClose||meta.previousClose||meta.regularMarketPrice;
+        const qts=j?.chart?.result?.[0]?.indicators?.quote?.[0];
+        const dt=meta.regularMarketTime
+          ?new Date(meta.regularMarketTime*1000).toLocaleDateString('en-CA',{timeZone:'America/New_York'}):''
+        return { vix:meta.regularMarketPrice, chg:(meta.regularMarketPrice-prev)/prev*100,
+                 date:dt, hist:(qts?.close||[]).filter(v=>v!=null&&v>0).slice(-22), src:'Yahoo' };
+      }).catch(()=>null));
+
+  // 全部並行，取最快成功的
+  const results = await Promise.allSettled([fredP, ...stooqPs, ...yhPs]);
+  for(const r of results){
+    if(r.status==='fulfilled' && r.value?.vix>0){
+      vix=r.value.vix; changePct=r.value.chg; dataDate=r.value.date;
+      vixHistory=r.value.hist; srcLabel=r.value.src;
+      break;
     }
   }
-
-  // ── 來源4：Yahoo Finance v7（via allorigins）─────────
-  if(!vix || isNaN(vix)){
-    try{
-      const yhUrl = 'https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=1mo&interval=1d';
-      const pUrl  = `https://api.allorigins.win/raw?url=${encodeURIComponent(yhUrl)}`;
-      const resp  = await Promise.race([
-        fetch(pUrl,{cache:'no-store'}),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('t')),8000))
-      ]);
-      if(resp.ok){
-        const j    = await resp.json();
-        const meta = j?.chart?.result?.[0]?.meta;
-        if(meta?.regularMarketPrice){
-          const prev = meta.previousClose||meta.chartPreviousClose||meta.regularMarketPrice;
-          vix       = meta.regularMarketPrice;
-          changePct = (vix-prev)/prev*100;
-          dataDate  = new Date(meta.regularMarketTime*1000)
-                        .toLocaleDateString('zh-TW',{timeZone:'America/New_York'});
-          const qts = j?.chart?.result?.[0]?.indicators?.quote?.[0];
-          if(qts?.close) vixHistory = qts.close.filter(v=>v!=null).slice(-22);
-          srcLabel  = 'Yahoo';
-        }
-      }
-    }catch(e){}
-  }
-
   if(!vix || isNaN(vix)){ renderVixFallback(); return; }
 
   renderVix(vix, changePct, dataDate, vixHistory, srcLabel);
@@ -3357,7 +3293,7 @@ function renderVixFallback(){
   const chgEl = document.getElementById('vixChg');
   if(chgEl){ chgEl.textContent='⚠️ 資料暫無法取得'; chgEl.style.color='var(--text3)'; }
   const ddEl = document.getElementById('vixDataDate');
-  if(ddEl) ddEl.textContent='已嘗試 FinMind(USStockPrice/CBOE_VIX) · stooq · Yahoo Finance';
+  if(ddEl) ddEl.textContent='已嘗試 FRED · stooq · Yahoo Finance，請稍後再試';
   const noteEl = document.getElementById('vixNote');
   if(noteEl) noteEl.innerHTML='<strong class="purple">🤖</strong> VIX 目前無法從四個備援來源取得（FinMind · stooq · Yahoo）。可能原因：CORS 限制或 proxy 暫停。請點 ↻ 手動重試，2 分鐘後將自動重試。';
   // 更新時間戳
