@@ -1012,9 +1012,6 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     </div>
   </div>
 
-  <div class="sec" style="margin-top:14px"><h2>自選股</h2><a href="#" onclick="switchPage('watchlist');return false">管理 ›</a></div>
-  <div id="homeWatchlist"></div>
-
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <h2>重大消息 &amp; 市場新聞</h2>
     <div style="display:flex;gap:6px;align-items:center">
@@ -2465,28 +2462,51 @@ async function runDeepModule(module){
 
   try{
     const prompt = buildDeepPrompt(module);
-    const resp   = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role:'user', content: prompt }],
-      }),
-    });
-    if(!resp.ok) throw new Error('API '+resp.status);
-    const data = await resp.json();
-    const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
-    if(!text) throw new Error('no content');
 
-    // 格式化 Markdown 為 HTML（基本處理）
+    // 直接呼叫 Anthropic API（Artifacts 環境由平台代理 CORS）
+    const doCall = async (url, extraHeaders={}) => {
+      const r = await fetchWithTimeout(url, 30000, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...extraHeaders },
+        body: JSON.stringify({
+          model:      'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages:   [{ role:'user', content: prompt }],
+        }),
+      });
+      if(!r.ok) return null;
+      const j = await r.json();
+      return (j.content||[]).map(b=>b.type==='text'?b.text:'').join('') || null;
+    };
+
+    // 嘗試1：直連（Artifacts/Claude.ai 環境有代理，不需 key）
+    let text = await doCall('https://api.anthropic.com/v1/messages').catch(()=>null);
+
+    // 嘗試2：corsproxy.io 中轉（Cloudflare Pages 環境）
+    if(!text){
+      text = await doCall(
+        'https://corsproxy.io/?url='+encodeURIComponent('https://api.anthropic.com/v1/messages')
+      ).catch(()=>null);
+    }
+
+    // 嘗試3：allorigins 中轉
+    if(!text){
+      text = await doCall(
+        'https://api.allorigins.win/raw?url='+encodeURIComponent('https://api.anthropic.com/v1/messages')
+      ).catch(()=>null);
+    }
+
+    if(!text) throw new Error('所有端點均無法回應');
+
+    // Markdown → HTML
+    const col = meta.color;
     const html = text
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/^###\s*(.+)$/gm, '<div style="font-size:13px;font-weight:700;color:'+meta.color+';margin:10px 0 4px">$1</div>')
-      .replace(/^##\s*(.+)$/gm,  '<div style="font-size:14px;font-weight:800;margin:12px 0 6px">$1</div>')
-      .replace(/^[-\u2022]\s*(.+)$/gm,'<div style="margin:4px 0;padding-left:12px">• $1</div>')
-      .replace(/\n{2,}/g, '<br>')
-      .replace(/\n/g, '<br>');
+      .replace(/\*\*(.+?)\*\*/g,        '<strong>$1</strong>')
+      .replace(/^###\s*(.+)$/gm,        `<div style="font-size:13px;font-weight:700;color:${col};margin:10px 0 4px">$1</div>`)
+      .replace(/^##\s*(.+)$/gm,         '<div style="font-size:14px;font-weight:800;margin:12px 0 6px">$1</div>')
+      .replace(/^[-\u2022]\s*(.+)$/gm,  '<div style="margin:5px 0;padding-left:14px;border-left:2px solid rgba(255,255,255,.1)">\u2022 $1</div>')
+      .replace(/\n{2,}/g, '<br><br>')
+      .replace(/\n/g,     '<br>');
 
     titleEl.textContent = meta.icon + ' ' + meta.title;
     contentEl.innerHTML = html;
@@ -2496,8 +2516,14 @@ async function runDeepModule(module){
 
   }catch(e){
     console.warn('[DeepModule]', module, e.message);
-    titleEl.textContent = meta.icon + ' ' + meta.title + ' — 暫時無法連線';
-    contentEl.innerHTML = '<span style="color:var(--text3);font-size:12px">AI 服務暫時無法使用（'+e.message+'），請稍後再試。</span>';
+    titleEl.textContent = meta.icon + ' ' + meta.title + ' — 無法連線';
+    contentEl.innerHTML =
+      `<div style="font-size:12px;color:var(--text3);line-height:1.7">
+        ⚠️ <strong style="color:var(--text2)">深度分析暫時無法使用</strong><br>
+        錯誤：${e.message}<br><br>
+        此功能需連線至 Anthropic API。<br>
+        請確認網路連線後重試，或稍後再試。
+      </div>`;
     btnEl.classList.remove('loading');
   }
 }
