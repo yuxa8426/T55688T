@@ -2261,10 +2261,16 @@ function calcInstScore(inst){
 // ════════════════════════════════════════════════════
 // 輔助：計算移動平均
 // ════════════════════════════════════════════════════
-function calcMA(closes, n){
-  if(closes.length < n) return null;
-  const slice = closes.slice(-n);
-  return slice.reduce((a,b)=>a+b,0)/n;
+function calcMA(closes, n, strict=true){
+  if(!closes || !closes.length) return null;
+  if(closes.length < n){
+    // 嚴格模式：資料不足回傳 null
+    if(strict) return null;
+    // 寬鬆模式：資料量至少50%時用現有資料估算
+    if(closes.length < n * 0.5) return null;
+  }
+  const slice = closes.slice(-Math.min(n, closes.length));
+  return slice.reduce((a,b)=>a+b,0)/slice.length;
 }
 
 // ════════════════════════════════════════════════════
@@ -2365,8 +2371,23 @@ async function loadLongTermData(){
   if(loadEl) loadEl.style.display = 'block';
 
   try{
-    const raw = await fmStockData(stockId, 375); // 375天 ≈ 18個月，確保12月週期
-    if(!raw || raw.length < 60){ if(loadEl) loadEl.style.display='none'; return; }
+    // 520個日曆日 ≈ 370個交易日，確保 MA250(需250) + 週期分析(需280)都夠
+    // _ttl=10分鐘，長期歷史資料不需要頻繁更新
+    const raw = await fmFetch({
+      dataset:    'TaiwanStockPrice',
+      data_id:    stockId,
+      start_date: nDaysAgo(520),
+      end_date:   todayStr(),
+      _ttl:       10 * 60 * 1000,
+    }, 10000);
+    if(!raw || raw.length < 60){
+      console.warn('[LongTerm] insufficient data:', raw?.length, 'rows for', stockId);
+      setEl('l-ma60', raw?.length ? raw.length+'筆不足' : '無法取得', 'var(--text3)');
+      setEl('l-body', `長期資料不足（取得 ${raw?.length||0} 筆，需 ≥60 筆）。FinMind 免費帳號每日限額可能已達上限。`);
+      if(loadEl) loadEl.style.display='none';
+      return;
+    }
+    console.log('[LongTerm]', stockId, 'got', raw.length, 'rows');
 
     const hist = _parseHistory(raw);
     const q    = _parseQuote(raw, stockId);
@@ -2625,14 +2646,22 @@ function updateLongTerm(price, closes, dates){
 
   const n = closes.length;
 
-  // ── 均線 ────────────────────────────────────────────
-  const ma60  = calcMA(closes, 60);
-  const ma120 = calcMA(closes, 120);
-  const ma250 = calcMA(closes, 250);
+  // ── 均線（嚴格模式：需足夠根數才計算）────────────────
+  const ma60  = calcMA(closes, 60,  true);
+  const ma120 = calcMA(closes, 120, true);
+  const ma250 = calcMA(closes, 250, true);
 
-  setEl('l-ma60',  ma60  ? fmt(ma60)  : '資料不足', ma60  ? (price>ma60 ?'var(--red)':'var(--green)'):'var(--text3)');
-  setEl('l-ma120', ma120 ? fmt(ma120) : '—',        ma120 ? (price>ma120?'var(--red)':'var(--green)'):'var(--text3)');
-  setEl('l-ma250', ma250 ? fmt(ma250) : '—',        ma250 ? (price>ma250?'var(--red)':'var(--green)'):'var(--text3)');
+  // 標示有效根數，幫助使用者理解資料品質
+  const nLabel = n >= 250 ? '' : `（${n}日）`;
+  setEl('l-ma60',
+    ma60  ? fmt(ma60)+nLabel  : (n>=30?'計算中…':'資料不足'),
+    ma60  ? (price>ma60 ?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-ma120',
+    ma120 ? fmt(ma120) : (n>=80?'載入中':'—'),
+    ma120 ? (price>ma120?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-ma250',
+    ma250 ? fmt(ma250) : (n>=180?'載入中':'—'),
+    ma250 ? (price>ma250?'var(--red)':'var(--green)'):'var(--text3)');
 
   // ── 漲幅 ────────────────────────────────────────────
   function periodReturn(lookback){
@@ -2853,13 +2882,19 @@ function updateAI(name, q){
   setBar('m-bar', midScore, 200);
 
   // ════════════════════════════════
-  // ③ 長期評分（以現有60天資料先給基礎分，切到長期tab時自動補抓完整資料）
+  // ③ 長期評分（60天資料僅夠基礎計算；完整面板等 loadLongTermData 補抓）
   // ════════════════════════════════
   const longScore = calcLongScore(price, closes, dates);
-  // 同步更新長期 panel（使用現有短資料，若不足則留 —）
-  updateLongTerm(price, closes, dates);
   setEl('l-score', longScore.toFixed(1), scoreColor(longScore));
   setBar('l-bar', longScore, 250);
+  // 60天 ≈ 43交易日，不夠畫 MA60；先設佔位提示，切到長期Tab時自動補抓
+  setEl('l-ma60',  '載入中…', 'var(--text3)');
+  setEl('l-ma120', '—', 'var(--text3)');
+  setEl('l-ma250', '—', 'var(--text3)');
+  setEl('l-quarter','—', 'var(--text3)');
+  setEl('l-half',   '—', 'var(--text3)');
+  setEl('l-year',   '—', 'var(--text3)');
+  setEl('l-body', '切換至「長期季↑」分頁，自動載入完整250日資料');
 
   // ════════════════════════════════
   // ④ 綜合評分（短30% + 中30% + 長25% + 法人15%）
