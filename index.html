@@ -2520,7 +2520,7 @@ async function runDeepModule(module){
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model:      'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          max_tokens: 3000,
           messages:   [{ role:'user', content: prompt }],
         }),
       });
@@ -2597,7 +2597,7 @@ RSI(14)：${ctx.rsi||'—'}
 可投入資金規模：${user.capitalLabel}`;
 
   const prompts = {
-    causal: `你是一位台股資深研究員，擅長因果推論分析，請嚴格用繁體中文回覆。
+    causal: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是台股資深研究員，擅長因果推論，用繁體中文回覆。
 
 ${stockInfo}
 
@@ -2616,7 +2616,7 @@ ${stockInfo}
 
 語氣專業但簡潔，每段100字以內，不要重複說「以上僅供參考」超過一次。`,
 
-    stress: `你是一位行為財務學專家，熟悉投資心理學，請嚴格用繁體中文回覆。
+    stress: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是行為財務學專家，熟悉投資心理學，用繁體中文回覆。
 
 ${stockInfo}
 ${userInfo}
@@ -2634,7 +2634,7 @@ ${userInfo}
 
 語氣像一位私人理財顧問，具體有數字。`,
 
-    altdata: `你是一位法人研究員，熟悉另類數據（Alternative Data）與台股供應鏈，請嚴格用繁體中文回覆。
+    altdata: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是法人研究員，熟悉另類數據與台股供應鏈，用繁體中文回覆。
 
 ${stockInfo}
 
@@ -2651,7 +2651,7 @@ ${stockInfo}
 
 用數據化思維，但說明一般投資人如何免費取得或估算這些訊號。`,
 
-    dynrisk: `你是一位風控專家，專長在動態倉位管理，請嚴格用繁體中文回覆。
+    dynrisk: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是風控專家，專長動態倉位管理，用繁體中文回覆。
 
 ${stockInfo}
 ${userInfo}
