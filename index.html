@@ -2505,6 +2505,7 @@ async function runDeepModule(module){
       : 'https://api.anthropic.com/v1/messages';  // 直連（需 CORS 支援）
 
     const callAI = async (endpoint) => {
+      console.log('[DeepModule] calling:', endpoint.slice(0,60));
       const r = await fetchWithTimeout(endpoint, 30000, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2514,31 +2515,31 @@ async function runDeepModule(module){
           messages:   [{ role:'user', content: prompt }],
         }),
       });
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      const t = (j.content||[]).map(b=>b.type==='text'?b.text:'').join('');
-      if(!t) throw new Error('empty response');
+      const rawText = await r.text();
+      console.log('[DeepModule] status:', r.status, 'body:', rawText.slice(0,200));
+      if(!r.ok) throw new Error(`HTTP ${r.status}: ${rawText.slice(0,100)}`);
+      const j = JSON.parse(rawText);
+      // 支援 Anthropic 格式 {content:[{type,text}]} 和直接 {text} 格式
+      const t = j.text
+        || (j.content||[]).map(b=>b.type==='text'?b.text:'').join('')
+        || j.candidates?.[0]?.content?.parts?.[0]?.text
+        || '';
+      if(!t) throw new Error('回應格式異常: '+rawText.slice(0,100));
       return t;
     };
 
     let text = null;
+    let lastErr = '';
 
-    // 嘗試1：Worker 代理 或 直連
-    try { text = await callAI(WORKER_URL); } catch(e1) {
-      console.warn('[DeepModule] primary failed:', e1.message);
-
-      // 嘗試2：corsproxy.io（Cloudflare Pages 無 Worker 的備援）
-      try {
-        text = await callAI(
-          'https://corsproxy.io/?url=' +
-          encodeURIComponent('https://api.anthropic.com/v1/messages')
-        );
-      } catch(e2) {
-        console.warn('[DeepModule] corsproxy failed:', e2.message);
-      }
+    // 嘗試：Worker 代理
+    try {
+      text = await callAI(WORKER_URL);
+    } catch(e1) {
+      lastErr = e1.message;
+      console.warn('[DeepModule] Worker failed:', e1.message);
     }
 
-    if(!text) throw new Error('請設定 Cloudflare Worker 代理（詳見 worker.js）');
+    if(!text) throw new Error(lastErr || 'Worker 無回應，請確認 Worker 已正確部署');
 
     // Markdown → HTML
     const col = meta.color;
@@ -2558,13 +2559,13 @@ async function runDeepModule(module){
 
   }catch(e){
     console.warn('[DeepModule]', module, e.message);
-    titleEl.textContent = meta.icon + ' ' + meta.title + ' — 無法連線';
+    titleEl.textContent = meta.icon + ' ' + meta.title + ' — 發生錯誤';
     contentEl.innerHTML =
       `<div style="font-size:12px;color:var(--text3);line-height:1.7">
-        ⚠️ <strong style="color:var(--text2)">深度分析暫時無法使用</strong><br>
-        錯誤：${e.message}<br><br>
-        此功能需連線至 Anthropic API。<br>
-        請確認網路連線後重試，或稍後再試。
+        ⚠️ <strong style="color:var(--text2)">錯誤詳情</strong><br>
+        <code style="color:var(--gold);font-size:11px;word-break:break-all">${e.message}</code><br><br>
+        <strong style="color:var(--text2)">請開啟瀏覽器開發者工具（F12）→ Console</strong><br>
+        查看 [DeepModule] 開頭的 log，把畫面截圖給我，我幫你診斷。
       </div>`;
     btnEl.classList.remove('loading');
   }
