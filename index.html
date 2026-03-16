@@ -1595,9 +1595,11 @@ const FM_CACHE_DEFAULT = 30 * 1000;
 
 async function fmFetch(params, timeout=6000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
-  const directUrl = FM_BASE + '?' + new URLSearchParams({ ...apiParams, token: FM_TOKEN });
-  // 走 corsproxy 繞過 CORS（Cloudflare Pages 環境需要）
-  const url = FM_PROXY + encodeURIComponent(directUrl);
+  // 優先走 Cloudflare Worker（最穩定）；未設定時嘗試直連（本地測試用）
+  const fmParams = new URLSearchParams({ ...apiParams, token: FM_TOKEN }).toString();
+  const url = (typeof API !== 'undefined' && API)
+    ? API.replace(/\/$/, '') + '/finmind?' + fmParams
+    : FM_BASE + '?' + fmParams;
   const rawTtl = _ttl ?? FM_CACHE_TTL_MAP[params.dataset] ?? FM_CACHE_DEFAULT;
   const ttl    = typeof rawTtl === 'function' ? rawTtl() : rawTtl;
 
