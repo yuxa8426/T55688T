@@ -1422,6 +1422,8 @@ function fmtPct(n){ const s=n>=0?'+':''; return s+fmt(n)+'%'; }
 
 const FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0xMCAxNDowNzo0NSIsInVzZXJfaWQiOiJ5dXhhODQyNiIsImVtYWlsIjoieXV4YTg0MjZAZ21haWwuY29tIiwiaXAiOiIyMjMuMTM5Ljk0LjE3NSJ9.tiYFgiur-vqVIPiLIDjC3jeVQgk1ajX0Zfv4CyETxVM';
 const FM_BASE  = 'https://api.finmindtrade.com/api/v4/data';
+// FinMind CORS proxy（t55688t.pages.dev 直連會被封鎖）
+const FM_PROXY = 'https://corsproxy.io/?url=';
 
 // 取今天或最近交易日的日期字串 YYYY-MM-DD
 // ── 台灣時間工具（UTC+8，避免 toISOString 時區錯位）──
@@ -1593,7 +1595,9 @@ const FM_CACHE_DEFAULT = 30 * 1000;
 
 async function fmFetch(params, timeout=6000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
-  const url = FM_BASE + '?' + new URLSearchParams({ ...apiParams, token: FM_TOKEN });
+  const directUrl = FM_BASE + '?' + new URLSearchParams({ ...apiParams, token: FM_TOKEN });
+  // 走 corsproxy 繞過 CORS（Cloudflare Pages 環境需要）
+  const url = FM_PROXY + encodeURIComponent(directUrl);
   const rawTtl = _ttl ?? FM_CACHE_TTL_MAP[params.dataset] ?? FM_CACHE_DEFAULT;
   const ttl    = typeof rawTtl === 'function' ? rawTtl() : rawTtl;
 
@@ -1624,7 +1628,10 @@ async function fmFetch(params, timeout=6000){
     try{
       const res = await fetchWithTimeout(url, timeout);
       if(!res.ok) throw new Error('HTTP '+res.status);
-      const json = await res.json();
+      const raw  = await res.json();
+      // corsproxy.io 有時包在 .contents 字串裡
+      const json = (raw.contents && typeof raw.contents === 'string')
+        ? JSON.parse(raw.contents) : raw;
       if(json.status !== 200) throw new Error(json.msg||'FinMind error');
       const data = json.data||[];
       _fmCache.set(url, {data, ts:Date.now()});
