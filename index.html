@@ -2565,14 +2565,15 @@ async function runDeepModule(module){
 
     if(!text) throw new Error(lastErr || 'Worker 無回應，請確認 Worker 已正確部署');
 
-    // Markdown → HTML
+    // Markdown → HTML（含 ==highlight== 語法）
     const col = meta.color;
     const html = text
+      .replace(/==(.+?)==/g,             `<mark style="background:${col}22;color:${col};border-radius:3px;padding:1px 5px;font-weight:700">$1</mark>`)
       .replace(/\*\*(.+?)\*\*/g,        '<strong>$1</strong>')
-      .replace(/^###\s*(.+)$/gm,        `<div style="font-size:13px;font-weight:700;color:${col};margin:10px 0 4px">$1</div>`)
-      .replace(/^##\s*(.+)$/gm,         '<div style="font-size:14px;font-weight:800;margin:12px 0 6px">$1</div>')
-      .replace(/^[-\u2022]\s*(.+)$/gm,  '<div style="margin:5px 0;padding-left:14px;border-left:2px solid rgba(255,255,255,.1)">\u2022 $1</div>')
-      .replace(/\n{2,}/g, '<br><br>')
+      .replace(/^###\s*(.+)$/gm,        `<div style="font-size:12px;font-weight:700;color:${col};margin:10px 0 3px;letter-spacing:.5px;text-transform:uppercase">$1</div>`)
+      .replace(/^##\s*(.+)$/gm,         `<div style="font-size:14px;font-weight:800;margin:4px 0 10px;border-bottom:1px solid ${col}44;padding-bottom:5px">$1</div>`)
+      .replace(/^[-\u2022]\s*(.+)$/gm,  '<div style="margin:4px 0;padding-left:12px;border-left:2px solid rgba(255,255,255,.1)">\u2022 $1</div>')
+      .replace(/\n{2,}/g, '<br>')
       .replace(/\n/g,     '<br>');
 
     titleEl.textContent = meta.icon + ' ' + meta.title;
@@ -2622,84 +2623,84 @@ RSI(14)：${ctx.rsi||'—'}
   const userInfo = `投資人偏好：${user.riskLabel}
 可投入資金規模：${user.capitalLabel}`;
 
+  // 格式規則：用 ==重點文字== 標記最重要的結論（前端會轉成 highlight）
+  const FMT = `輸出格式規則：
+1. 每個段落最多3句話，直接給結論不要解釋過程
+2. 最重要的數字、結論、操作建議用 ==文字== 包住（前端會高亮顯示）
+3. 禁止任何開場白、總結語、免責聲明
+4. 總字數控制在300字以內`;
+
   const prompts = {
-    causal: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是台股資深研究員，擅長因果推論，用繁體中文回覆。
+    causal: `${FMT}
 
 ${stockInfo}
 
-請針對此股票進行「因果鏈分析」，找出近期股價表現的可能真實原因（而非只是相關性），分三層說明：
+## 🔗 因果鏈分析
 
-### 一、技術面因果鏈
-根據技術數據，這次走勢最可能的直接觸發因素是什麼？（例如：止損位被打穿、RSI超買超賣後反轉、均線支撐/壓力被突破）
+### 技術面
+RSI與均線現況的直接觸發因素為何？用一句話說明。
 
-### 二、籌碼面因果鏈
-法人動向背後可能的邏輯是什麼？（例如：外資是避險性賣出？還是換股操作？投信是業績壓力建倉？）
+### 籌碼面
+法人動向最可能的真實意圖（避險/換股/建倉）？
 
-### 三、產業/宏觀因果鏈
-可能連結到哪些產業或宏觀因素？（例如：AI算力需求、Fed利率預期、匯率變動、地緣政治）
+### 宏觀面
+連結到哪個最關鍵的產業或總經因素？
 
-最後提供一句「因果鏈摘要」，說明「A導致B導致C」的推論鏈。
+### ⚡ 因果鏈摘要
+一句話：==A== 導致 ==B== 導致 ==C==`,
 
-語氣專業但簡潔，每段100字以內，不要重複說「以上僅供參考」超過一次。`,
-
-    stress: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是行為財務學專家，熟悉投資心理學，用繁體中文回覆。
-
-${stockInfo}
-${userInfo}
-
-請針對此投資人的「心理壓力承受度」，模擬以下兩個情境的心理狀態，並給出個性化策略建議：
-
-### 情境A：急跌 -15%（2週內）
-這位${user.riskLabel}的投資人會有什麼心理反應？最可能犯的錯誤是什麼？建議採取什麼策略減少情緒干擾？
-
-### 情境B：長期盤整 6個月（±5%震盪）
-這種無聊的盤整對他的心理影響是什麼？如何避免「無聊時亂操作」的陷阱？
-
-### 個性化建議
-基於此人的風險偏好（${user.riskLabel}）和資金規模（${user.capitalLabel}），若要持有此股，建議的部位比例上限是多少？設定哪個停損點可以讓他「睡得著覺」？
-
-語氣像一位私人理財顧問，具體有數字。`,
-
-    altdata: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是法人研究員，熟悉另類數據與台股供應鏈，用繁體中文回覆。
-
-${stockInfo}
-
-請分析以下「另類數據訊號」對此股票的可能影響：
-
-### 一、供應鏈追蹤訊號
-此股票所在的供應鏈上，有哪些「可觀察的另類數據」可以用來預測其業績？（例如：上游原料採購量、客戶的庫存天數、代工廠稼動率、港口貨運量）請列出3個最重要的指標及其觀察方式。
-
-### 二、衛星/電力/搜尋數據
-法人機構通常用哪些非財報數據監控此類公司？（例如：Google Trends搜尋量、App Store排行、工廠停車場衛星影像、夜間燈光衛星數據）請推測最相關的2~3項。
-
-### 三、領先指標推論
-根據以上另類指標，若出現什麼「正向訊號」可以視為買入先行指標？出現什麼「負向訊號」應該提前減碼？
-
-用數據化思維，但說明一般投資人如何免費取得或估算這些訊號。`,
-
-    dynrisk: `請直接進入分析，禁止開場白與自我介紹，直接給出標題與內容。\n\n你是風控專家，專長動態倉位管理，用繁體中文回覆。
+    stress: `${FMT}
 
 ${stockInfo}
 ${userInfo}
 
-請根據當前市場狀態，提供「動態倉位管理建議」：
+## 🧠 心理壓力模擬
 
-### 一、當前風險環境評估
-根據RSI=${ctx.rsi||'—'}、近期法人動向、技術評分${ctx.finalScore ? ctx.finalScore.toFixed(1) : '—'}/10，目前市場微環境是：高波動？低波動？趨勢行情？震盪行情？這對倉位管理意味著什麼？
+### 急跌-15%情境
+最可能犯的錯誤：==？==，對策：==？==
 
-### 二、建議倉位比例
-針對${user.riskLabel}（資金${user.capitalLabel}）：
-- 若現在是「空手」：建議首批建倉比例是多少？分幾次建倉？
-- 若已持有：建議在什麼價位加碼？什麼情況下應減碼至5成以下？
-- 停損設在哪裡（以%或技術位表示）？停利目標是？
+### 盤整6個月情境
+心理陷阱：==？==，防範方式：==？==
 
-### 三、環境突變應對
-若明天開盤突然出現以下情況，倉位應如何動態調整？
-- (a) 跳空跌停超過 -6%
-- (b) 外資突然連賣超 5 億元
-- (c) 台幣急貶超過 1%
+### 個人化建議（${user.riskLabel}・${user.capitalLabel}）
+- 建議部位上限：==%==
+- 停損設在：==價位或%==（睡得著覺的位置）
+- 加碼條件：==？==`,
 
-給出具體操作流程，而非模糊建議。`,
+    altdata: `${FMT}
+
+${stockInfo}
+
+## 🛰️ 另類數據訊號
+
+### 3個最關鍵的供應鏈先行指標
+逐一列出：指標名稱、觀察方式、免費取得方法
+
+### 買入訊號
+出現 ==？== 時視為正向先行訊號
+
+### 減碼訊號
+出現 ==？== 時應提前減碼`,
+
+    dynrisk: `${FMT}
+
+${stockInfo}
+${userInfo}
+
+## ⚡ 動態倉位管理
+
+### 當前環境（RSI ${ctx.rsi||'—'}・評分${ctx.finalScore ? ctx.finalScore.toFixed(1) : '—'}/10）
+市場狀態：==高/低波動・趨勢/震盪==，倉位策略含義：==？==
+
+### 建議倉位（${user.riskLabel}・${user.capitalLabel}）
+- 空手建倉：==首批?%==，分==?==次，間隔==?==
+- 停損：==%或價位==　停利：==%或價位==
+- 加碼條件：==？==
+
+### 突發應對
+- 跳空跌停-6%：==立即？==
+- 外資單日賣超5億：==？==
+- 台幣急貶1%：==？==`,
   };
   return prompts[module] || prompts.causal;
 }
