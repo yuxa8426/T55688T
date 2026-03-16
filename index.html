@@ -1271,13 +1271,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 // ════════════════════════════════════════════════════════
 // 股析 StockAI — 完整 JS 引擎（真實 API + 靜態備援）
 //
-// 部署 Cloudflare Worker 後，將下面這行改為你的 Worker URL：
-//   const API = 'https://stockai.yourname.workers.dev';
-//
-// 部署前（本地測試）維持 '' 即可 → 直接呼叫 TWSE/Yahoo
+// ── 深度分析模組設定（使用 Google Gemini 免費 API）──────
+// 完全免費，不需要信用卡！步驟：
+// 1. 前往 https://aistudio.google.com/apikey 取得免費 API Key
+// 2. Cloudflare Worker 貼入 worker.js，填入 Gemini API Key
+// 3. 部署後將下方 API 改為你的 Worker URL：
+//    const API = 'https://stockai-proxy.你的帳號.workers.dev';
 // ════════════════════════════════════════════════════════
 
-const API = '';
+const API = 'https://stockai-proxy.yuxa8426.workers.dev';   // ← 填入 Worker URL 後深度分析模組才能使用
 
 // ── 全域工具函式 ──────────────────────────────────────
 function setEl(id, val, color){
@@ -2429,6 +2431,40 @@ async function runDeepModule(module){
   const contentEl= document.getElementById('deepModuleContent');
   if(!btnEl || !resultEl || !titleEl || !contentEl) return;
 
+  // 若 API（Worker URL）未設定，顯示設定引導
+  if(!API){
+    resultEl.style.display = 'block';
+    titleEl.textContent    = '⚙️ 需要設定 API 代理';
+    titleEl.style.color    = '#f5c842';
+    contentEl.innerHTML    = `
+      <div style="font-size:13px;color:var(--text);line-height:1.8">
+        <strong>深度分析模組需要簡單設定（完全免費）。</strong><br><br>
+        <div style="font-size:12px;color:var(--text2)">
+          📋 設定步驟（約10分鐘，完全免費不需信用卡）：<br><br>
+          <strong style="color:var(--green)">第一步：取得免費 Gemini API Key</strong><br>
+          <div style="margin-left:12px;margin-bottom:8px">
+            1. 前往 <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--green)">aistudio.google.com/apikey</a><br>
+            2. 用 Google 帳號登入（不需信用卡）<br>
+            3. 點「Create API key」→ 複製（格式：AIza...）
+          </div>
+          <strong style="color:var(--gold)">第二步：建立 Cloudflare Worker</strong><br>
+          <div style="margin-left:12px;margin-bottom:8px">
+            4. 前往 <a href="https://dash.cloudflare.com" target="_blank" style="color:var(--gold)">dash.cloudflare.com</a>（免費帳號即可）<br>
+            5. Workers &amp; Pages → Create application → Start with Hello World<br>
+            6. 貼入 worker.js 內容（GitHub repo 根目錄），第 11 行換上 Key<br>
+            7. Save and Deploy → 複製 Worker URL（格式：xxx.workers.dev）
+          </div>
+          <strong style="color:var(--red)">第三步：更新一行程式碼</strong><br>
+          <div style="margin-left:12px">
+            8. GitHub 開啟 index.html，搜尋 <code style="color:var(--gold)">const API = ''</code><br>
+            9. 改為 <code style="color:var(--gold)">const API = 'https://xxx.workers.dev'</code> → Commit
+          </div>
+        </div>
+      </div>`;
+    if(sourcesEl) sourcesEl.style.display = 'none';
+    return;
+  }
+
   // 防重複點擊
   if(btnEl.classList.contains('loading')) return;
   btnEl.classList.add('loading');
@@ -2463,40 +2499,46 @@ async function runDeepModule(module){
   try{
     const prompt = buildDeepPrompt(module);
 
-    // 直接呼叫 Anthropic API（Artifacts 環境由平台代理 CORS）
-    const doCall = async (url, extraHeaders={}) => {
-      const r = await fetchWithTimeout(url, 30000, {
+    // API 端點：優先使用已設定的 Worker 代理，否則嘗試直連
+    const WORKER_URL = (typeof API !== 'undefined' && API)
+      ? API.replace(/\/$/, '') + '/v1/messages'   // Cloudflare Worker
+      : 'https://api.anthropic.com/v1/messages';  // 直連（需 CORS 支援）
+
+    const callAI = async (endpoint) => {
+      const r = await fetchWithTimeout(endpoint, 30000, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...extraHeaders },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model:      'claude-sonnet-4-20250514',
           max_tokens: 1000,
           messages:   [{ role:'user', content: prompt }],
         }),
       });
-      if(!r.ok) return null;
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      return (j.content||[]).map(b=>b.type==='text'?b.text:'').join('') || null;
+      const t = (j.content||[]).map(b=>b.type==='text'?b.text:'').join('');
+      if(!t) throw new Error('empty response');
+      return t;
     };
 
-    // 嘗試1：直連（Artifacts/Claude.ai 環境有代理，不需 key）
-    let text = await doCall('https://api.anthropic.com/v1/messages').catch(()=>null);
+    let text = null;
 
-    // 嘗試2：corsproxy.io 中轉（Cloudflare Pages 環境）
-    if(!text){
-      text = await doCall(
-        'https://corsproxy.io/?url='+encodeURIComponent('https://api.anthropic.com/v1/messages')
-      ).catch(()=>null);
+    // 嘗試1：Worker 代理 或 直連
+    try { text = await callAI(WORKER_URL); } catch(e1) {
+      console.warn('[DeepModule] primary failed:', e1.message);
+
+      // 嘗試2：corsproxy.io（Cloudflare Pages 無 Worker 的備援）
+      try {
+        text = await callAI(
+          'https://corsproxy.io/?url=' +
+          encodeURIComponent('https://api.anthropic.com/v1/messages')
+        );
+      } catch(e2) {
+        console.warn('[DeepModule] corsproxy failed:', e2.message);
+      }
     }
 
-    // 嘗試3：allorigins 中轉
-    if(!text){
-      text = await doCall(
-        'https://api.allorigins.win/raw?url='+encodeURIComponent('https://api.anthropic.com/v1/messages')
-      ).catch(()=>null);
-    }
-
-    if(!text) throw new Error('所有端點均無法回應');
+    if(!text) throw new Error('請設定 Cloudflare Worker 代理（詳見 worker.js）');
 
     // Markdown → HTML
     const col = meta.color;
