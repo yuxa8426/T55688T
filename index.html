@@ -5639,6 +5639,7 @@ async function renderWatchlist(){
 async function renderHomeWatchlist(){
   const wl = getWatchlist().slice(0,4);
   const el = document.getElementById('homeWatchlist');
+  if(!el) return; // 總覽頁已移除自選股區塊
   if(!wl.length){ el.innerHTML=''; return; }
   el.innerHTML = wl.map(s=>`
     <div class="wrow" onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('home')">
