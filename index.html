@@ -732,6 +732,13 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       </div>
     </div>
 
+    <!-- 個人化設定連動提示（有設定才顯示）-->
+    <div id="aiPersonalBanner" style="display:none;margin-top:12px;padding:8px 12px;background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.2);border-radius:10px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px">⚡</span>
+      <div style="flex:1;font-size:11px;color:#c0a0ff;line-height:1.4" id="aiPersonalBannerText">深度分析已依個人設定個性化</div>
+      <button onclick="switchPage('profile')" style="font-size:10px;color:#a080ff;background:none;border:none;cursor:pointer;font-weight:700;white-space:nowrap">修改設定 ›</button>
+    </div>
+
     <!-- 綜合評分列 -->
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -776,7 +783,10 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
     <!-- ═══ 四大深度分析模組 ═══ -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:10px">🧬 深度分析模組</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:1px">🧬 深度分析模組</div>
+        <div id="deepModuleProfileBadge" style="display:none;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(124,92,252,.12);color:#a080ff;border:1px solid rgba(124,92,252,.3)"></div>
+      </div>
 
       <!-- 模組按鈕列 -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -786,7 +796,13 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
         </button>
         <button onclick="runDeepModule('stress')" class="deep-btn" id="btn-stress">
           <span style="font-size:16px">🧠</span>
-          <div><div style="font-size:12px;font-weight:700">心理壓力模擬</div><div style="font-size:10px;color:var(--text3)">個人化波動承受分析</div></div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:5px">
+              <div style="font-size:12px;font-weight:700">心理壓力模擬</div>
+              <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(124,92,252,.15);color:#a080ff;font-weight:700">個人化</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3)">依風險偏好個性化分析</div>
+          </div>
         </button>
         <button onclick="runDeepModule('altdata')" class="deep-btn" id="btn-altdata">
           <span style="font-size:16px">🛰️</span>
@@ -794,16 +810,24 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
         </button>
         <button onclick="runDeepModule('dynrisk')" class="deep-btn" id="btn-dynrisk">
           <span style="font-size:16px">⚡</span>
-          <div><div style="font-size:12px;font-weight:700">動態倉位管理</div><div style="font-size:10px;color:var(--text3)">環境突變倉位建議</div></div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:5px">
+              <div style="font-size:12px;font-weight:700">動態倉位管理</div>
+              <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(124,92,252,.15);color:#a080ff;font-weight:700">個人化</span>
+            </div>
+            <div style="font-size:10px;color:var(--text3)">依資金規模計算部位</div>
+          </div>
         </button>
       </div>
 
       <!-- 分析結果顯示區 -->
       <div id="deepModuleResult" style="display:none;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:12px;padding:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <div style="font-size:12px;font-weight:700;color:var(--gold)" id="deepModuleTitle">—</div>
           <button onclick="document.getElementById('deepModuleResult').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;line-height:1">✕</button>
         </div>
+        <!-- 連動數據來源標示 -->
+        <div id="deepModuleDataSources" style="display:none;margin-bottom:10px;display:flex;gap:5px;flex-wrap:wrap"></div>
         <div id="deepModuleContent" style="font-size:13px;color:var(--text);line-height:1.7">—</div>
       </div>
     </div>
@@ -1186,8 +1210,24 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <div class="prof-av" id="profAvatar">股</div>
     <div style="font-size:20px;font-weight:700" id="profName">股析用戶</div>
     <div style="font-size:13px;color:var(--text2);margin-top:4px" id="profBio">點擊編輯個人資料</div>
+    <!-- 設定標籤 -->
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap" id="profTags">
+      <span id="profRiskTag" style="display:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(124,92,252,.4);background:rgba(124,92,252,.1);color:#a080ff"></span>
+      <span id="profCapitalTag" style="display:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(0,212,170,.35);background:rgba(0,212,170,.08);color:var(--green)"></span>
+    </div>
+    <!-- 連動提示 -->
+    <div id="profLinkedHint" style="display:none;margin-top:8px;font-size:11px;color:var(--text3)">
+      ⚡ 此設定已連動 AI 深度分析模組
+    </div>
   </div>
-  <div class="pref-item" onclick="editProfile()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">✏️</div><div><div class="pref-t">編輯個人資料</div><div class="pref-s">姓名、股齡、投資風格</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
+  <div class="pref-item" onclick="editProfile()">
+    <div class="pref-icon" style="background:rgba(0,212,170,.12)">✏️</div>
+    <div style="flex:1">
+      <div class="pref-t">編輯個人資料</div>
+      <div class="pref-s" id="profEditSub">姓名、股齡、投資風格</div>
+    </div>
+    <span style="color:var(--text3);font-size:18px">›</span>
+  </div>
   <div class="pref-item" onclick="showToast('通知設定開發中')"><div class="pref-icon" style="background:rgba(0,212,170,.12)">🔔</div><div><div class="pref-t">通知設定</div><div class="pref-s">價格警報、法人動向</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="clearAllData()"><div class="pref-icon" style="background:rgba(255,76,106,.12)">🗑️</div><div><div class="pref-t">清除所有資料</div><div class="pref-s">自選股、投組、設定</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="showToast('股析 StockAI v2.0 · FinMind 真實資料')"><div class="pref-icon" style="background:rgba(245,200,66,.12)">📡</div><div><div class="pref-t">數據來源</div><div class="pref-s">FinMind · TWSE · 每日更新</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
@@ -2379,6 +2419,29 @@ async function runDeepModule(module){
   titleEl.style.color    = meta.color;
   contentEl.innerHTML    = '<span style="color:var(--text3)">⏳ AI 正在生成分析，約 10~15 秒…</span>';
 
+  // 顯示連動數據來源標籤
+  const sourcesEl = document.getElementById('deepModuleDataSources');
+  if(sourcesEl){
+    const ctx = _lastAIContext || {};
+    const user = getUserProfile();
+    const tags = [];
+    // 股票資料
+    tags.push({text:`📊 ${ctx.name||currentName}`, color:'rgba(0,212,170,.15)', border:'rgba(0,212,170,.3)', tc:'var(--green)'});
+    if(ctx.rsi)        tags.push({text:`RSI ${ctx.rsi}`, color:'rgba(245,200,66,.1)', border:'rgba(245,200,66,.25)', tc:'#f5c842'});
+    if(ctx.finalScore) tags.push({text:`綜合 ${ctx.finalScore.toFixed(1)}/10`, color:'rgba(124,92,252,.12)', border:'rgba(124,92,252,.3)', tc:'#a080ff'});
+    // 法人
+    if(ctx.foreignStreak!=null) tags.push({text:`外資${ctx.foreignStreak>0?'連買':'連賣'}${Math.abs(ctx.foreignStreak)}日`, color:'rgba(255,76,106,.1)', border:'rgba(255,76,106,.25)', tc:'var(--red)'});
+    // 個人設定（若為 stress/dynrisk 顯示個人化標籤）
+    if(['stress','dynrisk'].includes(module)){
+      tags.push({text:`⚡ ${user.riskLabel}`, color:'rgba(124,92,252,.15)', border:'rgba(124,92,252,.35)', tc:'#c080ff'});
+      tags.push({text:`💰 ${user.capitalLabel}`, color:'rgba(0,212,170,.1)', border:'rgba(0,212,170,.3)', tc:'var(--green)'});
+    }
+    sourcesEl.style.display = 'flex';
+    sourcesEl.innerHTML = tags.map(t=>
+      `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:${t.color};border:1px solid ${t.border};color:${t.tc}">${t.text}</span>`
+    ).join('');
+  }
+
   try{
     const prompt = buildDeepPrompt(module);
     const resp   = await fetch('https://api.anthropic.com/v1/messages', {
@@ -2830,7 +2893,28 @@ function updateAI(name, q){
     const btn=document.getElementById('btn-'+m);
     if(btn) btn.classList.remove('done','loading');
   });
-  document.getElementById('deepModuleResult')?.style && (document.getElementById('deepModuleResult').style.display='none');
+  const _drEl = document.getElementById('deepModuleResult');
+  if(_drEl) _drEl.style.display = 'none';
+
+  // 更新個人化設定 banner
+  (function(){
+    const user = getUserProfile();
+    const bannerEl = document.getElementById('aiPersonalBanner');
+    const bannerTxtEl = document.getElementById('aiPersonalBannerText');
+    const badgeEl  = document.getElementById('deepModuleProfileBadge');
+    const hasSettings = !!(user.risk || user.capital);
+    if(bannerEl){
+      bannerEl.style.display = hasSettings ? 'flex' : 'none';
+      if(bannerTxtEl && hasSettings){
+        bannerTxtEl.textContent =
+          `⚡ 深度分析已依「${user.riskLabel}・${user.capitalLabel}」個性化`;
+      }
+    }
+    if(badgeEl){
+      badgeEl.textContent = hasSettings ? `⚡ ${user.riskLabel}` : '';
+      badgeEl.style.display = hasSettings ? 'inline-flex' : 'none';
+    }
+  })();
 
   setEl('m-rsi',    rsiVal);
   setEl('m-target', target);
@@ -5876,14 +5960,61 @@ function loadProfile(){
   const bio  = p.bio||'點擊編輯個人資料';
   const initial = name.charAt(0)||'股';
 
-  // 個人頁
+  // 個人頁基本資料
   document.getElementById('profName').textContent   = name;
   document.getElementById('profBio').textContent    = bio;
   document.getElementById('profAvatar').textContent = initial;
 
-  // 首頁 header 右上角 avatar — 同步更新
+  // 首頁 header 右上角 avatar
   const hdr = document.getElementById('headerAvatar');
   if(hdr) hdr.textContent = initial;
+
+  // ── 風險/資金設定標籤 ──
+  const hasRisk    = !!p.risk;
+  const hasCapital = !!p.capital;
+  const hasSettings = hasRisk || hasCapital;
+
+  const riskLabels = {
+    low:'🛡️ 保守型', mid:'⚖️ 穩健型', high:'🚀 積極型', pro:'⚡ 專業型'
+  };
+  const capitalLabels = {
+    small:'💰 50萬以下', mid:'💰 50~200萬', large:'💰 200~500萬', xlarge:'💰 500萬+'
+  };
+
+  const riskTagEl    = document.getElementById('profRiskTag');
+  const capitalTagEl = document.getElementById('profCapitalTag');
+  const hintEl       = document.getElementById('profLinkedHint');
+  const editSubEl    = document.getElementById('profEditSub');
+
+  if(riskTagEl){
+    riskTagEl.textContent = riskLabels[p.risk||'mid'];
+    riskTagEl.style.display = 'inline-flex';
+  }
+  if(capitalTagEl){
+    capitalTagEl.textContent = capitalLabels[p.capital||'mid'];
+    capitalTagEl.style.display = 'inline-flex';
+  }
+  if(hintEl) hintEl.style.display = hasSettings ? 'block' : 'none';
+
+  // 更新編輯按鈕副標題
+  if(editSubEl){
+    const parts = [];
+    if(p.name) parts.push(p.name);
+    if(p.risk) parts.push(riskLabels[p.risk]);
+    if(p.capital) parts.push(capitalLabels[p.capital]);
+    editSubEl.textContent = parts.length ? parts.join(' · ') : '姓名、股齡、投資風格';
+  }
+
+  // 更新深度模組的連動標示
+  const badgeEl = document.getElementById('deepModuleProfileBadge');
+  if(badgeEl){
+    if(hasSettings){
+      badgeEl.textContent = `⚡ 已連動：${riskLabels[p.risk||'mid']}`;
+      badgeEl.style.display = 'inline-flex';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
 }
 
 function editProfile(){
