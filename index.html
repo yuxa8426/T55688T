@@ -2429,6 +2429,9 @@ const DEEP_MODULE_META = {
 // 用上次 updateAI 計算完的資料快取
 let _lastAIContext = null;
 
+// 深度分析結果快取：key = "stockId:module"，value = {html, title, sources}
+const _deepResultCache = new Map();
+
 // 供 updateAI 呼叫，把分析資料存起來給深度模組用
 function cacheAIContext(ctx){ _lastAIContext = ctx; }
 
@@ -2439,6 +2442,18 @@ async function runDeepModule(module){
   const titleEl  = document.getElementById('deepModuleTitle');
   const contentEl= document.getElementById('deepModuleContent');
   if(!btnEl || !resultEl || !titleEl || !contentEl) return;
+
+  // 快取命中：同股票同模組已有結果，直接顯示不重新呼叫 AI
+  const cacheKey = `${currentTicker}:${module}`;
+  const cached   = _deepResultCache.get(cacheKey);
+  if(cached){
+    resultEl.style.display    = 'block';
+    titleEl.textContent       = cached.title;
+    titleEl.style.color       = meta.color;
+    contentEl.innerHTML       = cached.html;
+    if(sourcesEl){ sourcesEl.style.display='flex'; sourcesEl.innerHTML=cached.sources||''; }
+    return; // 直接回傳，不重新分析
+  }
 
   // 若 API（Worker URL）未設定，顯示設定引導
   if(!API){
@@ -2565,6 +2580,13 @@ async function runDeepModule(module){
     btnEl.classList.remove('loading');
     btnEl.classList.add('done');
     setTimeout(()=>btnEl.classList.remove('done'), 3000);
+
+    // 儲存到快取（同股票同模組，下次直接顯示）
+    _deepResultCache.set(cacheKey, {
+      title:   meta.icon + ' ' + meta.title,
+      html,
+      sources: sourcesEl ? sourcesEl.innerHTML : '',
+    });
 
   }catch(e){
     console.warn('[DeepModule]', module, e.message);
@@ -3001,8 +3023,9 @@ function updateAI(name, q){
     mom5Pct, instScore, finalScore,
     foreignStreak: inst?.foreignStreak ?? null,
   });
-  // 重置深度模組按鈕狀態（換股後清除 done 標記）
+  // 換股票：清除此股的深度分析快取，關閉結果面板
   ['causal','stress','altdata','dynrisk'].forEach(m=>{
+    _deepResultCache.delete(`${currentTicker}:${m}`); // currentTicker 此時已是新股票
     const btn=document.getElementById('btn-'+m);
     if(btn) btn.classList.remove('done','loading');
   });
