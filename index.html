@@ -652,32 +652,71 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
     <!-- 長期面板 -->
     <div id="panel-long" style="display:none">
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">MA60</div>
-          <div style="font-size:18px;font-weight:700" id="l-ma60">—</div>
+      <!-- 長期面板載入提示 -->
+      <div id="l-loading" style="display:none;text-align:center;padding:12px;font-size:12px;color:var(--text3)">⏳ 載入250日長期資料…</div>
+
+      <!-- 行1：均線組 -->
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA60 季線</div>
+          <div style="font-size:16px;font-weight:700" id="l-ma60">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">季漲幅</div>
-          <div style="font-size:18px;font-weight:700" id="l-quarter">—</div>
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA120 半年線</div>
+          <div style="font-size:16px;font-weight:700" id="l-ma120">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">週期規律</div>
-          <div style="font-size:18px;font-weight:700" id="l-cycle">—</div>
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA250 年線</div>
+          <div style="font-size:16px;font-weight:700" id="l-ma250">—</div>
         </div>
       </div>
 
-      <!-- 季節性週期圖 -->
-      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:12px 13px;margin-bottom:12px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:600">歷年月份漲跌規律（近一年）</div>
+      <!-- 行2：漲幅組 -->
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">季漲幅（60日）</div>
+          <div style="font-size:16px;font-weight:700" id="l-quarter">—</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">半年漲幅</div>
+          <div style="font-size:16px;font-weight:700" id="l-half">—</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">年漲幅（52W）</div>
+          <div style="font-size:16px;font-weight:700" id="l-year">—</div>
+        </div>
+      </div>
+
+      <!-- 行3：52週高低 + 週期 -->
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <div style="flex:1.4;background:rgba(255,255,255,.05);border-radius:10px;padding:9px">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px">52週高低點</div>
+          <div style="font-size:11px" id="l-52w">—</div>
+          <!-- 52週位置條 -->
+          <div style="height:4px;border-radius:2px;background:var(--surface);margin-top:5px;overflow:hidden">
+            <div id="l-52w-bar" style="height:100%;border-radius:2px;background:var(--gold);width:50%;transition:width .6s ease"></div>
+          </div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px" id="l-52w-pos">—</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">週期規律</div>
+          <div style="font-size:15px;font-weight:700" id="l-cycle">—</div>
+        </div>
+      </div>
+
+      <!-- 月份漲跌週期圖 -->
+      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:12px 13px;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:600">近12個月漲跌節律</div>
         <div id="cycleChart" style="display:flex;align-items:flex-end;gap:3px;height:52px"></div>
         <div id="cycleLabels" style="display:flex;gap:3px;margin-top:4px"></div>
       </div>
 
+      <!-- 長期觀察重點 -->
       <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:11px 13px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:4px">長期觀察重點</div>
         <div style="font-size:13px;color:var(--text);line-height:1.6" id="l-body">—</div>
       </div>
+
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--text2)">長期評分</span>
         <div style="display:flex;align-items:baseline;gap:3px">
@@ -2221,6 +2260,180 @@ function showPeriod(p){
       tab.style.color = 'var(--text2)';
     }
   });
+  // 切到長期 tab 時，若尚未載入250日資料，自動補抓
+  if(p === 'long' && currentTicker) loadLongTermData();
+}
+
+// 長期資料 lazy loader（250日）
+let _longDataLoaded = ''; // 記錄已載入的 stockId，避免重複抓
+async function loadLongTermData(){
+  const stockId = currentTicker.replace('.TW','');
+  if(_longDataLoaded === stockId) return; // 已有此股長期資料
+
+  const loadEl = document.getElementById('l-loading');
+  if(loadEl) loadEl.style.display = 'block';
+
+  try{
+    const raw = await fmStockData(stockId, 375); // 375天 ≈ 18個月，確保12月週期
+    if(!raw || raw.length < 60){ if(loadEl) loadEl.style.display='none'; return; }
+
+    const hist = _parseHistory(raw);
+    const q    = _parseQuote(raw, stockId);
+    if(!hist || !q){ if(loadEl) loadEl.style.display='none'; return; }
+
+    _longDataLoaded = stockId;
+    if(loadEl) loadEl.style.display = 'none';
+
+    // 用完整長期資料重算長期面板
+    updateLongTerm(q.price, hist.close, hist.dates);
+  }catch(e){
+    console.warn('[LongTerm]', e.message);
+    if(loadEl) loadEl.style.display = 'none';
+  }
+}
+
+
+// ════════════════════════════════════════════════════
+// 長期評分計算（可用60天或375天資料）
+// ════════════════════════════════════════════════════
+function calcLongScore(price, closes, dates){
+  const scoreColor = v => v>=7?'var(--red)':v>=4?'var(--gold)':'var(--green)';
+  if(!price || closes.length < 20) return 5;
+  let score = 5;
+  const ma60 = calcMA(closes, 60);
+  if(ma60){
+    score += price > ma60 ? 2 : -2;
+    const qStart = closes[Math.max(0, closes.length-60)];
+    const qPct   = qStart>0 ? (price-qStart)/qStart*100 : 0;
+    if(qPct>15)       score+=1.5;
+    else if(qPct>5)   score+=1;
+    else if(qPct>0)   score+=0.5;
+    else if(qPct>-5)  score-=0.5;
+    else if(qPct>-15) score-=1;
+    else              score-=1.5;
+  }
+  // 若有更多資料，加上MA120/MA250 加減分
+  const ma120 = calcMA(closes, 120);
+  const ma250 = calcMA(closes, 250);
+  if(ma120) score += price > ma120 ? 0.5 : -0.5;
+  if(ma250) score += price > ma250 ? 0.5 : -0.5;
+  return Math.max(1, Math.min(10, score));
+}
+
+// ════════════════════════════════════════════════════
+// 長期面板渲染（供 updateAI 和 loadLongTermData 共用）
+// ════════════════════════════════════════════════════
+function updateLongTerm(price, closes, dates){
+  function setEl(id, val, color){
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(val !== undefined) el.textContent = val;
+    if(color) el.style.color = color;
+  }
+  const scoreColor = v => v>=7?'var(--red)':v>=4?'var(--gold)':'var(--green)';
+
+  if(!price || closes.length < 20){
+    setEl('l-body','長期資料載入中，請切到長期分頁等候…');
+    return;
+  }
+
+  const n = closes.length;
+
+  // ── 均線 ────────────────────────────────────────────
+  const ma60  = calcMA(closes, 60);
+  const ma120 = calcMA(closes, 120);
+  const ma250 = calcMA(closes, 250);
+
+  setEl('l-ma60',  ma60  ? fmt(ma60)  : '資料不足', ma60  ? (price>ma60 ?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-ma120', ma120 ? fmt(ma120) : '—',        ma120 ? (price>ma120?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-ma250', ma250 ? fmt(ma250) : '—',        ma250 ? (price>ma250?'var(--red)':'var(--green)'):'var(--text3)');
+
+  // ── 漲幅 ────────────────────────────────────────────
+  function periodReturn(lookback){
+    if(n < lookback+1) return null;
+    const start = closes[n-lookback];
+    return start>0 ? (price-start)/start*100 : null;
+  }
+  const qtrPct  = periodReturn(60);
+  const halfPct = periodReturn(130);
+  const yearPct = periodReturn(250);
+
+  setEl('l-quarter', qtrPct!=null  ? fmtPct(qtrPct)  : '—', qtrPct!=null  ? (qtrPct>=0 ?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-half',    halfPct!=null ? fmtPct(halfPct) : '—', halfPct!=null ? (halfPct>=0?'var(--red)':'var(--green)'):'var(--text3)');
+  setEl('l-year',    yearPct!=null ? fmtPct(yearPct) : '—', yearPct!=null ? (yearPct>=0?'var(--red)':'var(--green)'):'var(--text3)');
+
+  // ── 52週高低 ─────────────────────────────────────────
+  const w52 = closes.slice(-250);
+  if(w52.length >= 20){
+    const hi52 = Math.max(...w52);
+    const lo52 = Math.min(...w52);
+    const pos52 = hi52>lo52 ? Math.round((price-lo52)/(hi52-lo52)*100) : 50;
+    setEl('l-52w', `高 ${fmt(hi52)}  ／  低 ${fmt(lo52)}`);
+    setEl('l-52w-pos', `目前位於52週區間 ${pos52}% 處`);
+    const barEl = document.getElementById('l-52w-bar');
+    if(barEl){
+      barEl.style.width = pos52+'%';
+      barEl.style.background = pos52>=70?'var(--red)':pos52>=40?'var(--gold)':'var(--green)';
+    }
+  } else {
+    setEl('l-52w','—'); setEl('l-52w-pos','需250日以上資料');
+  }
+
+  // ── 週期規律 ─────────────────────────────────────────
+  const cycleData = calcCyclePattern(closes, dates);
+  let cycleLabel = '資料不足';
+  if(cycleData){
+    const {hasCycle, longestUp, longestDn} = cycleData;
+    cycleLabel = hasCycle ? (longestUp>=3?`漲${longestUp}月律`:`跌${longestDn}月律`) : '無明顯週期';
+    setEl('l-cycle', cycleLabel, hasCycle?'var(--gold)':'var(--text3)');
+
+    // 月份柱狀圖
+    const chartEl = document.getElementById('cycleChart');
+    const lblEl   = document.getElementById('cycleLabels');
+    const {recent, recentMonths} = cycleData;
+    if(chartEl && recent.length){
+      const maxAbs = Math.max(...recent.map(Math.abs), 0.1);
+      const MAX_H  = 44;
+      chartEl.innerHTML = recent.map((r,i)=>{
+        const h = Math.max(Math.round(Math.abs(r)/maxAbs*MAX_H), 2);
+        const isNow = i===recent.length-1;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
+          <div title="${r.toFixed(1)}%" style="width:100%;height:${h}px;border-radius:3px 3px 0 0;background:${r>=0?(isNow?'#ff6680':'var(--red)'):(isNow?'#00ffc8':'var(--green)')};opacity:${isNow?1:.8}"></div>
+        </div>`;
+      }).join('');
+      if(lblEl) lblEl.innerHTML = recentMonths.map((ym,i)=>{
+        const isNow = i===recent.length-1;
+        return `<div style="flex:1;text-align:center;font-size:9px;color:${isNow?'var(--text)':'var(--text3)'}">${ym.slice(5)}</div>`;
+      }).join('');
+    }
+  } else {
+    setEl('l-cycle', cycleLabel, 'var(--text3)');
+    const chartEl = document.getElementById('cycleChart');
+    if(chartEl && closes.length < 100) chartEl.innerHTML = `<div style="width:100%;text-align:center;font-size:11px;color:var(--text3);padding-top:14px">需250日以上資料才能顯示月份節律</div>`;
+  }
+
+  // ── 長期觀察重點文字 ─────────────────────────────────
+  const longScore = calcLongScore(price, closes, dates);
+  const longRating = longScore>=7?'偏強':longScore>=5?'中性':'偏弱';
+  const aboveMa60  = ma60 && price > ma60;
+
+  let bodyParts = [];
+  bodyParts.push(`現價${aboveMa60?'站上':'跌破'} MA60(${ma60?fmt(ma60):'—'})`);
+  if(ma120) bodyParts.push(`${price>ma120?'站上':'跌破'} MA120`);
+  if(ma250) bodyParts.push(`${price>ma250?'站上':'跌破'} MA250`);
+  if(qtrPct!=null)  bodyParts.push(`季漲幅 ${fmtPct(qtrPct)}`);
+  if(halfPct!=null) bodyParts.push(`半年漲幅 ${fmtPct(halfPct)}`);
+  if(yearPct!=null) bodyParts.push(`年漲幅 ${fmtPct(yearPct)}`);
+  if(cycleData?.hasCycle) bodyParts.push(`近一年有${cycleData.longestUp>=3?'連漲'+cycleData.longestUp+'月':' 連跌'+cycleData.longestDn+'月'}週期節律`);
+
+  setEl('l-body', `長期趨勢${longRating}：${bodyParts.join('，')}。以上為技術統計，不構成投資建議。`);
+
+  // 更新長期評分
+  setEl('l-score', longScore.toFixed(1), scoreColor(longScore));
+  setTimeout(()=>{
+    const bar = document.getElementById('l-bar');
+    if(bar) bar.style.width = (longScore/10*100)+'%';
+  }, 250);
 }
 
 // ════════════════════════════════════════════════════
@@ -2354,84 +2567,19 @@ function updateAI(name, q){
   setBar('m-bar', midScore, 200);
 
   // ════════════════════════════════
-  // ③ 長期評分（季：MA60 + 季漲幅 + 週期分析）
+  // ③ 長期評分（以現有60天資料先給基礎分，切到長期tab時自動補抓完整資料）
   // ════════════════════════════════
-  const ma60 = calcMA(closes, 60);
-  let longScore = 5;
-  let ma60Label='—', qtrLabel='—', cycleLabel='—';
-  let cycleData = null;
-
-  if(ma60 && price){
-    ma60Label = fmt(ma60);
-    const aboveMa60 = price > ma60;
-    longScore += aboveMa60 ? 2 : -2;
-
-    // 季漲幅（最近60根）
-    const qtrStart = closes[closes.length-60] || closes[0];
-    const qtrPct   = qtrStart>0 ? (price-qtrStart)/qtrStart*100 : 0;
-    qtrLabel = fmtPct(qtrPct);
-    if(qtrPct>15)      longScore+=1.5;
-    else if(qtrPct>5)  longScore+=1;
-    else if(qtrPct>0)  longScore+=0.5;
-    else if(qtrPct>-5) longScore-=0.5;
-    else if(qtrPct>-15)longScore-=1;
-    else               longScore-=1.5;
-
-    longScore = Math.max(1,Math.min(10,longScore));
-    setEl('l-ma60',    ma60Label, aboveMa60?'var(--green)':'var(--red)');
-    setEl('l-quarter', qtrLabel,  qtrPct>=0?'var(--green)':'var(--red)');
-
-    // 週期規律分析
-    cycleData = calcCyclePattern(closes, dates);
-    if(cycleData){
-      const {hasCycle, longestUp, longestDn, upMonths, downMonths, std, mean, recent, recentMonths, currentMonthReturn} = cycleData;
-      cycleLabel = hasCycle ? (longestUp>=3?`漲${longestUp}月節律`:`跌${longestDn}月節律`) : '無明顯週期';
-      setEl('l-cycle', cycleLabel, hasCycle?'var(--gold)':'var(--text3)');
-
-      // 畫近12月柱狀圖
-      const chartEl = document.getElementById('cycleChart');
-      const lblEl   = document.getElementById('cycleLabels');
-      if(chartEl && recent.length){
-        const maxAbs = Math.max(...recent.map(Math.abs), 1);
-        const MAX_H = 44;
-        chartEl.innerHTML = recent.map((r,i)=>{
-          const h   = Math.max(Math.round(Math.abs(r)/maxAbs*MAX_H), 2);
-          const pos = r>=0;
-          const isNow = i===recent.length-1;
-          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end">
-            <div style="width:100%;height:${h}px;border-radius:3px 3px 0 0;background:${pos?(isNow?'#00ffc8':'#00d4aa'):(isNow?'#ff8fa0':'#ff4c6a')};opacity:${isNow?1:.75}"></div>
-          </div>`;
-        }).join('');
-        if(lblEl) lblEl.innerHTML = recentMonths.map((ym,i)=>{
-          const mo = ym.slice(5);
-          const isNow = i===recent.length-1;
-          return `<div style="flex:1;text-align:center;font-size:9px;color:${isNow?'var(--text)':'var(--text3)'}">${mo}</div>`;
-        }).join('');
-      }
-
-      const cycleDesc = hasCycle
-        ? `近一年出現${longestUp>=3?'連漲'+longestUp+'個月':longestDn>=3?'連跌'+longestDn+'個月':''}的週期節律（波動率 ${std}%）`
-        : `近一年無明顯週期節律，月均報酬 ${mean}%，波動率 ${std}%`;
-
-      const longRating = longScore>=7?'偏強':longScore>=5?'中性':'偏弱';
-      const longBody = `現價${aboveMa60?'站上':'跌破'} MA60(${ma60Label})，季漲幅 ${qtrLabel}，長期趨勢${longRating}。${cycleDesc}，本月至今 ${currentMonthReturn}%。以上為技術統計參考，不構成投資建議。`;
-      setEl('l-body', longBody);
-    } else {
-      setEl('l-cycle', '資料不足');
-      setEl('l-body', `MA60=${ma60Label}，季漲幅 ${qtrLabel}，長期趨勢${longScore>=7?'偏強':longScore>=5?'中性':'偏弱'}。週期分析需完整日期資料。`);
-    }
-  } else {
-    setEl('l-body','長期資料不足（需至少60根K線）。');
-    setEl('l-ma60','—'); setEl('l-quarter','—'); setEl('l-cycle','—');
-  }
-
+  const longScore = calcLongScore(price, closes, dates);
+  // 同步更新長期 panel（使用現有短資料，若不足則留 —）
+  updateLongTerm(price, closes, dates);
   setEl('l-score', longScore.toFixed(1), scoreColor(longScore));
   setBar('l-bar', longScore, 250);
 
   // ════════════════════════════════
   // ④ 綜合評分（短30% + 中30% + 長25% + 法人15%）
   // ════════════════════════════════
-  const composite = shortScore*0.30 + midScore*0.30 + longScore*0.25 + instScore*0.15;
+  const longScoreForComposite = calcLongScore(price, closes, dates);
+  const composite = shortScore*0.30 + midScore*0.30 + longScoreForComposite*0.25 + instScore*0.15;
   const finalScore = Math.max(1,Math.min(10, composite));
 
   let rating, sigText, sigClass;
@@ -2445,8 +2593,8 @@ function updateAI(name, q){
   const target = price ? Math.round(price*targetMult).toLocaleString() : '—';
 
   // 更新 header 與綜合指標
-  setEl('aiTitle', `${name} — 短${shortScore.toFixed(1)} ／ 中${midScore.toFixed(1)} ／ 長${longScore.toFixed(1)}`);
-  setEl('aiBody',  `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期${ma60?'站上':'跌破'} MA60${cycleData?.hasCycle?'，偵測到週期節律':''}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`);
+  setEl('aiTitle', `${name} — 短${shortScore.toFixed(1)} ／ 中${midScore.toFixed(1)} ／ 長${longScoreForComposite.toFixed(1)}`);
+  setEl('aiBody',  `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期評分 ${longScoreForComposite.toFixed(1)}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`);
 
   setEl('m-rsi',    rsiVal);
   setEl('m-target', target);
@@ -2461,7 +2609,7 @@ function updateAI(name, q){
   // 分項格（短/中/長/法人）
   setEl('scoreTech',    shortScore.toFixed(1), scoreColor(shortScore));
   setEl('scoreInst',    midScore.toFixed(1),   scoreColor(midScore));
-  setEl('scoreMom',     longScore.toFixed(1),  scoreColor(longScore));
+  setEl('scoreMom',     longScoreForComposite.toFixed(1), scoreColor(longScoreForComposite));
   setEl('scoreInstVal', instScore.toFixed(1),  scoreColor(instScore));
 
   // m-target / m-rating 顏色
@@ -4669,6 +4817,7 @@ async function selectStock(el, name, ticker){
   currentTicker = ticker || (name+'.TW');
   currentName   = name;
   const stockId = currentTicker.replace('.TW','');
+  _longDataLoaded = ''; // 重置長期資料快取，讓新股票重新載入
 
   // 立即顯示名稱佔位，清空法人卡片
   document.getElementById('chartTitle').textContent = name + ' 走勢圖';
