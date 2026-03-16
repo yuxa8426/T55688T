@@ -83,6 +83,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .vb{flex:1;border-radius:3px 3px 0 0;min-height:3px;transition:height .5s ease}
 .vol-signal{font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5}
 .ai-card{background:linear-gradient(135deg,#1a1030,#0d1a2a);border-radius:16px;margin:0 16px 14px;padding:16px;border:1px solid rgba(124,92,252,.3)}
+.deep-btn{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;transition:all .2s;color:var(--text)}
+.deep-btn:active,.deep-btn.loading{opacity:.7;background:rgba(124,92,252,.1);border-color:var(--purple)}
+.deep-btn.done{border-color:rgba(0,212,170,.3);background:rgba(0,212,170,.05)}
 .ai-tag{font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
 .ai-card h3{font-size:16px;font-weight:700;margin-bottom:8px}
 .ai-card p{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px}
@@ -771,6 +774,40 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <!-- 操作參考建議框（動態注入）-->
     <div id="aiActionBox" style="margin-top:14px"></div>
 
+    <!-- ═══ 四大深度分析模組 ═══ -->
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:1px;margin-bottom:10px">🧬 深度分析模組</div>
+
+      <!-- 模組按鈕列 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <button onclick="runDeepModule('causal')" class="deep-btn" id="btn-causal">
+          <span style="font-size:16px">🔗</span>
+          <div><div style="font-size:12px;font-weight:700">因果鏈分析</div><div style="font-size:10px;color:var(--text3)">找出漲跌真正原因</div></div>
+        </button>
+        <button onclick="runDeepModule('stress')" class="deep-btn" id="btn-stress">
+          <span style="font-size:16px">🧠</span>
+          <div><div style="font-size:12px;font-weight:700">心理壓力模擬</div><div style="font-size:10px;color:var(--text3)">個人化波動承受分析</div></div>
+        </button>
+        <button onclick="runDeepModule('altdata')" class="deep-btn" id="btn-altdata">
+          <span style="font-size:16px">🛰️</span>
+          <div><div style="font-size:12px;font-weight:700">另類數據訊號</div><div style="font-size:10px;color:var(--text3)">供應鏈/產業另類指標</div></div>
+        </button>
+        <button onclick="runDeepModule('dynrisk')" class="deep-btn" id="btn-dynrisk">
+          <span style="font-size:16px">⚡</span>
+          <div><div style="font-size:12px;font-weight:700">動態倉位管理</div><div style="font-size:10px;color:var(--text3)">環境突變倉位建議</div></div>
+        </button>
+      </div>
+
+      <!-- 分析結果顯示區 -->
+      <div id="deepModuleResult" style="display:none;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:var(--gold)" id="deepModuleTitle">—</div>
+          <button onclick="document.getElementById('deepModuleResult').style.display='none'" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div id="deepModuleContent" style="font-size:13px;color:var(--text);line-height:1.7">—</div>
+      </div>
+    </div>
+
     <!-- 更新時間戳 -->
     <div style="display:flex;justify-content:flex-end;margin-top:8px">
       <span style="font-size:10px;color:var(--text3)" id="aiUpdateTime">—</span>
@@ -1161,7 +1198,21 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px">姓名</div>
       <input id="pName" type="text" placeholder="你的名字" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px">
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px">自我介紹</div>
-      <input id="pBio" type="text" placeholder="例如：股齡 8 年 · 價值投資者" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:14px">
+      <input id="pBio" type="text" placeholder="例如：股齡 8 年 · 價值投資者" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">風險承受度</div>
+      <select id="pRisk" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:14px;font-family:inherit;outline:none;margin-bottom:10px">
+        <option value="low">保守型 — 虧損超過 5% 就難以入睡</option>
+        <option value="mid" selected>穩健型 — 能接受 10~15% 短期回撤</option>
+        <option value="high">積極型 — 能承受 20~30% 波動，追求高報酬</option>
+        <option value="pro">專業型 — 熟悉衍生品，接受極端波動</option>
+      </select>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">可投入資金規模</div>
+      <select id="pCapital" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:14px;font-family:inherit;outline:none;margin-bottom:14px">
+        <option value="small">50萬以下</option>
+        <option value="mid" selected>50~200萬</option>
+        <option value="large">200~500萬</option>
+        <option value="xlarge">500萬以上</option>
+      </select>
       <button onclick="saveProfile()" style="width:100%;background:var(--green);color:#000;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px">儲存</button>
       <button onclick="document.getElementById('profileModal').style.display='none'" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text2);font-size:15px;cursor:pointer;font-family:inherit">取消</button>
     </div>
@@ -2293,6 +2344,178 @@ async function loadLongTermData(){
 }
 
 
+
+// ════════════════════════════════════════════════════════
+// 四大深度分析模組（Claude AI 驅動）
+// ════════════════════════════════════════════════════════
+
+// 模組標題
+const DEEP_MODULE_META = {
+  causal:  { icon:'🔗', title:'因果鏈分析', color:'#f5c842' },
+  stress:  { icon:'🧠', title:'心理壓力模擬', color:'#a080ff' },
+  altdata: { icon:'🛰️', title:'另類數據訊號', color:'#4fc3f7' },
+  dynrisk: { icon:'⚡', title:'動態倉位管理', color:'#ff7043' },
+};
+
+// 用上次 updateAI 計算完的資料快取
+let _lastAIContext = null;
+
+// 供 updateAI 呼叫，把分析資料存起來給深度模組用
+function cacheAIContext(ctx){ _lastAIContext = ctx; }
+
+async function runDeepModule(module){
+  const meta = DEEP_MODULE_META[module];
+  const btnEl    = document.getElementById('btn-'+module);
+  const resultEl = document.getElementById('deepModuleResult');
+  const titleEl  = document.getElementById('deepModuleTitle');
+  const contentEl= document.getElementById('deepModuleContent');
+  if(!btnEl || !resultEl || !titleEl || !contentEl) return;
+
+  // 防重複點擊
+  if(btnEl.classList.contains('loading')) return;
+  btnEl.classList.add('loading');
+  resultEl.style.display = 'block';
+  titleEl.textContent    = meta.icon + ' ' + meta.title + ' 分析中…';
+  titleEl.style.color    = meta.color;
+  contentEl.innerHTML    = '<span style="color:var(--text3)">⏳ AI 正在生成分析，約 10~15 秒…</span>';
+
+  try{
+    const prompt = buildDeepPrompt(module);
+    const resp   = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role:'user', content: prompt }],
+      }),
+    });
+    if(!resp.ok) throw new Error('API '+resp.status);
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
+    if(!text) throw new Error('no content');
+
+    // 格式化 Markdown 為 HTML（基本處理）
+    const html = text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^###\s*(.+)$/gm, '<div style="font-size:13px;font-weight:700;color:'+meta.color+';margin:10px 0 4px">$1</div>')
+      .replace(/^##\s*(.+)$/gm,  '<div style="font-size:14px;font-weight:800;margin:12px 0 6px">$1</div>')
+      .replace(/^[-\u2022]\s*(.+)$/gm,'<div style="margin:4px 0;padding-left:12px">• $1</div>')
+      .replace(/\n{2,}/g, '<br>')
+      .replace(/\n/g, '<br>');
+
+    titleEl.textContent = meta.icon + ' ' + meta.title;
+    contentEl.innerHTML = html;
+    btnEl.classList.remove('loading');
+    btnEl.classList.add('done');
+    setTimeout(()=>btnEl.classList.remove('done'), 3000);
+
+  }catch(e){
+    console.warn('[DeepModule]', module, e.message);
+    titleEl.textContent = meta.icon + ' ' + meta.title + ' — 暫時無法連線';
+    contentEl.innerHTML = '<span style="color:var(--text3);font-size:12px">AI 服務暫時無法使用（'+e.message+'），請稍後再試。</span>';
+    btnEl.classList.remove('loading');
+  }
+}
+
+function buildDeepPrompt(module){
+  const ctx = _lastAIContext || {};
+  const user = getUserProfile();
+
+  const stockInfo = `分析標的：${ctx.name||currentName}（${(currentTicker||'').replace('.TW','')}）
+目前股價：${ctx.price ? ctx.price.toFixed(2) : '—'} 元
+今日漲跌：${ctx.changePct != null ? (ctx.changePct>=0?'+':'')+ctx.changePct.toFixed(2)+'%' : '—'}
+RSI(14)：${ctx.rsi||'—'}
+5日動能：${ctx.mom5Pct != null ? (ctx.mom5Pct>=0?'+':'')+ctx.mom5Pct.toFixed(2)+'%' : '—'}
+法人近5日累積：${ctx.instScore != null ? (ctx.instScore>=5?'買超':'賣超') : '—'}
+綜合技術評分：${ctx.finalScore ? ctx.finalScore.toFixed(1)+'/10' : '—'}
+外資連買/賣天數：${ctx.foreignStreak != null ? (ctx.foreignStreak>0?'連買'+ctx.foreignStreak+'日':'連賣'+Math.abs(ctx.foreignStreak)+'日') : '—'}`;
+
+  const userInfo = `投資人偏好：${user.riskLabel}
+可投入資金規模：${user.capitalLabel}`;
+
+  const prompts = {
+    causal: `你是一位台股資深研究員，擅長因果推論分析，請嚴格用繁體中文回覆。
+
+${stockInfo}
+
+請針對此股票進行「因果鏈分析」，找出近期股價表現的可能真實原因（而非只是相關性），分三層說明：
+
+### 一、技術面因果鏈
+根據技術數據，這次走勢最可能的直接觸發因素是什麼？（例如：止損位被打穿、RSI超買超賣後反轉、均線支撐/壓力被突破）
+
+### 二、籌碼面因果鏈
+法人動向背後可能的邏輯是什麼？（例如：外資是避險性賣出？還是換股操作？投信是業績壓力建倉？）
+
+### 三、產業/宏觀因果鏈
+可能連結到哪些產業或宏觀因素？（例如：AI算力需求、Fed利率預期、匯率變動、地緣政治）
+
+最後提供一句「因果鏈摘要」，說明「A導致B導致C」的推論鏈。
+
+語氣專業但簡潔，每段100字以內，不要重複說「以上僅供參考」超過一次。`,
+
+    stress: `你是一位行為財務學專家，熟悉投資心理學，請嚴格用繁體中文回覆。
+
+${stockInfo}
+${userInfo}
+
+請針對此投資人的「心理壓力承受度」，模擬以下兩個情境的心理狀態，並給出個性化策略建議：
+
+### 情境A：急跌 -15%（2週內）
+這位${user.riskLabel}的投資人會有什麼心理反應？最可能犯的錯誤是什麼？建議採取什麼策略減少情緒干擾？
+
+### 情境B：長期盤整 6個月（±5%震盪）
+這種無聊的盤整對他的心理影響是什麼？如何避免「無聊時亂操作」的陷阱？
+
+### 個性化建議
+基於此人的風險偏好（${user.riskLabel}）和資金規模（${user.capitalLabel}），若要持有此股，建議的部位比例上限是多少？設定哪個停損點可以讓他「睡得著覺」？
+
+語氣像一位私人理財顧問，具體有數字。`,
+
+    altdata: `你是一位法人研究員，熟悉另類數據（Alternative Data）與台股供應鏈，請嚴格用繁體中文回覆。
+
+${stockInfo}
+
+請分析以下「另類數據訊號」對此股票的可能影響：
+
+### 一、供應鏈追蹤訊號
+此股票所在的供應鏈上，有哪些「可觀察的另類數據」可以用來預測其業績？（例如：上游原料採購量、客戶的庫存天數、代工廠稼動率、港口貨運量）請列出3個最重要的指標及其觀察方式。
+
+### 二、衛星/電力/搜尋數據
+法人機構通常用哪些非財報數據監控此類公司？（例如：Google Trends搜尋量、App Store排行、工廠停車場衛星影像、夜間燈光衛星數據）請推測最相關的2~3項。
+
+### 三、領先指標推論
+根據以上另類指標，若出現什麼「正向訊號」可以視為買入先行指標？出現什麼「負向訊號」應該提前減碼？
+
+用數據化思維，但說明一般投資人如何免費取得或估算這些訊號。`,
+
+    dynrisk: `你是一位風控專家，專長在動態倉位管理，請嚴格用繁體中文回覆。
+
+${stockInfo}
+${userInfo}
+
+請根據當前市場狀態，提供「動態倉位管理建議」：
+
+### 一、當前風險環境評估
+根據RSI=${ctx.rsi||'—'}、近期法人動向、技術評分${ctx.finalScore ? ctx.finalScore.toFixed(1) : '—'}/10，目前市場微環境是：高波動？低波動？趨勢行情？震盪行情？這對倉位管理意味著什麼？
+
+### 二、建議倉位比例
+針對${user.riskLabel}（資金${user.capitalLabel}）：
+- 若現在是「空手」：建議首批建倉比例是多少？分幾次建倉？
+- 若已持有：建議在什麼價位加碼？什麼情況下應減碼至5成以下？
+- 停損設在哪裡（以%或技術位表示）？停利目標是？
+
+### 三、環境突變應對
+若明天開盤突然出現以下情況，倉位應如何動態調整？
+- (a) 跳空跌停超過 -6%
+- (b) 外資突然連賣超 5 億元
+- (c) 台幣急貶超過 1%
+
+給出具體操作流程，而非模糊建議。`,
+  };
+  return prompts[module] || prompts.causal;
+}
+
 // ════════════════════════════════════════════════════
 // 長期評分計算（可用60天或375天資料）
 // ════════════════════════════════════════════════════
@@ -2595,6 +2818,19 @@ function updateAI(name, q){
   // 更新 header 與綜合指標
   setEl('aiTitle', `${name} — 短${shortScore.toFixed(1)} ／ 中${midScore.toFixed(1)} ／ 長${longScoreForComposite.toFixed(1)}`);
   setEl('aiBody',  `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期評分 ${longScoreForComposite.toFixed(1)}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`);
+
+  // 快取 AI 分析上下文，供深度模組使用
+  cacheAIContext({
+    name, price, changePct, rsi: rsiVal,
+    mom5Pct, instScore, finalScore,
+    foreignStreak: inst?.foreignStreak ?? null,
+  });
+  // 重置深度模組按鈕狀態（換股後清除 done 標記）
+  ['causal','stress','altdata','dynrisk'].forEach(m=>{
+    const btn=document.getElementById('btn-'+m);
+    if(btn) btn.classList.remove('done','loading');
+  });
+  document.getElementById('deepModuleResult')?.style && (document.getElementById('deepModuleResult').style.display='none');
 
   setEl('m-rsi',    rsiVal);
   setEl('m-target', target);
@@ -5654,13 +5890,42 @@ function editProfile(){
   const p = JSON.parse(localStorage.getItem(PROF_KEY)||'{}');
   document.getElementById('pName').value = p.name||'';
   document.getElementById('pBio').value  = p.bio||'';
+  if(document.getElementById('pRisk'))    document.getElementById('pRisk').value    = p.risk||'mid';
+  if(document.getElementById('pCapital')) document.getElementById('pCapital').value = p.capital||'mid';
   document.getElementById('profileModal').style.display='flex';
 }
 
+
+// 取得使用者完整 profile（含風險偏好）
+function getUserProfile(){
+  const p = JSON.parse(localStorage.getItem(PROF_KEY)||'{}');
+  const riskMap = {
+    low:  '保守型（能接受最多5%虧損）',
+    mid:  '穩健型（能接受10~15%回撤）',
+    high: '積極型（能承受20~30%波動）',
+    pro:  '專業型（接受極端波動）',
+  };
+  const capitalMap = {
+    small:  '50萬以下',
+    mid:    '50~200萬',
+    large:  '200~500萬',
+    xlarge: '500萬以上',
+  };
+  return {
+    name:        p.name    || '投資人',
+    bio:         p.bio     || '',
+    risk:        p.risk    || 'mid',
+    capital:     p.capital || 'mid',
+    riskLabel:   riskMap[p.risk||'mid'],
+    capitalLabel:capitalMap[p.capital||'mid'],
+  };
+}
 function saveProfile(){
-  const name = document.getElementById('pName').value.trim()||'股析用戶';
-  const bio  = document.getElementById('pBio').value.trim()||'';
-  localStorage.setItem(PROF_KEY, JSON.stringify({name,bio}));
+  const name   = document.getElementById('pName').value.trim()||'股析用戶';
+  const bio    = document.getElementById('pBio').value.trim()||'';
+  const risk   = document.getElementById('pRisk')?.value    || 'mid';
+  const capital= document.getElementById('pCapital')?.value || 'mid';
+  localStorage.setItem(PROF_KEY, JSON.stringify({name,bio,risk,capital}));
   document.getElementById('profileModal').style.display='none';
   loadProfile();
   showToast('個人資料已儲存');
