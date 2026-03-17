@@ -935,13 +935,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
-        <span style="font-size:16px;font-weight:700" id="chipStockName">— 持股分佈</span>
+        <span style="font-size:16px;font-weight:700" id="chipStockName">— 籌碼分析</span>
         <div style="font-size:10px;color:var(--text3);margin-top:2px" id="chipDate">資料載入中…</div>
-      </div>
-      <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
-        <button class="tab active" style="padding:5px 10px;font-size:11px" onclick="chipsTab(this,'本週')">本週</button>
-        <button class="tab" style="padding:5px 10px;font-size:11px" onclick="chipsTab(this,'本月')">本月</button>
-        <button class="tab" style="padding:5px 10px;font-size:11px" onclick="chipsTab(this,'本季')">本季</button>
       </div>
     </div>
     <div class="donut-wrap">
@@ -969,6 +964,40 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <div class="tbox"><div class="ti">🎯</div><div class="tl">持股評級</div><div class="tv" id="chip-rating">—</div></div>
       <div class="tbox"><div class="ti">📅</div><div class="tl">資料更新</div><div class="tv gold">每日盤後</div></div>
     </div>
+
+    <!-- 20日法人籌碼趨勢折線圖 -->
+    <div style="margin-top:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <span>法人籌碼趨勢（近20日）</span>
+        <div style="display:flex;gap:10px;font-size:10px;color:var(--text3)">
+          <span><span style="display:inline-block;width:10px;height:2px;background:#7c5cfc;vertical-align:middle;margin-right:3px"></span>外資</span>
+          <span><span style="display:inline-block;width:10px;height:2px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>投信</span>
+        </div>
+      </div>
+      <!-- SVG 趨勢圖 -->
+      <div style="position:relative;height:90px;background:rgba(0,0,0,.2);border-radius:10px;padding:8px 10px">
+        <svg id="chipTrendSvg" width="100%" height="74" style="overflow:visible">
+          <!-- 零軸線 -->
+          <line id="chipZeroLine" x1="0" y1="37" x2="100%" y2="37" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="4 3"/>
+          <!-- 外資折線 -->
+          <polyline id="chipForeignLine" fill="none" stroke="#7c5cfc" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points=""/>
+          <polyline id="chipForeignFill" fill="url(#chipForeignGrad)" stroke="none" points=""/>
+          <!-- 投信折線 -->
+          <polyline id="chipTrustLine" fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points=""/>
+          <defs>
+            <linearGradient id="chipForeignGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#7c5cfc" stop-opacity=".25"/>
+              <stop offset="100%" stop-color="#7c5cfc" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <!-- 日期標籤 -->
+        <div id="chipTrendDates" style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px"></div>
+        <!-- Hover tooltip -->
+        <div id="chipTrendTip" style="display:none;position:absolute;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap"></div>
+      </div>
+    </div>
+
   <div id="chipSource" style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">📊 資料載入中…</div>
   </div>
 
@@ -1896,8 +1925,11 @@ async function fmShareholder(stockId='2330', days=60){
     dealerNet  += byDate[d].dealer;
   }
 
-  // 最近20日外資每日淨買超（用於趨勢）
-  foreignNetArr = sortedDates.slice(-20).map(d=>byDate[d].foreign/1000); // 轉萬股
+  // 最近20日外資 + 投信每日淨買超（用於趨勢圖，單位：張）
+  const last20Dates = sortedDates.slice(-20);
+  foreignNetArr = last20Dates.map(d=>Math.round(byDate[d].foreign));   // 千股單位保留
+  const trustNetArr  = last20Dates.map(d=>Math.round(byDate[d].trust));
+  const sortedDates20 = last20Dates; // 日期標籤
 
   // 最新一日數據
   const todayInst = byDate[latestDate] || {foreign:0,trust:0,dealer:0};
@@ -1956,6 +1988,8 @@ async function fmShareholder(stockId='2330', days=60){
     todayDealer:  Math.round(todayInst.dealer/1000),
     prevForeign:  Math.round(prevInst.foreign/1000),
     foreignNetArr,
+    trustNetArr:  last20Dates.map(d=>Math.round(byDate[d].trust)),
+    sortedDates20: last20Dates,
     marginBal, shortBal, marginChg,
     foreignPct, foreignChg, foreignRemain,
     date: latestDate,
@@ -4127,8 +4161,95 @@ function renderChips(data, label='近60日'){
   if(srcEl) srcEl.textContent=`📊 外資持股 · 法人買賣 · 融資券 — FinMind 真實數據（${label}）`;
 
   markFresh('chips');
+
+  // 繪製20日法人趨勢折線圖
+  renderChipTrendChart(data.foreignNetArr||[], data.trustNetArr||[], data.sortedDates20||[]);
 }
 
+
+
+// ════════════════════════════════════════════════════
+// 大戶籌碼 20日趨勢折線圖
+// ════════════════════════════════════════════════════
+function renderChipTrendChart(foreignArr, trustArr, dates){
+  const svg = document.getElementById('chipTrendSvg');
+  if(!svg) return;
+
+  const allVals = [...foreignArr, ...trustArr].filter(v=>!isNaN(v));
+  if(!allVals.length) return;
+
+  const W = svg.parentElement.offsetWidth - 20; // 減 padding
+  const H = 74;
+  const PAD = { t:4, b:4, l:4, r:4 };
+  const chartW = W - PAD.l - PAD.r;
+  const chartH = H - PAD.t - PAD.b;
+  const n = Math.max(foreignArr.length, trustArr.length);
+  if(n < 2) return;
+
+  // 值域
+  const maxV = Math.max(...allVals.map(Math.abs), 1);
+  const mid  = H / 2; // 零軸 Y 位置
+
+  // X 位置
+  const xPos = i => PAD.l + (i / (n-1)) * chartW;
+  // Y 位置（正數=往上=紅色區，負數=往下=綠色區）
+  const yPos = v => mid - (v / maxV) * (chartH * 0.45);
+
+  // 更新零軸線
+  const zeroLine = document.getElementById('chipZeroLine');
+  if(zeroLine){
+    zeroLine.setAttribute('y1', mid);
+    zeroLine.setAttribute('y2', mid);
+  }
+
+  // 繪製折線
+  function makePts(arr){
+    return arr.map((v,i)=>`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
+  }
+  function makeFillPts(arr){
+    const pts = arr.map((v,i)=>`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`);
+    return `${xPos(0).toFixed(1)},${mid} ${pts.join(' ')} ${xPos(arr.length-1).toFixed(1)},${mid}`;
+  }
+
+  const fLine = document.getElementById('chipForeignLine');
+  const fFill = document.getElementById('chipForeignFill');
+  const tLine = document.getElementById('chipTrustLine');
+  if(fLine) fLine.setAttribute('points', makePts(foreignArr));
+  if(fFill) fFill.setAttribute('points', makeFillPts(foreignArr));
+  if(tLine) tLine.setAttribute('points', makePts(trustArr));
+
+  // 日期標籤（首/中/末）
+  const datesEl = document.getElementById('chipTrendDates');
+  if(datesEl && dates.length){
+    const first = dates[0]?.slice(5)||'';
+    const mid2  = dates[Math.floor(dates.length/2)]?.slice(5)||'';
+    const last  = dates[dates.length-1]?.slice(5)||'';
+    datesEl.innerHTML = `<span>${first}</span><span>${mid2}</span><span>${last}</span>`;
+  }
+
+  // Hover tooltip
+  const tipEl = document.getElementById('chipTrendTip');
+  const svgEl = svg;
+  svgEl.onmousemove = svgEl.ontouchmove = (e)=>{
+    if(!tipEl) return;
+    const rect = svgEl.getBoundingClientRect();
+    const cx   = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const idx  = Math.min(n-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (n-1))));
+    const fv   = foreignArr[idx] || 0;
+    const tv   = trustArr[idx]   || 0;
+    const dt   = dates[idx] || '';
+    const fStr = (fv >= 0 ? '+' : '') + (Math.abs(fv)>=1000 ? (fv/1000).toFixed(1)+'千張' : fv+'張');
+    const tStr = (tv >= 0 ? '+' : '') + (Math.abs(tv)>=1000 ? (tv/1000).toFixed(1)+'千張' : tv+'張');
+    tipEl.innerHTML =
+      `<div style="color:var(--text3);margin-bottom:3px">${dt}</div>` +
+      `<div style="color:#a080ff">外資 <strong style="color:${fv>=0?'var(--red)':'var(--green)'}">${fStr}</strong></div>` +
+      `<div style="color:#00d4aa">投信 <strong style="color:${tv>=0?'var(--red)':'var(--green)'}">${tStr}</strong></div>`;
+    tipEl.style.display = 'block';
+    tipEl.style.left    = Math.min(cx+8, rect.width-120)+'px';
+    tipEl.style.top     = '4px';
+  };
+  svgEl.onmouseleave = svgEl.ontouchend = ()=>{ if(tipEl) tipEl.style.display='none'; };
+}
 
 function renderChipsPlaceholder(){
   const nameEl = document.getElementById('chipStockName');
