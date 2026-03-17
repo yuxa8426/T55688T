@@ -1170,9 +1170,16 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 <!-- ═══ PAGE: 警示股 ═══ -->
 <div class="page" id="page-portfolio">
   <div class="header">
-    <div><h1>警示股</h1><p>注意 · 處置 · 風險監控</p></div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div><h1>警示股</h1><p id="alertScopeLabel">注意 · 處置 · 風險監控</p></div>
+    <div style="display:flex;align-items:center;gap:6px">
       <span id="alertUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+      <!-- 掃描數量選擇器 -->
+      <select id="alertScopeSelect" onchange="onAlertScopeChange(this.value)"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:3px 6px;font-family:inherit;cursor:pointer;outline:none">
+        <option value="50"  selected>50 支</option>
+        <option value="100">100 支</option>
+        <option value="200">200 支</option>
+      </select>
       <button onclick="refreshAlertStocks(true)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 10px;font-family:inherit">↻</button>
     </div>
   </div>
@@ -5752,36 +5759,98 @@ let _alertLoaded = false;
 
 // 廣義池：TREND_POOL + 各族群代表股 + 中小型高波動股
 function getAlertPool(){
-  const extra = [
-    // 電子大型
-    {id:'2303',name:'聯電'},{id:'2308',name:'台達電'},{id:'2317',name:'鴻海'},
-    {id:'2345',name:'智邦'},{id:'2356',name:'英業達'},{id:'2379',name:'瑞昱'},
-    {id:'2382',name:'廣達'},{id:'2395',name:'研華'},{id:'2408',name:'南亞科'},
-    {id:'2412',name:'中華電'},{id:'2357',name:'華碩'},{id:'2376',name:'技嘉'},
-    // 金融
-    {id:'2881',name:'富邦金'},{id:'2882',name:'國泰金'},
-    {id:'2884',name:'玉山金'},{id:'2886',name:'兆豐金'},{id:'2891',name:'中信金'},
-    {id:'2890',name:'永豐金'},{id:'2892',name:'第一金'},
-    // 傳產
-    {id:'1301',name:'台塑'},{id:'1303',name:'南亞'},{id:'1326',name:'台化'},
-    {id:'2002',name:'中鋼'},{id:'2207',name:'和泰車'},
-    // 航運（高波動）
-    {id:'2603',name:'長榮'},{id:'2609',name:'陽明'},{id:'2615',name:'萬海'},
-    // 中小型高波動
-    {id:'3008',name:'大立光'},{id:'3034',name:'聯詠'},{id:'3443',name:'創意'},
-    {id:'4904',name:'遠傳'},{id:'5871',name:'中租-KY'},{id:'6669',name:'緯穎'},
-    {id:'8069',name:'元太'},{id:'6415',name:'矽力-KY'},{id:'6770',name:'力積電'},
-    {id:'2458',name:'義隆'},{id:'3711',name:'日月投控'},{id:'6669',name:'緯穎'},
-    {id:'4938',name:'和碩'},{id:'2049',name:'上銀'},{id:'1590',name:'亞德客-KY'},
-    {id:'6533',name:'晶心科'},{id:'3037',name:'欣興'},{id:'2301',name:'光寶科'},
-    {id:'3044',name:'健鼎'},{id:'4961',name:'天鈺'},{id:'6274',name:'台燿'},
-    {id:'2337',name:'旺宏'},{id:'5269',name:'祥碩'},{id:'3081',name:'聯亞'},
+  // 基礎池（約50支）：TREND_POOL + 基本extra
+  const extra50 = [
+    {id:'2382',name:'廣達'},{id:'2357',name:'華碩'},{id:'2376',name:'技嘉'},
+    {id:'3661',name:'世芯-KY'},{id:'2395',name:'研華'},{id:'6770',name:'力積電'},
+    {id:'2303',name:'聯電'},{id:'4938',name:'和碩'},{id:'2379',name:'瑞昱'},
+    {id:'2882',name:'國泰金'},{id:'2886',name:'兆豐金'},{id:'2884',name:'玉山金'},
+    {id:'2207',name:'和泰車'},{id:'1216',name:'統一'},{id:'1101',name:'台泥'},
+    {id:'3008',name:'大立光'},{id:'3034',name:'聯詠'},{id:'2049',name:'上銀'},
+    {id:'3037',name:'欣興'},{id:'5269',name:'祥碩'},{id:'2337',name:'旺宏'},
   ];
-  const pool = [...(window.TREND_POOL||[])];
-  const ids = new Set(pool.map(s=>s.id));
-  extra.forEach(s=>{ if(!ids.has(s.id)) pool.push(s); });
-  return pool;
+  const base = [...(window.TREND_POOL||[])];
+  const ids  = new Set(base.map(s=>s.id));
+  extra50.forEach(s=>{ if(!ids.has(s.id)) base.push(s); });
+
+  if(_alertScope <= 50)  return base.slice(0, 50);
+  if(_alertScope <= 100){
+    const pool = [...base];
+    ALERT_POOL_100.forEach(s=>{ if(!ids.has(s.id)){ ids.add(s.id); pool.push(s); }});
+    return pool.slice(0, 100);
+  }
+  // 200支
+  const pool = [...base];
+  [...ALERT_POOL_100, ...ALERT_POOL_200].forEach(s=>{
+    if(!ids.has(s.id)){ ids.add(s.id); pool.push(s); }
+  });
+  return pool.slice(0, 200);
 }
+
+// ── 擴充掃描池：100支 / 200支 ────────────────────────────
+// 基礎50支 → TREND_POOL + extra
+// 擴充100支 → 加入中型股
+// 擴充200支 → 再加入更多中小型股
+
+const ALERT_POOL_100 = [
+  // 加入的50~100支（中型股、金融、傳產）
+  {id:'2882',name:'國泰金'},{id:'2886',name:'兆豐金'},{id:'2884',name:'玉山金'},
+  {id:'2891',name:'中信金'},{id:'2883',name:'開發金'},{id:'2887',name:'台新金'},
+  {id:'5880',name:'合庫金'},{id:'2880',name:'華南金'},{id:'2890',name:'永豐金'},
+  {id:'0056',name:'元大高股息'},{id:'00878',name:'國泰永續高息'},
+  {id:'00713',name:'元大台灣高息低波'},{id:'0050',name:'元大台灣50'},
+  {id:'2207',name:'和泰車'},{id:'1216',name:'統一'},{id:'2912',name:'統一超'},
+  {id:'1101',name:'台泥'},{id:'1303',name:'南亞'},{id:'1326',name:'台化'},
+  {id:'2105',name:'正新'},{id:'9904',name:'寶成'},{id:'2474',name:'可成'},
+  {id:'3045',name:'台灣大'},{id:'4904',name:'遠傳'},{id:'2412',name:'中華電'},
+  {id:'6505',name:'台塑化'},{id:'1402',name:'遠東新'},{id:'1802',name:'台玻'},
+  {id:'2408',name:'南亞科'},{id:'3006',name:'晶豪科'},{id:'2344',name:'華邦電'},
+  {id:'3702',name:'大聯大'},{id:'2347',name:'聯強'},{id:'2049',name:'上銀'},
+  {id:'1590',name:'亞德客-KY'},{id:'2059',name:'川湖'},{id:'6116',name:'彩晶'},
+  {id:'2511',name:'太子建設'},{id:'2603',name:'長榮'},{id:'2615',name:'萬海'},
+  {id:'2609',name:'陽明'},{id:'2618',name:'長榮航'},{id:'2634',name:'漢翔'},
+  {id:'3481',name:'群創'},{id:'2475',name:'華映'},{id:'4763',name:'材料-KY'},
+  {id:'6271',name:'同欣電'},{id:'3035',name:'智原'},{id:'8046',name:'南電'},
+];
+
+const ALERT_POOL_200 = [
+  // 加入的100~200支（小型股、題材股）
+  {id:'2231',name:'為升'},{id:'3596',name:'智易'},{id:'4919',name:'新唐'},
+  {id:'3529',name:'力旺'},{id:'6411',name:'晶焱'},{id:'3105',name:'穩懋'},
+  {id:'2330',name:'台積電'}, // ensure included
+  {id:'6669',name:'緯穎'},{id:'3691',name:'碩禾'},{id:'8299',name:'群聯'},
+  {id:'5483',name:'中美晶'},{id:'6244',name:'茂迪'},{id:'3576',name:'新日光'},
+  {id:'2393',name:'億光'},{id:'3014',name:'聯陽'},{id:'2361',name:'威達電'},
+  {id:'6197',name:'佳必琪'},{id:'3707',name:'漢磊'},{id:'6488',name:'環球晶'},
+  {id:'3288',name:'點晶'},{id:'4966',name:'超豐'},{id:'2441',name:'超微半導'},
+  {id:'2356',name:'英業達'},{id:'2324',name:'仁寶'},{id:'2352',name:'佳世達'},
+  {id:'3002',name:'聯電'},{id:'2321',name:'東訊'},{id:'2353',name:'宏碁'},
+  {id:'3673',name:'TPK-KY'},{id:'6239',name:'力成'},{id:'2327',name:'國巨'},
+  {id:'2498',name:'宏達電'},{id:'2383',name:'台光電'},{id:'3680',name:'家登'},
+  {id:'6694',name:'安格'},  {id:'2379',name:'瑞昱'},{id:'2385',name:'群光'},
+  {id:'6176',name:'瑞儀'}, {id:'3706',name:'神達'},{id:'2454',name:'聯發科'},
+  {id:'1476',name:'儒鴻'},{id:'1477',name:'聚陽'},{id:'4148',name:'全宇生技'},
+  {id:'6452',name:'康友-KY'},{id:'1229',name:'聯華食'},{id:'1210',name:'大成長城'},
+  {id:'2201',name:'裕隆'},{id:'2204',name:'中華'},{id:'2206',name:'三陽工業'},
+  {id:'9939',name:'宏全'},{id:'1795',name:'美時'},{id:'4726',name:'永信藥品'},
+  {id:'4141',name:'龍燈-KY'},{id:'6547',name:'高端疫苗'},{id:'4174',name:'浩鼎'},
+  {id:'5522',name:'遠雄'},{id:'2542',name:'興富發'},{id:'2520',name:'冠德'},
+  {id:'6285',name:'啟碁'},{id:'6456',name:'GIS-KY'},{id:'3680',name:'家登'},
+  {id:'2301',name:'光寶科'},{id:'2308',name:'台達電'},{id:'2317',name:'鴻海'},
+  {id:'6257',name:'矽格'},{id:'3189',name:'景碩'},{id:'8150',name:'南茂'},
+  {id:'3293',name:'鈊象'},{id:'6462',name:'神盾'},{id:'4989',name:'雲辰'},
+  {id:'5469',name:'瀚宇博'},{id:'2404',name:'漢唐'},{id:'6278',name:'台表科'},
+  {id:'3592',name:'瑞鼎'},{id:'3149',name:'正達'},{id:'6182',name:'合晶'},
+  {id:'2406',name:'國碩'},{id:'8016',name:'矽創'},{id:'3576',name:'新日光'},
+  {id:'6147',name:'頎邦'},{id:'2449',name:'京元電子'},{id:'6271',name:'同欣電'},
+  {id:'3227',name:'原相'},{id:'3698',name:'隆達'},{id:'3630',name:'新鉅科'},
+  {id:'6153',name:'嘉聯益'},{id:'3055',name:'蔚華科'},{id:'2428',name:'興勤'},
+  {id:'6550',name:'北極星藥業'},{id:'4174',name:'浩鼎'},{id:'1734',name:'杏輝'},
+  {id:'2867',name:'三商壽'},{id:'2823',name:'中壽'},{id:'2836',name:'台灣企銀'},
+];
+
+// 根據選擇的掃描範圍回傳股票池
+let _alertScope = 50; // 預設50支
 
 // FinMind TaiwanStockPrice 欄位：
 //   date, stock_id, Trading_Volume, Trading_money,
@@ -5878,6 +5947,15 @@ async function calcAlertStatus(stockId, stockName){
   }
 }
 
+// 掃描範圍設定（50/100/200）
+function onAlertScopeChange(val){
+  _alertScope = parseInt(val);
+  const timeMap = {50:'約20秒', 100:'約40秒', 200:'約80秒'};
+  const scopeEl = document.getElementById('alertScopeLabel');
+  if(scopeEl) scopeEl.textContent = `掃描 ${val} 支 · ${timeMap[val]||''}`;
+  refreshAlertStocks(true); // 切換後自動重新掃描
+}
+
 // 批次計算全池注意/處置/出閘（分批，避免 API rate limit）
 async function fetchAlertStocksFromFinMind(){
   const pool = getAlertPool();
@@ -5896,8 +5974,15 @@ async function fetchAlertStocksFromFinMind(){
     tried += batch.length;
     // 即時更新提示
     const listEl = document.getElementById('alertList');
-    if(listEl && listEl.innerHTML.includes('分析中')){
-      listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 分析中… ${tried}/${pool.length} 支（已發現 ${results.length} 筆異常）</div>`;
+    if(listEl){
+      const pct = Math.round(tried/pool.length*100);
+      listEl.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">
+        ⏳ 掃描中… ${tried}/${pool.length} 支<br>
+        <div style="margin:8px auto;width:200px;height:4px;background:var(--surface);border-radius:2px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--green);transition:width .3s"></div>
+        </div>
+        <span style="font-size:11px">已發現 ${results.length} 筆異常</span>
+      </div>`;
     }
     if(i+BATCH < pool.length) await new Promise(r=>setTimeout(r, DELAY));
   }
@@ -5917,8 +6002,9 @@ async function refreshAlertStocks(manual=false){
 
   const listEl = document.getElementById('alertList');
   const noteEl = document.getElementById('alertDataNote');
+  const timeEst = {50:'約20秒', 100:'約40秒', 200:'約80秒'};
   if(listEl) listEl.innerHTML =
-    `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 分析中（掃描約50支股票，約20秒）…</div>`;
+    `<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">⏳ 開始掃描 ${_alertScope} 支股票（${timeEst[_alertScope]||''}）…</div>`;
 
   // ── FinMind 計算注意/處置/出閘 ────────────────────────
   const allAlerts = await fetchAlertStocksFromFinMind();
