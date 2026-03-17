@@ -1836,13 +1836,18 @@ async function fmInstitutional(stockId='2330'){
 // ⚠️ TaiwanStockHoldingSharesPer（TDCC股東分散表）需 FinMind backer 會員，
 //    一般免費帳號不支援，故改用上述三合一真實數據呈現。
 
-async function fmShareholder(stockId='2330'){
+// fmShareholderDays：接受 days 參數，供本週/本月/本季切換使用
+async function fmShareholderDays(stockId='2330', days=60){
+  return fmShareholder(stockId, days);
+}
+
+async function fmShareholder(stockId='2330', days=60){
   // 三個 API 並行抓取
   const [instData, marginData, holdData] = await Promise.all([
     fmFetch({
       dataset:    'TaiwanStockInstitutionalInvestorsBuySell',
       data_id:    stockId,
-      start_date: nDaysAgo(60),
+      start_date: nDaysAgo(days),
       end_date:   todayStr(),
     }, 8000).catch(()=>null),
     fmFetch({
@@ -3410,7 +3415,14 @@ async function setTab(btn, period){
 
 function chipsTab(btn, label){
   btn.closest('div').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active'); showToast('切換至'+label+'（模擬數據）');
+  btn.classList.add('active');
+  // 依 label 決定抓取天數
+  const daysMap = {'本週':7, '本月':30, '本季':90};
+  const days = daysMap[label] || 60;
+  showToast('切換至'+label+'…');
+  // 重新抓取對應時間範圍的真實資料
+  const stockId = currentTicker.replace('.TW','');
+  loadShareholderDays(stockId, days, label);
 }
 
 // ════════════════════════════════════════════════════
@@ -3988,25 +4000,30 @@ async function loadInstitutional(){
 
 // ── 大戶籌碼 — 直接用 FinMind，不需要任何 proxy ─────
 async function loadShareholder(stockId){
+  await loadShareholderDays(stockId, 60, '近60日');
+}
+
+async function loadShareholderDays(stockId, days=60, label='近60日'){
   const id = stockId || currentTicker.replace('.TW','');
   const nameEl = document.getElementById('chipStockName');
   const dateEl = document.getElementById('chipDate');
-  if(nameEl) nameEl.textContent = (currentName||id) + ' 持股分佈';
-  if(dateEl) dateEl.textContent = '資料載入中（TDCC 股權分散表）…';
+  if(nameEl) nameEl.textContent = (currentName||id) + ' 籌碼分析';
+  if(dateEl) dateEl.textContent = `${label} 資料載入中…`;
 
   try {
-    const data = await fmShareholder(id);
+    const data = await fmShareholderDays(id, days);
     if(data){
-      renderChips(data);
+      renderChips(data, label);
     } else {
       renderChipsPlaceholder();
     }
   } catch(e){
+    console.warn('[Chips]', e.message);
     renderChipsPlaceholder();
   }
 }
 
-function renderChips(data){
+function renderChips(data, label='近60日'){
   const big    = data.bigHolder?.pct    ?? 0;
   const mid    = data.midHolder?.pct    ?? 0;
   const retail = data.retail?.pct       ?? 0;
@@ -4016,7 +4033,7 @@ function renderChips(data){
   const nameEl = document.getElementById('chipStockName');
   const dateEl = document.getElementById('chipDate');
   if(nameEl) nameEl.textContent = (currentName || '—') + ' 籌碼分析';
-  if(dateEl) dateEl.textContent = date ? '資料日期：' + date + '（每日更新）' : '最新';
+  if(dateEl) dateEl.textContent = (date ? '資料日期：' + date : '最新') + '　📅 ' + label + ' 法人籌碼（FinMind 真實數據）';
 
   // 標籤
   const labelBig = document.getElementById('leg-big-lbl');
@@ -4107,7 +4124,7 @@ function renderChips(data){
   }
 
   const srcEl=document.getElementById('chipSource');
-  if(srcEl) srcEl.textContent='📊 外資持股(FinMind) + 法人買賣(TWSE) + 融資券(每日真實數據)';
+  if(srcEl) srcEl.textContent=`📊 外資持股 · 法人買賣 · 融資券 — FinMind 真實數據（${label}）`;
 
   markFresh('chips');
 }
