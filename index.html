@@ -968,7 +968,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <!-- 20日法人籌碼趨勢折線圖 -->
     <div style="margin-top:14px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-        <span>法人籌碼趨勢（近20日）</span>
+        <span id="chipTrendTitle">法人籌碼趨勢（近20日）</span>
         <div style="display:flex;gap:10px;font-size:10px;color:var(--text3)">
           <span><span style="display:inline-block;width:10px;height:2px;background:#7c5cfc;vertical-align:middle;margin-right:3px"></span>外資</span>
           <span><span style="display:inline-block;width:10px;height:2px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>投信</span>
@@ -1925,11 +1925,13 @@ async function fmShareholder(stockId='2330', days=60){
     dealerNet  += byDate[d].dealer;
   }
 
-  // 最近20日外資 + 投信每日淨買超（用於趨勢圖，單位：張）
+  // 最近20日外資 + 投信每日淨買超（單位：張，FinMind buy/sell 欄位原始單位即為張）
   const last20Dates = sortedDates.slice(-20);
-  foreignNetArr = last20Dates.map(d=>Math.round(byDate[d].foreign));   // 千股單位保留
-  const trustNetArr  = last20Dates.map(d=>Math.round(byDate[d].trust));
-  const sortedDates20 = last20Dates; // 日期標籤
+  // 注意：每筆資料 buy/sell 是同一 institutional_investors 類別的量
+  //       byDate[d].foreign 已累加該日外資 buy-sell（張），直接使用
+  foreignNetArr   = last20Dates.map(d => Math.round(byDate[d].foreign));
+  const trustNetArr   = last20Dates.map(d => Math.round(byDate[d].trust));
+  const sortedDates20 = last20Dates;
 
   // 最新一日數據
   const todayInst = byDate[latestDate] || {foreign:0,trust:0,dealer:0};
@@ -4175,20 +4177,34 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   const svg = document.getElementById('chipTrendSvg');
   if(!svg) return;
 
-  const allVals = [...foreignArr, ...trustArr].filter(v=>!isNaN(v));
-  if(!allVals.length) return;
+  const allVals = [...foreignArr, ...trustArr].filter(v=>!isNaN(v) && v !== 0);
+  if(!allVals.length){
+    // 資料全為0，顯示提示
+    const datesEl = document.getElementById('chipTrendDates');
+    if(datesEl) datesEl.innerHTML = '<span style="color:var(--text3)">近期無法人資料</span>';
+    return;
+  }
 
-  const W = svg.parentElement.offsetWidth - 20; // 減 padding
+  // 自動縮放：超過1000張以千張顯示
+  const maxRaw = Math.max(...allVals.map(Math.abs));
+  const useK   = maxRaw >= 500; // 超過500張用千張
+  const scale  = useK ? 1000 : 1;
+  const fArr   = foreignArr.map(v => v / scale);
+  const tArr   = trustArr.map(v => v / scale);
+  const unit   = useK ? '千張' : '張';
+
+  const W = svg.parentElement.offsetWidth - 20;
   const H = 74;
   const PAD = { t:4, b:4, l:4, r:4 };
   const chartW = W - PAD.l - PAD.r;
   const chartH = H - PAD.t - PAD.b;
-  const n = Math.max(foreignArr.length, trustArr.length);
+  const n = Math.max(fArr.length, tArr.length);
   if(n < 2) return;
 
-  // 值域
-  const maxV = Math.max(...allVals.map(Math.abs), 1);
-  const mid  = H / 2; // 零軸 Y 位置
+  // 值域（縮放後）
+  const allScaled = [...fArr, ...tArr].filter(v=>!isNaN(v));
+  const maxV = Math.max(...allScaled.map(Math.abs), 0.1);
+  const mid  = H / 2;
 
   // X 位置
   const xPos = i => PAD.l + (i / (n-1)) * chartW;
@@ -4202,7 +4218,7 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
     zeroLine.setAttribute('y2', mid);
   }
 
-  // 繪製折線
+  // 繪製折線（使用縮放後的 fArr / tArr）
   function makePts(arr){
     return arr.map((v,i)=>`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
   }
@@ -4214,9 +4230,13 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   const fLine = document.getElementById('chipForeignLine');
   const fFill = document.getElementById('chipForeignFill');
   const tLine = document.getElementById('chipTrustLine');
-  if(fLine) fLine.setAttribute('points', makePts(foreignArr));
-  if(fFill) fFill.setAttribute('points', makeFillPts(foreignArr));
-  if(tLine) tLine.setAttribute('points', makePts(trustArr));
+  if(fLine) fLine.setAttribute('points', makePts(fArr));
+  if(fFill) fFill.setAttribute('points', makeFillPts(fArr));
+  if(tLine) tLine.setAttribute('points', makePts(tArr));
+
+  // 更新標題顯示單位
+  const titleEl = document.getElementById('chipTrendTitle');
+  if(titleEl) titleEl.textContent = `法人籌碼趨勢（近20日 · 單位:${unit}）`;
 
   // 日期標籤（首/中/末）
   const datesEl = document.getElementById('chipTrendDates');
@@ -4234,12 +4254,21 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
     if(!tipEl) return;
     const rect = svgEl.getBoundingClientRect();
     const cx   = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const idx  = Math.min(n-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (n-1))));
+    const len  = Math.max(foreignArr.length, trustArr.length);
+    const idx  = Math.min(len-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (len-1))));
+    // tooltip 顯示原始張數
     const fv   = foreignArr[idx] || 0;
     const tv   = trustArr[idx]   || 0;
     const dt   = dates[idx] || '';
-    const fStr = (fv >= 0 ? '+' : '') + (Math.abs(fv)>=1000 ? (fv/1000).toFixed(1)+'千張' : fv+'張');
-    const tStr = (tv >= 0 ? '+' : '') + (Math.abs(tv)>=1000 ? (tv/1000).toFixed(1)+'千張' : tv+'張');
+    const fmtV = v => {
+      const abs = Math.abs(v);
+      const sign = v >= 0 ? '+' : '-';
+      if(abs >= 10000) return sign + (abs/10000).toFixed(1) + '萬張';
+      if(abs >= 1000)  return sign + (abs/1000).toFixed(1)  + '千張';
+      return sign + abs + '張';
+    };
+    const fStr = fmtV(fv);
+    const tStr = fmtV(tv);
     tipEl.innerHTML =
       `<div style="color:var(--text3);margin-bottom:3px">${dt}</div>` +
       `<div style="color:#a080ff">外資 <strong style="color:${fv>=0?'var(--red)':'var(--green)'}">${fStr}</strong></div>` +
