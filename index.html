@@ -2746,7 +2746,14 @@ function updateLongTerm(price, closes, dates){
   function setEl(id, val, color){
     const el = document.getElementById(id);
     if(!el) return;
-    if(val !== undefined) el.textContent = val;
+    if(val !== undefined){
+      // body 欄位用 innerHTML 支援著色，其他欄位用 textContent
+      if(id.endsWith('-body') || id==='aiBody' || id==='vixNote'){
+        el.innerHTML = colorSentiment(val);
+      } else {
+        el.textContent = val;
+      }
+    }
     if(color) el.style.color = color;
   }
   const scoreColor = v => v>=7?'var(--red)':v>=4?'var(--gold)':'var(--green)';
@@ -3027,7 +3034,9 @@ function updateAI(name, q){
 
   // 更新 header 與綜合指標
   setEl('aiTitle', `${name} — 短${shortScore.toFixed(1)} ／ 中${midScore.toFixed(1)} ／ 長${longScoreForComposite.toFixed(1)}`);
-  setEl('aiBody',  `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期評分 ${longScoreForComposite.toFixed(1)}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`);
+  const aiBodyText = `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期評分 ${longScoreForComposite.toFixed(1)}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`;
+  const aiBodyEl = document.getElementById('aiBody');
+  if(aiBodyEl) aiBodyEl.innerHTML = colorSentiment(aiBodyText);
 
   // 快取 AI 分析上下文，供深度模組使用
   cacheAIContext({
@@ -3899,7 +3908,7 @@ function renderVix(vix, changePct, dataDate, history, srcLabel=''){
     else if(vix<25) note=`VIX ${vix.toFixed(1)}，市場開始出現不安情緒，波動率偏高，需留意下行風險。`;
     else if(vix<35) note=`VIX ${vix.toFixed(1)}，市場恐慌情緒升溫，歷史上此區間常出現急跌。注意風險控管。`;
     else            note=`VIX ${vix.toFixed(1)}，極度恐慌！歷史上此高位通常接近短期底部，但波動劇烈，謹慎應對。`;
-    noteEl.innerHTML = `<strong class="purple">🤖 AI 解讀：</strong>${note}`;
+    noteEl.innerHTML = `<strong class="purple">🤖 AI 解讀：</strong>${colorSentiment(note)}`;
   }
 }
 
@@ -5450,6 +5459,66 @@ function resolveNewsUrl(url, title){
   return 'https://news.google.com/search?q=' + encodeURIComponent(title) + '&hl=zh-TW&gl=TW&ceid=TW:zh-Hant';
 }
 
+// ════════════════════════════════════════════════════
+// 利多/利空關鍵詞著色
+// 台股慣例：利多=紅色、利空=綠色
+// ════════════════════════════════════════════════════
+const BULL_WORDS = [
+  // 業績/財務
+  '獲利','盈餘','淨利','EPS','營收創高','獲利成長','超預期','優於預期','大幅成長',
+  '營收','突破','創高','新高','創新高','歷史高','季增','年增','成長','增加','增長',
+  // 法人動作
+  '買超','加碼','增持','建倉','買進','做多','看多','目標價上調','調升',
+  '外資買','投信買','買入','大買','連買',
+  // 產業/市場
+  '利多','利好','正向','樂觀','上調','升評','強力買進','受惠','題材',
+  '需求強','訂單','滿載','稼動率','漲價','漲',
+  // 政策/總經
+  '降息','寬鬆','補貼','政府支持','擴大投資','資金行情',
+  // 技術
+  '突破壓力','站上','多頭','黃金交叉','漲停',
+];
+const BEAR_WORDS = [
+  // 業績/財務
+  '虧損','虧損擴大','虧損增加','下修','獲利下滑','低於預期','不如預期',
+  '衰退','下滑','下降','季減','年減','縮水','虧','減少',
+  // 法人動作
+  '賣超','減持','降低持股','賣出','做空','看空','目標價下調','調降',
+  '外資賣','投信賣','大賣','連賣',
+  // 產業/市場
+  '利空','負面','悲觀','下調','降評','賣出建議','衝擊','庫存',
+  '需求疲','砍單','降價','跌',
+  // 政策/總經
+  '升息','緊縮','制裁','關稅','貿易戰','地緣政治',
+  // 技術
+  '跌破支撐','死亡交叉','空頭','跌停','破底',
+  // 警示
+  '停牌','下市','處置','注意','警示','違約','掏空','弊案',
+];
+
+function colorSentiment(text){
+  if(!text) return text;
+  let result = text;
+  // 利多詞：紅色
+  BULL_WORDS.forEach(w=>{
+    if(result.includes(w)){
+      result = result.split(w).join(
+        `<span style="color:var(--red);font-weight:700">${w}</span>`
+      );
+    }
+  });
+  // 利空詞：綠色（先利多後利空，避免衝突）
+  BEAR_WORDS.forEach(w=>{
+    // 不在已著色的 span 內才替換
+    if(result.includes(w) && !result.includes(`>${w}</span>`)){
+      result = result.split(w).join(
+        `<span style="color:var(--green);font-weight:700">${w}</span>`
+      );
+    }
+  });
+  return result;
+}
+
 function newsItem(title, source, cat, url, isStockRelated, date){
   const catLabel  = {tech:'個股',finance:'法人',macro:'總經'}[cat]||'財經';
   const finalUrl  = resolveNewsUrl(url, title);
@@ -5461,7 +5530,7 @@ function newsItem(title, source, cat, url, isStockRelated, date){
     : `<span style="font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0" title="Google 新聞搜尋">🔍</span>`;
   return `<div class="nitem" onclick="window.open('${finalUrl.replace(/'/g,'%27')}','_blank')" style="cursor:pointer">
     <div style="flex:1;min-width:0">
-      <div class="nt">${badge}${title}</div>
+      <div class="nt">${badge}${colorSentiment(title)}</div>
       <div class="ns">${source}${date ? ' · ' + relTime(date) : ''}</div>
     </div>
     <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
@@ -5539,7 +5608,7 @@ function updatePulse(instData, indexData){
   const bodyEl  = document.getElementById('pulseBody');
   const timeEl  = document.getElementById('pulseTime');
   if(titleEl) titleEl.textContent = title;
-  if(bodyEl)  bodyEl.textContent  = body;
+  if(bodyEl)  bodyEl.innerHTML = colorSentiment(body);
   // 時間標籤：即時顯示盤中時間，非即時顯示資料日期
   const srcLabel = indexData?.isRealtime
     ? `⚡ 即時 ${indexData.time||ts}`
@@ -6141,7 +6210,7 @@ function renderAlertList(tab){
     // 原因
     const warnText = s.reason||s.disposeType||'';
     const warnHtml = warnText
-      ? `<div class="acard-warn">⚠ ${warnText}</div>` : '';
+      ? `<div class="acard-warn">⚠ ${colorSentiment(warnText)}</div>` : '';
 
     // 安全轉義名稱（避免單引號破壞 onclick）
     const safeName = (s.name||'').replace(/'/g,"\'");
