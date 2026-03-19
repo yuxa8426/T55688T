@@ -4037,81 +4037,62 @@ let _vixTimer = null;
 
 async function loadVix(manual=false){
   if(manual) showToast('🔄 更新 VIX…');
-  let vix=null, changePct=0, vixHistory=[], dataDate='', srcLabel='';
 
-  // CSV 解析輔助
-  function parseCsvRows(csv, colClose, colDate, minVal){
-    if(!csv || csv.includes('No data') || csv.length<30) return null;
-    const rows = csv.trim().split('\n').slice(1)
-      .map(l=>{ const p=l.split(','); return {date:(p[colDate]||'').trim(), close:parseFloat(p[colClose])}; })
-      .filter(r=>r.date && !isNaN(r.close) && r.close>minVal)
-      .sort((a,b)=>a.date>b.date?1:-1);
-    return rows.length ? rows : null;
-  }
-  function rowsToResult(rows, src){
-    if(!rows) return null;
-    const l=rows[rows.length-1], p=rows.length>1?rows[rows.length-2]:null;
-    return { vix:l.close, chg:p?(l.close-p.close)/p.close*100:0,
-             date:l.date, hist:rows.slice(-22).map(r=>r.close), src };
+  // ── 來源1：Cloudflare Worker /vix（伺服器端直接抓，最穩定）──
+  if(API){
+    try{
+      const resp = await fetchWithTimeout(`${API}/vix`, 12000);
+      if(resp.ok){
+        const d = await resp.json();
+        if(d.vix && d.vix > 5){
+          console.log('[VIX] Worker OK:', d.vix, d.src);
+          _applyVix(d.vix, d.chg||0, d.date||'', d.hist||[], d.src||'Worker');
+          return;
+        }
+      }
+    }catch(e){ console.warn('[VIX] Worker failed:', e.message); }
   }
 
-  const PX = ['https://corsproxy.io/?url=', 'https://api.allorigins.win/raw?url='];
-
-  // A: FRED（免費，有 CORS，格式 DATE,VIXCLS）
-  const fredP = fetchWithTimeout(
-    'https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS', 5000)
-    .then(r=>r.ok?r.text():Promise.reject('bad'))
-    .then(csv=>rowsToResult(parseCsvRows(csv,1,0,5),'FRED'))
-    .catch(()=>null);
-
-  // B: stooq（via proxy，格式 Date,O,H,L,Close,Vol）
-  const stooqUrl = 'https://stooq.com/q/d/l/?s=%5Evix&i=d';
-  const stooqPs  = PX.map(px=>
-    fetchWithTimeout(px+encodeURIComponent(stooqUrl), 5000)
-      .then(r=>r.ok?r.text():Promise.reject())
-      .then(csv=>rowsToResult(parseCsvRows(csv,4,0,5),'stooq'))
-      .catch(()=>null));
-
-  // C: Yahoo Finance v8（via proxy）
-  const yhUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=1mo&interval=1d';
-  const yhPs  = PX.map(px=>
-    fetchWithTimeout(px+encodeURIComponent(yhUrl), 5000)
-      .then(r=>r.ok?r.text():Promise.reject())
-      .then(txt=>{
-        const j=JSON.parse(txt), meta=j?.chart?.result?.[0]?.meta;
-        if(!meta?.regularMarketPrice) return null;
-        const prev=meta.chartPreviousClose||meta.previousClose||meta.regularMarketPrice;
-        const qts=j?.chart?.result?.[0]?.indicators?.quote?.[0];
-        const dt=meta.regularMarketTime
-          ?new Date(meta.regularMarketTime*1000).toLocaleDateString('en-CA',{timeZone:'America/New_York'}):''
-        return { vix:meta.regularMarketPrice, chg:(meta.regularMarketPrice-prev)/prev*100,
-                 date:dt, hist:(qts?.close||[]).filter(v=>v!=null&&v>0).slice(-22), src:'Yahoo' };
-      }).catch(()=>null));
-
-  // 全部並行，取最快成功的
-  const results = await Promise.allSettled([fredP, ...stooqPs, ...yhPs]);
-  for(const r of results){
-    if(r.status==='fulfilled' && r.value?.vix>0){
-      vix=r.value.vix; changePct=r.value.chg; dataDate=r.value.date;
-      vixHistory=r.value.hist; srcLabel=r.value.src;
-      break;
+  // ── 來源2：FRED 直接 fetch（無需 proxy，部分瀏覽器允許）──
+  try{
+    const resp = await fetchWithTimeout(
+      'https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS', 6000);
+    if(resp.ok){
+      const csv = await resp.text();
+      const rows = csv.trim().split('\n').slice(1)
+        .map(l=>{ const p=l.split(','); return {date:p[0]?.trim(), close:parseFloat(p[1])}; })
+        .filter(r=>r.date && !isNaN(r.close) && r.close>5)
+        .sort((a,b)=>a.date>b.date?1:-1);
+      if(rows.length){
+        const last=rows[rows.length-1], prev=rows[rows.length-2];
+        console.log('[VIX] FRED direct OK:', last.close);
+        _applyVix(last.close, prev?(last.close-prev.close)/prev.close*100:0,
+                  last.date, rows.slice(-22).map(r=>r.close), 'FRED');
+        return;
+      }
     }
-  }
-  if(!vix || isNaN(vix)){ renderVixFallback(); return; }
+  }catch(e){ console.warn('[VIX] FRED direct:', e.message); }
 
-  renderVix(vix, changePct, dataDate, vixHistory, srcLabel);
+  // ── 所有來源失敗 ──────────────────────────────────────────
+  console.warn('[VIX] all sources failed');
+  renderVixFallback();
+  clearTimeout(_vixTimer);
+  _vixTimer = setTimeout(()=>loadVix(), 120000);
+}
+
+function _applyVix(vix, chg, date, hist, src){
+  renderVix(vix, chg, date, hist, src);
   markFresh('vix');
-
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const ts  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const el  = document.getElementById('vixUpdateTime');
-  if(el) el.textContent = `更新 ${ts}${srcLabel?' · '+srcLabel:''}`;
-
+  if(el) el.textContent = `更新 ${ts} · ${src}`;
   clearTimeout(_vixTimer);
   const nowMin = now.getHours()*60+now.getMinutes();
-  const inUS   = nowMin>=210 && nowMin<=570; // 03:30~09:30台灣時間 = 美股盤中
+  const inUS   = nowMin>=210 && nowMin<=570;
   _vixTimer = setTimeout(()=>loadVix(), inUS ? 90000 : 300000);
 }
+
 
 function renderVix(vix, changePct, dataDate, history, srcLabel=''){
   // 數字
