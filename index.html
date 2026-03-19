@@ -6638,13 +6638,24 @@ async function calcAlertStatus(stockId, stockName){
     const lastPct = calcPct(last);
 
     // ── 判斷等級 ─────────────────────────────────────────
-    // 處置：近20日漲停≥3 或跌停≥2 或量暴衝≥3次
-    const isDispose = limitUpCnt>=3 || limitDnCnt>=2 || volSpikeCnt>=3;
+    // 近5日資料（用於更嚴格的短期判斷）
+    let limitUp5=0, limitDn5=0, volSpike5=0;
+    rows5.forEach(d=>{
+      const pct = calcPct(d);
+      const vol = Number(d.Trading_Volume||0);
+      if(pct >= 9.3)  limitUp5++;
+      if(pct <= -9.3) limitDn5++;
+      if(avgVol20>0 && vol >= avgVol20*2.5) volSpike5++;
+    });
 
-    // 注意：漲停≥1 或跌停≥1 或量暴衝≥2次 或 近10日累積波幅>20% 或 近5日大波動≥2次
+    // 處置：近20日漲停≥2 或跌停≥2 或量暴衝≥2次（調低門檻）
+    //        或近5日出現連續漲停2次
+    const isDispose = limitUpCnt>=2 || limitDnCnt>=2 || volSpikeCnt>=2 || limitUp5>=2 || limitDn5>=2;
+
+    // 注意：任何一次漲跌停，或量暴衝，或近10日累積波幅>15%，或近5日大波動≥1次
     const isNotice = !isDispose && (
-      limitUpCnt>=1 || limitDnCnt>=1 || volSpikeCnt>=2 ||
-      totalMove10 > 20 || bigMoveCnt5 >= 2
+      limitUpCnt>=1 || limitDnCnt>=1 || volSpikeCnt>=1 ||
+      totalMove10 > 15 || bigMoveCnt5 >= 1
     );
 
     // 出閘：近5日正常（無漲跌停、無量暴衝），但更早的10-20日區間有異常
@@ -6693,29 +6704,56 @@ function onAlertScopeChange(val){
   refreshAlertStocks(true); // 切換後自動重新掃描
 }
 
-// ── 從 Worker 抓取 TWSE 官方處置/注意股清單 ────────────
-let _officialDisposeCache = null;
-let _officialDisposeCacheTs = 0;
-const OFFICIAL_DISPOSE_TTL = 10 * 60 * 1000; // 10分鐘 cache（確保即時性）
+// ════════════════════════════════════════════════════
+// 官方處置/注意股 — 用 FinMind TaiwanStockDayTradingSuspension
+// 暫停先賣後買當沖 = 交易所對異常股採取的管制措施
+// 同時用近期股價異常波動作為技術輔助判斷
+// ════════════════════════════════════════════════════
+let _officialDisposeCache    = null;
+let _officialDisposeCacheTs  = 0;
+const OFFICIAL_DISPOSE_TTL   = 10 * 60 * 1000;
 
 async function fetchOfficialDisposeList(){
-  // cache 命中
   if(_officialDisposeCache && Date.now()-_officialDisposeCacheTs < OFFICIAL_DISPOSE_TTL)
     return _officialDisposeCache;
 
-  if(!API) return { dispose:[], notice:[] };
+  const result = { dispose:[], notice:[] };
+
   try{
-    const resp = await fetchWithTimeout(`${API}/dispose`, 10000);
-    if(!resp.ok) return { dispose:[], notice:[] };
-    const data = await resp.json();
-    _officialDisposeCache   = data;
-    _officialDisposeCacheTs = Date.now();
-    console.log('[Official] dispose:', data.dispose?.length, 'notice:', data.notice?.length);
-    return data;
-  }catch(e){
-    console.warn('[Official dispose]', e.message);
-    return { dispose:[], notice:[] };
-  }
+    // 方法1：FinMind TaiwanStockDayTradingSuspension
+    // 當沖暫停 = 交易所處置措施之一（免費帳號可用）
+    const suspData = await fmFetch({
+      dataset:    'TaiwanStockDayTradingSuspension',
+      start_date: nDaysAgo(10),
+      end_date:   todayStr(),
+    }, 10000).catch(()=>null);
+
+    if(suspData && suspData.length){
+      const today  = todayStr();
+      const active = suspData.filter(r=>{
+        const start = r.start_date||r.StartDate||r.date||'';
+        const end   = r.end_date  ||r.EndDate  ||'9999';
+        return start <= today && end >= today;
+      });
+      const ids = [...new Set(active.map(r=>(r.stock_id||r.StockID||'').toString().trim()))];
+      ids.filter(id=>/^\d{4,6}$/.test(id)).forEach(id=>{
+        result.notice.push({id, src:'FinMind-Suspension'});
+      });
+      console.log('[Official] DayTradingSuspension active:', active.length, 'ids:', ids.length);
+    }
+  }catch(e){ console.warn('[Official] suspension:', e.message); }
+
+  try{
+    // 方法2：FinMind TaiwanStockPrice — 近5日漲停≥2次或跌停≥2次視為需要標記
+    // 這是比 TWSE HTML 更穩定的資料來源
+    // 注意：這是技術判斷，不是官方公告，已在 calcAlertStatus 中處理
+    // 這裡只補充 Suspension 資料沒涵蓋的部分
+  }catch(e){}
+
+  _officialDisposeCache   = result;
+  _officialDisposeCacheTs = Date.now();
+  console.log('[Official] dispose:', result.dispose.length, 'notice:', result.notice.length);
+  return result;
 }
 
 // 批次計算全池注意/處置/出閘（分批，避免 API rate limit）
