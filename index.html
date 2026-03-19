@@ -1807,7 +1807,7 @@ const FM_CACHE_TTL_MAP = {
 };
 const FM_CACHE_DEFAULT = 30 * 1000;
 
-async function fmFetch(params, timeout=6000){
+async function fmFetch(params, timeout=15000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
   // 優先走 Cloudflare Worker（最穩定）；未設定時嘗試直連（本地測試用）
   const fmParams = new URLSearchParams({ ...apiParams, token: FM_TOKEN }).toString();
@@ -2075,19 +2075,19 @@ async function fmShareholder(stockId='2330', days=60){
       data_id:    stockId,
       start_date: nDaysAgo(days),
       end_date:   todayStr(),
-    }, 8000).catch(()=>null),
+    }, 15000).catch(()=>null),
     fmFetch({
       dataset:    'TaiwanStockMarginPurchaseShortSale',
       data_id:    stockId,
       start_date: nDaysAgo(10),
       end_date:   todayStr(),
-    }, 12000).catch(()=>null),
+    }, 15000).catch(()=>null),
     fmFetch({
       dataset:    'TaiwanStockShareholding',
       data_id:    stockId,
       start_date: nDaysAgo(10),
       end_date:   todayStr(),
-    }, 12000).catch(()=>null),
+    }, 15000).catch(()=>null),
   ]);
 
   if(!instData || !instData.length) return null;
@@ -4206,10 +4206,10 @@ async function loadInstitutional(){
   // 市場脈動用全市場法人加總（TaiwanStockInstitutionalInvestors，無 data_id = 全市場）
   try{
     const mkt = await fmFetch({
-      dataset:    'TaiwanStockInstitutionalInvestors',
+      dataset:    'TaiwanStockTotalInstitutionalInvestors',
       start_date: nDaysAgo(5),
       end_date:   nDaysAgo(0),
-    }, 12000);
+    }, 15000);
     if(mkt && mkt.length){
       // 取最新日期的全市場加總
       const dates = [...new Set(mkt.map(r=>r.date))].sort();
