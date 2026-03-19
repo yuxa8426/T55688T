@@ -1900,19 +1900,18 @@ async function fmShareholder(stockId='2330', days=60){
   let foreignNet=0, trustNet=0, dealerNet=0;
   let foreignNetArr=[], latestDate='';
 
-  // 按日期彙整
+  // 按日期彙整（欄位：name, buy, sell，與 fmInstitutional 一致）
   const byDate = {};
   for(const r of instData){
     const d   = r.date;
-    const who = (r.institutional_investors||'').toString();
-    // 買超 = buy - sell（單位：千股 → 轉為張）
-    const buy  = parseFloat(r.buy||0);
-    const sell = parseFloat(r.sell||0);
-    const net  = buy - sell; // 千股
+    const nm  = (r.name || r.institutional_investors || '').toString();
+    const buy  = parseInt(r.buy  || 0);
+    const sell = parseInt(r.sell || 0);
+    const net  = buy - sell; // 張
     if(!byDate[d]) byDate[d]={foreign:0,trust:0,dealer:0};
-    if(who.includes('外資'))      { byDate[d].foreign += net; }
-    else if(who.includes('投信')) { byDate[d].trust   += net; }
-    else if(who.includes('自營')) { byDate[d].dealer  += net; }
+    if     (nm.includes('外資')||nm.includes('Foreign'))    byDate[d].foreign += net;
+    else if(nm.includes('投信')||nm.includes('Investment')) byDate[d].trust   += net;
+    else if(nm.includes('自營')||nm.includes('Dealer'))     byDate[d].dealer  += net;
   }
 
   const sortedDates = Object.keys(byDate).sort();
@@ -1982,13 +1981,13 @@ async function fmShareholder(stockId='2330', days=60){
     midHolder: { pct:midPct,   count:0, label:'本土法人'                     },
     retail:    { pct:retailPct,count:0, label:'散戶估算'                     },
     // 真實數據
-    foreignNet:   Math.round(foreignNet/1000),
-    trustNet:     Math.round(trustNet/1000),
-    dealerNet:    Math.round(dealerNet/1000),
-    todayForeign: Math.round(todayInst.foreign/1000),
-    todayTrust:   Math.round(todayInst.trust/1000),
-    todayDealer:  Math.round(todayInst.dealer/1000),
-    prevForeign:  Math.round(prevInst.foreign/1000),
+    foreignNet:   foreignNet,      // 張
+    trustNet:     trustNet,         // 張
+    dealerNet:    dealerNet,        // 張
+    todayForeign: todayInst.foreign,
+    todayTrust:   todayInst.trust,
+    todayDealer:  todayInst.dealer,
+    prevForeign:  prevInst.foreign,
     foreignNetArr,
     trustNetArr:  last20Dates.map(d=>Math.round(byDate[d].trust)),
     sortedDates20: last20Dates,
@@ -4116,15 +4115,17 @@ function renderChips(data, label='近60日'){
     setLegSub('leg-big-sub',`持股${data.foreignPct.toFixed(1)}% ${chgStr}`, data.foreignChg>0?'var(--red)':data.foreignChg<0?'var(--green)':'var(--text3)');
   } else if(data.todayForeign !== undefined){
     const tF=data.todayForeign||0;
-    const tFabs=(Math.abs(tF)>=10000?(Math.abs(tF)/10000).toFixed(1)+'億':Math.abs(tF).toLocaleString()+'萬')+'股';
-    setLegSub('leg-big-sub',`今日${tF>=0?'買超+':'賣超'}${tFabs}`,tF>=0?'var(--red)':'var(--green)');
+    const abs=Math.abs(tF);
+    const tFStr = abs>=10000 ? (abs/10000).toFixed(1)+'萬張' : abs>=1000 ? (abs/1000).toFixed(1)+'千張' : abs+'張';
+    setLegSub('leg-big-sub',`今日${tF>=0?'買超+':'賣超'}${tFStr}`,tF>=0?'var(--red)':'var(--green)');
   } else { setLegSub('leg-big-sub','—'); }
 
   // 法人合計（投信+自營）
   if(data.todayTrust !== undefined){
     const tN=(data.todayTrust||0)+(data.todayDealer||0);
-    const tNabs=(Math.abs(tN)>=10000?(Math.abs(tN)/10000).toFixed(1)+'億':Math.abs(tN).toLocaleString()+'萬')+'股';
-    setLegSub('leg-mid-sub',`今日${tN>=0?'淨買+':'淨賣'}${tNabs}`,tN>=0?'var(--red)':'var(--green)');
+    const absN=Math.abs(tN);
+    const tNStr = absN>=10000 ? (absN/10000).toFixed(1)+'萬張' : absN>=1000 ? (absN/1000).toFixed(1)+'千張' : absN+'張';
+    setLegSub('leg-mid-sub',`今日${tN>=0?'淨買+':'淨賣'}${tNStr}`,tN>=0?'var(--red)':'var(--green)');
   } else { setLegSub('leg-mid-sub','—'); }
 
   // 散戶：融資餘額
@@ -4154,8 +4155,9 @@ function renderChips(data, label='近60日'){
   const weekEl=document.getElementById('chip-week-chg');
   if(weekEl){
     const tF=data.todayForeign||0;
-    const tFabs=(Math.abs(tF)>=10000?(Math.abs(tF)/10000).toFixed(1)+'億':Math.abs(tF).toLocaleString()+'萬')+'股';
-    weekEl.textContent=tF!==0?(tF>0?'外資今日買超+':'外資今日賣超')+tFabs:'外資今日持平';
+    const absF=Math.abs(tF);
+    const tFStr = absF>=10000?(absF/10000).toFixed(1)+'萬張':absF>=1000?(absF/1000).toFixed(1)+'千張':absF+'張';
+    weekEl.textContent=tF!==0?(tF>0?'外資今日買超+':'外資今日賣超')+tFStr:'外資今日持平';
     weekEl.style.color=tF>=0?'var(--red)':'var(--green)';
   }
 
