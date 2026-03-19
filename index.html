@@ -1244,6 +1244,21 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       🤖 AI 策略分析 → 選出10支股票
     </button>
 
+    <!-- 本機回測統計 -->
+    <div id="backtestPanel" style="display:none;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 本機回測記錄</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="checkBacktestNow()" style="font-size:11px;background:none;border:1px solid var(--border);border-radius:7px;color:var(--text3);padding:3px 8px;cursor:pointer;font-family:inherit">立即驗證</button>
+          <button onclick="clearBacktest()" style="font-size:11px;background:none;border:1px solid rgba(255,76,106,.3);border-radius:7px;color:var(--text3);padding:3px 8px;cursor:pointer;font-family:inherit">清除記錄</button>
+        </div>
+      </div>
+      <!-- 各策略勝率統計 -->
+      <div id="backtestStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px"></div>
+      <!-- 待驗證清單 -->
+      <div id="backtestPending" style="font-size:11px;color:var(--text3)"></div>
+    </div>
+
     <!-- 結果區 -->
     <div id="stratResult" style="display:none">
       <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:10px" id="stratResultTitle">—</div>
@@ -1474,7 +1489,10 @@ function switchPage(n){
   document.getElementById('nb-'+n).classList.add('active');
   window.scrollTo(0,0);
   // 切換頁面時載入對應資料
-  if(n==='watchlist') setTimeout(()=>{ updateStratDesc(_currentStrat||'A'); },50);
+  if(n==='watchlist') setTimeout(()=>{
+    updateStratDesc(_currentStrat||'A');
+    autoCheckBacktest();
+  },50);
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
   if(n==='explore'){
     const unloaded = Object.keys(SECTORS).filter(k=>!_sectorPreviewCache[k]);
@@ -6033,7 +6051,9 @@ async function runStratAnalysis(){
       `今日：${new Date().toLocaleDateString('zh-TW')}`,
     ].filter(Boolean).join('，');
 
-    const prompt = strat.prompt(market);
+    // 加入本機回測修正數據，讓 AI 參考過去準確率調整策略
+    const btSummary = getBacktestSummary(key);
+    const prompt = strat.prompt(market + btSummary);
     const WORKER = (typeof API !== 'undefined' && API)
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
@@ -6067,6 +6087,9 @@ async function runStratAnalysis(){
 
     const stocks = parsed.stocks || [];
     if(!stocks.length) throw new Error('無股票資料');
+
+    // 記錄到回測系統（背景執行，不阻塞渲染）
+    recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
 
     // 渲染結果
     titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選`;
@@ -6105,6 +6128,212 @@ async function runStratAnalysis(){
     runBtn.disabled = false;
     runBtn.textContent = '🤖 AI 策略分析 → 選出10支股票';
     if(runningEl) runningEl.style.display = 'none';
+  }
+}
+
+// ════════════════════════════════════════════════════
+// 策略回測追蹤系統
+// 每次推薦後記錄到 localStorage
+// 每7天自動比對實際漲跌，計算本機勝率
+// 勝率數據回饋給 AI，讓策略越來越準
+// ════════════════════════════════════════════════════
+const BT_KEY = 'stockai_backtest';
+
+// 讀取所有回測記錄
+function getBtRecords(){
+  try{ return JSON.parse(localStorage.getItem(BT_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveBtRecords(records){ localStorage.setItem(BT_KEY, JSON.stringify(records)); }
+
+// 儲存本次推薦（記錄推薦時的股價 + 推薦日期）
+async function recordStratRecommend(stratKey, stocks){
+  const records = getBtRecords();
+  const today   = todayStr();
+
+  // 批次取得推薦股票的當前股價（用於基準）
+  const priceMap = {};
+  await Promise.all(stocks.slice(0,10).map(async s=>{
+    try{
+      const raw = await fmStockData(s.id, 5);
+      const q   = _parseQuote(raw, s.id);
+      if(q?.price) priceMap[s.id] = q.price;
+    }catch(e){}
+  }));
+
+  // 建立記錄
+  const record = {
+    id:        Date.now(),
+    stratKey,
+    date:      today,
+    checkDate: addDays(today, 7),  // 7天後驗證
+    verified:  false,
+    stocks: stocks.slice(0,10).map(s=>({
+      id:      s.id,
+      name:    s.name,
+      aiWin:   Math.round(s.winRate||60),  // AI 預測勝率
+      entryPx: priceMap[s.id] || null,     // 推薦時股價
+      exitPx:  null,                        // 驗證時股價
+      result:  null,                        // 'win'|'loss'|'flat'
+      pct:     null,                        // 實際漲跌幅
+    })),
+  };
+  records.push(record);
+  // 只保留最近 50 筆
+  if(records.length > 50) records.splice(0, records.length - 50);
+  saveBtRecords(records);
+  console.log('[Backtest] recorded', record.stocks.length, 'stocks for strat', stratKey);
+}
+
+// 日期工具
+function addDays(dateStr, n){
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+
+// 計算各策略的本機實測勝率
+function calcStratWinRates(){
+  const records = getBtRecords();
+  const stats = {};
+  'ABCDE'.split('').forEach(k=>{ stats[k] = {total:0, wins:0, losses:0, pending:0}; });
+
+  records.forEach(r=>{
+    const st = stats[r.stratKey];
+    if(!st) return;
+    r.stocks.forEach(s=>{
+      if(s.result === 'win')   { st.total++; st.wins++; }
+      else if(s.result === 'loss'){ st.total++; st.losses++; }
+      else                         { st.pending++; }
+    });
+  });
+
+  // 計算勝率
+  Object.keys(stats).forEach(k=>{
+    const s = stats[k];
+    s.winRate = s.total > 0 ? Math.round(s.wins / s.total * 100) : null;
+  });
+  return stats;
+}
+
+// 驗證到期的記錄（抓現在股價 vs 入場股價）
+async function checkBacktestNow(){
+  const records = getBtRecords();
+  const today   = todayStr();
+  let verified  = 0;
+  let changed   = false;
+
+  for(const r of records){
+    if(r.verified) continue;
+    if(r.checkDate > today) continue; // 尚未到7天
+
+    // 取每支股票的現在股價
+    for(const s of r.stocks){
+      if(s.result) continue; // 已驗證
+      if(!s.entryPx){ s.result='flat'; s.pct=0; continue; }
+      try{
+        const raw = await fmStockData(s.id, 5);
+        const q   = _parseQuote(raw, s.id);
+        if(q?.price){
+          s.exitPx = q.price;
+          s.pct    = +((q.price - s.entryPx) / s.entryPx * 100).toFixed(2);
+          s.result = s.pct >= 2 ? 'win' : s.pct <= -2 ? 'loss' : 'flat';
+        }
+      }catch(e){ s.result = 'flat'; s.pct = 0; }
+    }
+    // 全部驗證完才標記 verified
+    if(r.stocks.every(s=>s.result)){
+      r.verified = true;
+      verified++;
+    }
+    changed = true;
+  }
+
+  if(changed) saveBtRecords(records);
+  renderBacktestPanel();
+  if(verified > 0) showToast(`✅ 驗證完成 ${verified} 筆推薦記錄`);
+  else showToast('ℹ️ 尚無到期記錄（推薦後7天才驗證）');
+}
+
+// 清除所有回測記錄
+function clearBacktest(){
+  if(!confirm('確定清除所有回測記錄？')) return;
+  localStorage.removeItem(BT_KEY);
+  renderBacktestPanel();
+  showToast('回測記錄已清除');
+}
+
+// 渲染回測面板
+function renderBacktestPanel(){
+  const panelEl = document.getElementById('backtestPanel');
+  const statsEl = document.getElementById('backtestStats');
+  const pendEl  = document.getElementById('backtestPending');
+  if(!panelEl) return;
+
+  const records = getBtRecords();
+  if(!records.length){ panelEl.style.display='none'; return; }
+  panelEl.style.display = 'block';
+
+  // 統計各策略
+  const stats = calcStratWinRates();
+  const stratInfo = { A:{icon:'🚀',color:'#ff4c6a'}, B:{icon:'📈',color:'#00d4aa'}, C:{icon:'💎',color:'#f5c842'}, D:{icon:'🔄',color:'#a080ff'}, E:{icon:'⚖️',color:'#4fc3f7'} };
+
+  if(statsEl) statsEl.innerHTML = 'ABCDE'.split('').map(k=>{
+    const s  = stats[k];
+    const si = stratInfo[k];
+    const wr = s.winRate;
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center">
+      <div style="font-size:14px">${si.icon}</div>
+      <div style="font-size:9px;color:var(--text3);margin:2px 0">策略${k}</div>
+      ${wr !== null
+        ? `<div style="font-size:15px;font-weight:800;color:${si.color}">${wr}%</div>
+           <div style="font-size:9px;color:var(--text3)">${s.wins}勝/${s.losses}敗</div>`
+        : `<div style="font-size:11px;color:var(--text3);padding:4px 0">待累積</div>
+           <div style="font-size:9px;color:var(--text3)">${s.pending}筆中</div>`
+      }
+    </div>`;
+  }).join('');
+
+  // 待驗證清單
+  const today   = todayStr();
+  const pending = records.filter(r=>!r.verified);
+  if(pendEl && pending.length){
+    pendEl.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">` +
+      pending.slice(0,5).map(r=>{
+        const daysLeft = Math.ceil((new Date(r.checkDate) - new Date(today)) / 86400000);
+        const label    = daysLeft > 0 ? `${daysLeft}天後驗證` : '今日可驗證';
+        const col      = daysLeft <= 0 ? 'var(--gold)' : 'var(--text3)';
+        return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <span style="color:var(--text2)">策略${r.stratKey} · ${r.date} · ${r.stocks.length}支</span>
+          <span style="color:${col}">${label}</span>
+        </div>`;
+      }).join('') + `</div>`;
+  } else if(pendEl){
+    pendEl.innerHTML = '';
+  }
+}
+
+// 取得回測修正摘要（給 AI 的 context）
+function getBacktestSummary(stratKey){
+  const stats = calcStratWinRates();
+  const s     = stats[stratKey];
+  if(!s || s.winRate === null) return '';
+  const dir = s.winRate >= 60 ? '繼續強化' : s.winRate >= 45 ? '小幅調整' : '大幅修正';
+  return `
+
+【本機回測修正】策略${stratKey}已驗證${s.total}次，實測勝率${s.winRate}%（${s.wins}勝/${s.losses}敗）。請${dir}此策略的選股邏輯，提升精準度。`;
+}
+
+// 每次進入策略頁自動觸發到期驗證
+function autoCheckBacktest(){
+  const records = getBtRecords();
+  const today   = todayStr();
+  const hasExpired = records.some(r=>!r.verified && r.checkDate <= today);
+  if(hasExpired){
+    console.log('[Backtest] auto-checking expired records...');
+    checkBacktestNow();
+  } else {
+    renderBacktestPanel();
   }
 }
 
