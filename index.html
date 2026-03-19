@@ -1810,8 +1810,10 @@ function scheduleAutoRefresh(){
 // 通用 FinMind fetch
 // ── fmFetch：帶快取 + in-flight dedup ────────────────
 // 同一 URL 30秒內回傳快取，並行請求自動共用同一個 Promise
-const _fmCache   = new Map(); // url → {data, ts, ttl}
-const _fmFlight  = new Map(); // url → Promise（in-flight dedup）
+const _fmCache       = new Map(); // url → {data, ts, ttl}
+const _fmFlight      = new Map(); // url → Promise（in-flight dedup）
+const _intradayCache = new Map(); // stockId → {data, ts}
+const INTRADAY_TTL   = 30 * 1000; // 盤中 30 秒更新
 // 每 5 分鐘清除過期 cache，防記憶體持續增長
 setInterval(()=>{
   const now = Date.now();
