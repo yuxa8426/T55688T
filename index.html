@@ -965,37 +965,35 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <div class="tbox"><div class="ti">📅</div><div class="tl">資料更新</div><div class="tv gold">每日盤後</div></div>
     </div>
 
-    <!-- 20日法人籌碼趨勢折線圖 -->
+    <!-- 20日法人籌碼長條圖（外資/投信雙欄） -->
     <div style="margin-top:14px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
         <span id="chipTrendTitle">法人籌碼趨勢（近20日）</span>
         <div style="display:flex;gap:10px;font-size:10px;color:var(--text3)">
-          <span><span style="display:inline-block;width:10px;height:2px;background:#7c5cfc;vertical-align:middle;margin-right:3px"></span>外資</span>
-          <span><span style="display:inline-block;width:10px;height:2px;background:#00d4aa;vertical-align:middle;margin-right:3px"></span>投信</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:#ff4c6a;border-radius:2px;vertical-align:middle;margin-right:3px"></span>買超</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:#00d4aa;border-radius:2px;vertical-align:middle;margin-right:3px"></span>賣超</span>
         </div>
       </div>
-      <!-- SVG 趨勢圖 -->
-      <div style="position:relative;height:90px;background:rgba(0,0,0,.2);border-radius:10px;padding:8px 10px">
-        <svg id="chipTrendSvg" width="100%" height="74" style="overflow:visible">
-          <!-- 零軸線 -->
-          <line id="chipZeroLine" x1="0" y1="37" x2="100%" y2="37" stroke="rgba(255,255,255,.1)" stroke-width="1" stroke-dasharray="4 3"/>
-          <!-- 外資折線 -->
-          <polyline id="chipForeignLine" fill="none" stroke="#7c5cfc" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points=""/>
-          <polyline id="chipForeignFill" fill="url(#chipForeignGrad)" stroke="none" points=""/>
-          <!-- 投信折線 -->
-          <polyline id="chipTrustLine" fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points=""/>
-          <defs>
-            <linearGradient id="chipForeignGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#7c5cfc" stop-opacity=".25"/>
-              <stop offset="100%" stop-color="#7c5cfc" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <!-- 日期標籤 -->
-        <div id="chipTrendDates" style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px"></div>
-        <!-- Hover tooltip -->
-        <div id="chipTrendTip" style="display:none;position:absolute;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap"></div>
+      <!-- 外資長條圖 -->
+      <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:#a080ff;font-weight:700;width:22px;flex-shrink:0">外資</span>
+        <div style="flex:1;position:relative;height:48px;background:rgba(0,0,0,.2);border-radius:8px;overflow:hidden">
+          <div id="chipForeignBars" style="display:flex;align-items:flex-end;height:100%;padding:0 2px;gap:1px"></div>
+          <div id="chipForeignZero" style="position:absolute;bottom:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.15)"></div>
+        </div>
       </div>
+      <!-- 投信長條圖 -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:#00d4aa;font-weight:700;width:22px;flex-shrink:0">投信</span>
+        <div style="flex:1;position:relative;height:48px;background:rgba(0,0,0,.2);border-radius:8px;overflow:hidden">
+          <div id="chipTrustBars" style="display:flex;align-items:flex-end;height:100%;padding:0 2px;gap:1px"></div>
+          <div id="chipTrustZero" style="position:absolute;bottom:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.15)"></div>
+        </div>
+      </div>
+      <!-- 日期標籤 -->
+      <div id="chipTrendDates" style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:4px;padding:0 28px"></div>
+      <!-- Hover tooltip -->
+      <div id="chipTrendTip" style="display:none;position:fixed;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:11px;pointer-events:none;z-index:9999;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.5)"></div>
     </div>
 
   <div id="chipSource" style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">📊 資料載入中…</div>
@@ -4179,119 +4177,96 @@ function renderChips(data, label='近60日'){
 // 大戶籌碼 20日趨勢折線圖
 // ════════════════════════════════════════════════════
 function renderChipTrendChart(foreignArr, trustArr, dates){
-  const svg = document.getElementById('chipTrendSvg');
-  if(!svg) return;
+  const fBarsEl = document.getElementById('chipForeignBars');
+  const tBarsEl = document.getElementById('chipTrustBars');
+  const datesEl = document.getElementById('chipTrendDates');
+  const titleEl = document.getElementById('chipTrendTitle');
+  const tipEl   = document.getElementById('chipTrendTip');
+  if(!fBarsEl || !tBarsEl) return;
 
-  const allVals = [...foreignArr, ...trustArr].filter(v=>!isNaN(v) && v !== 0);
-  if(!allVals.length){
-    // 資料全為0，顯示提示
-    const datesEl = document.getElementById('chipTrendDates');
+  const n = Math.max(foreignArr.length, trustArr.length);
+  if(n < 1){
     if(datesEl) datesEl.innerHTML = '<span style="color:var(--text3)">近期無法人資料</span>';
     return;
   }
 
-  // 自動縮放：超過1000張以千張顯示
-  const maxRaw = Math.max(...allVals.map(Math.abs));
-  const useK   = maxRaw >= 500; // 超過500張用千張
-  const scale  = useK ? 1000 : 1;
-  const fArr   = foreignArr.map(v => v / scale);
-  const tArr   = trustArr.map(v => v / scale);
-  const unit   = useK ? '千張' : '張';
+  // 單位格式化
+  const fmtV = v => {
+    const abs = Math.abs(v), s = v >= 0 ? '+' : '-';
+    if(abs >= 10000) return s+(abs/10000).toFixed(1)+'萬張';
+    if(abs >= 1000)  return s+(abs/1000).toFixed(1)+'千張';
+    return s+abs+'張';
+  };
 
-  // 用固定 viewBox 座標系（300x74），不依賴 offsetWidth，避免初始化寬度為0的問題
-  const W = 300;
-  const H = 74;
-  const PAD = { t:4, b:4, l:4, r:4 };
-  const chartW = W - PAD.l - PAD.r;
-  const chartH = H - PAD.t - PAD.b;
-  const n = Math.max(fArr.length, tArr.length);
-  if(n < 2) return;
-
-  // 設定 SVG viewBox 固定為 300x74，並讓 SVG 自動拉伸至容器寬度
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.setAttribute('preserveAspectRatio', 'none');
-
-  // 值域（縮放後）
-  const allScaled = [...fArr, ...tArr].filter(v=>!isNaN(v));
-  const maxV = Math.max(...allScaled.map(Math.abs), 0.1);
-  const mid  = H / 2;
-
-  // X 位置
-  const xPos = i => PAD.l + (i / (n-1)) * chartW;
-  // Y 位置（正數=往上=紅色區，負數=往下=綠色區）
-  const yPos = v => mid - (v / maxV) * (chartH * 0.45);
-
-  // 更新零軸線
-  const zeroLine = document.getElementById('chipZeroLine');
-  if(zeroLine){
-    zeroLine.setAttribute('x1', '0');
-    zeroLine.setAttribute('y1', mid);
-    zeroLine.setAttribute('x2', W);
-    zeroLine.setAttribute('y2', mid);
-  }
-
-  // 繪製折線（使用縮放後的 fArr / tArr）
-  function makePts(arr){
-    return arr.map((v,i)=>`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ');
-  }
-  function makeFillPts(arr){
-    const pts = arr.map((v,i)=>`${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`);
-    return `${xPos(0).toFixed(1)},${mid} ${pts.join(' ')} ${xPos(arr.length-1).toFixed(1)},${mid}`;
-  }
-
-  const fLine = document.getElementById('chipForeignLine');
-  const fFill = document.getElementById('chipForeignFill');
-  const tLine = document.getElementById('chipTrustLine');
-  if(fLine) fLine.setAttribute('points', makePts(fArr));
-  if(fFill) fFill.setAttribute('points', makeFillPts(fArr));
-  if(tLine) tLine.setAttribute('points', makePts(tArr));
-
-  // 更新標題顯示單位
-  const titleEl = document.getElementById('chipTrendTitle');
+  // 標題單位
+  const allAbs = [...foreignArr, ...trustArr].map(Math.abs).filter(v=>v>0);
+  const maxRaw = allAbs.length ? Math.max(...allAbs) : 0;
+  const unit = maxRaw >= 500 ? '千張' : '張';
   if(titleEl) titleEl.textContent = `法人籌碼趨勢（近20日 · 單位:${unit}）`;
 
-  // 日期標籤（首/中/末）
-  const datesEl = document.getElementById('chipTrendDates');
-  if(datesEl && dates.length){
-    const first = dates[0]?.slice(5)||'';
-    const mid2  = dates[Math.floor(dates.length/2)]?.slice(5)||'';
-    const last  = dates[dates.length-1]?.slice(5)||'';
-    datesEl.innerHTML = `<span>${first}</span><span>${mid2}</span><span>${last}</span>`;
+  // 繪製單欄長條圖
+  function renderBars(el, arr, maxV){
+    el.innerHTML = '';
+    arr.forEach((v, i)=>{
+      const pct  = maxV > 0 ? Math.min(Math.abs(v)/maxV*46, 46) : 0; // 最高46%（留空間給零軸）
+      const isUp = v >= 0;
+      const bar  = document.createElement('div');
+      bar.style.cssText = [
+        'flex:1',
+        'display:flex',
+        'flex-direction:column',
+        `justify-content:${isUp ? 'flex-end' : 'flex-start'}`,
+        'align-items:center',
+        'height:100%',
+        'cursor:pointer',
+        'position:relative',
+      ].join(';');
+
+      const inner = document.createElement('div');
+      inner.style.cssText = [
+        'width:70%',
+        `height:${Math.max(pct, pct>0?2:0)}%`,
+        `background:${isUp ? 'var(--red)' : 'var(--green)'}`,
+        'border-radius:1px',
+        `margin-${isUp ? 'top' : 'bottom'}:50%`,  // 從零軸開始往上/往下
+        'transition:height .4s ease',
+      ].join(';');
+      // 修正：正值從零軸向上，負值從零軸向下
+      inner.style.marginTop   = isUp  ? 'auto' : '50%';
+      inner.style.marginBottom= !isUp ? 'auto' : '50%';
+
+      bar.appendChild(inner);
+
+      // 綁定 tooltip
+      const showTip = (e) => {
+        if(!tipEl) return;
+        tipEl.style.display = 'block';
+        tipEl.innerHTML =
+          `<div style="font-size:10px;color:var(--text3);margin-bottom:3px">${dates[i]||''}</div>` +
+          `<strong style="color:${isUp?'var(--red)':'var(--green)'}">${fmtV(v)}</strong>`;
+        const r = bar.getBoundingClientRect();
+        tipEl.style.left = (r.left + r.width/2 - 40) + 'px';
+        tipEl.style.top  = (r.top - 52 + window.scrollY) + 'px';
+      };
+      bar.addEventListener('mouseover', showTip);
+      bar.addEventListener('touchstart', showTip, {passive:true});
+      bar.addEventListener('mouseleave', ()=>{ if(tipEl) tipEl.style.display='none'; });
+      el.appendChild(bar);
+    });
   }
 
-  // Hover tooltip
-  const tipEl = document.getElementById('chipTrendTip');
-  const svgEl = svg;
-  svgEl.onmousemove = svgEl.ontouchmove = (e)=>{
-    if(!tipEl) return;
-    const rect = svgEl.getBoundingClientRect();
-    const scaleX = W / rect.width; // viewBox 座標 vs 實際像素的比例
-    const cxPx   = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cx     = cxPx * scaleX;  // 轉換到 viewBox 座標
-    const len    = Math.max(foreignArr.length, trustArr.length);
-    const idx    = Math.min(len-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (len-1))));
-    // tooltip 顯示原始張數
-    const fv   = foreignArr[idx] || 0;
-    const tv   = trustArr[idx]   || 0;
-    const dt   = dates[idx] || '';
-    const fmtV = v => {
-      const abs = Math.abs(v);
-      const sign = v >= 0 ? '+' : '-';
-      if(abs >= 10000) return sign + (abs/10000).toFixed(1) + '萬張';
-      if(abs >= 1000)  return sign + (abs/1000).toFixed(1)  + '千張';
-      return sign + abs + '張';
-    };
-    const fStr = fmtV(fv);
-    const tStr = fmtV(tv);
-    tipEl.innerHTML =
-      `<div style="color:var(--text3);margin-bottom:3px">${dt}</div>` +
-      `<div style="color:#a080ff">外資 <strong style="color:${fv>=0?'var(--red)':'var(--green)'}">${fStr}</strong></div>` +
-      `<div style="color:#00d4aa">投信 <strong style="color:${tv>=0?'var(--red)':'var(--green)'}">${tStr}</strong></div>`;
-    tipEl.style.display = 'block';
-    tipEl.style.left    = Math.min(cxPx+8, rect.width-120)+'px';
-    tipEl.style.top     = '4px';
-  };
-  svgEl.onmouseleave = svgEl.ontouchend = ()=>{ if(tipEl) tipEl.style.display='none'; };
+  const fMax = Math.max(...foreignArr.map(Math.abs), 1);
+  const tMax = Math.max(...trustArr.map(Math.abs),   1);
+  renderBars(fBarsEl, foreignArr, fMax);
+  renderBars(tBarsEl, trustArr,   tMax);
+
+  // 日期標籤（首/中/末）
+  if(datesEl && dates.length){
+    const first = dates[0]?.slice(5)||'';
+    const mid   = dates[Math.floor(dates.length/2)]?.slice(5)||'';
+    const last  = dates[dates.length-1]?.slice(5)||'';
+    datesEl.innerHTML = `<span>${first}</span><span>${mid}</span><span>${last}</span>`;
+  }
 }
 
 function renderChipsPlaceholder(){
