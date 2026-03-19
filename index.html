@@ -4165,7 +4165,10 @@ function renderChips(data, label='近60日'){
   markFresh('chips');
 
   // 繪製20日法人趨勢折線圖
-  renderChipTrendChart(data.foreignNetArr||[], data.trustNetArr||[], data.sortedDates20||[]);
+  // 使用 setTimeout 確保 DOM 已渲染後再計算寬度
+  setTimeout(()=>{
+    renderChipTrendChart(data.foreignNetArr||[], data.trustNetArr||[], data.sortedDates20||[]);
+  }, 100);
 }
 
 
@@ -4193,13 +4196,18 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   const tArr   = trustArr.map(v => v / scale);
   const unit   = useK ? '千張' : '張';
 
-  const W = svg.parentElement.offsetWidth - 20;
+  // 用固定 viewBox 座標系（300x74），不依賴 offsetWidth，避免初始化寬度為0的問題
+  const W = 300;
   const H = 74;
   const PAD = { t:4, b:4, l:4, r:4 };
   const chartW = W - PAD.l - PAD.r;
   const chartH = H - PAD.t - PAD.b;
   const n = Math.max(fArr.length, tArr.length);
   if(n < 2) return;
+
+  // 設定 SVG viewBox 固定為 300x74，並讓 SVG 自動拉伸至容器寬度
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
 
   // 值域（縮放後）
   const allScaled = [...fArr, ...tArr].filter(v=>!isNaN(v));
@@ -4214,7 +4222,9 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   // 更新零軸線
   const zeroLine = document.getElementById('chipZeroLine');
   if(zeroLine){
+    zeroLine.setAttribute('x1', '0');
     zeroLine.setAttribute('y1', mid);
+    zeroLine.setAttribute('x2', W);
     zeroLine.setAttribute('y2', mid);
   }
 
@@ -4253,9 +4263,11 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   svgEl.onmousemove = svgEl.ontouchmove = (e)=>{
     if(!tipEl) return;
     const rect = svgEl.getBoundingClientRect();
-    const cx   = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const len  = Math.max(foreignArr.length, trustArr.length);
-    const idx  = Math.min(len-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (len-1))));
+    const scaleX = W / rect.width; // viewBox 座標 vs 實際像素的比例
+    const cxPx   = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cx     = cxPx * scaleX;  // 轉換到 viewBox 座標
+    const len    = Math.max(foreignArr.length, trustArr.length);
+    const idx    = Math.min(len-1, Math.max(0, Math.round((cx - PAD.l) / chartW * (len-1))));
     // tooltip 顯示原始張數
     const fv   = foreignArr[idx] || 0;
     const tv   = trustArr[idx]   || 0;
@@ -4274,7 +4286,7 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
       `<div style="color:#a080ff">外資 <strong style="color:${fv>=0?'var(--red)':'var(--green)'}">${fStr}</strong></div>` +
       `<div style="color:#00d4aa">投信 <strong style="color:${tv>=0?'var(--red)':'var(--green)'}">${tStr}</strong></div>`;
     tipEl.style.display = 'block';
-    tipEl.style.left    = Math.min(cx+8, rect.width-120)+'px';
+    tipEl.style.left    = Math.min(cxPx+8, rect.width-120)+'px';
     tipEl.style.top     = '4px';
   };
   svgEl.onmouseleave = svgEl.ontouchend = ()=>{ if(tipEl) tipEl.style.display='none'; };
