@@ -9,6 +9,39 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="股析">
 <meta name="theme-color" content="#0a0a0f">
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot }
+      from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    // ── 請填入你的 Firebase 設定 ────────────────────────
+    // 取得方式：Firebase Console → 專案設定 → 你的應用程式 → firebaseConfig
+    const firebaseConfig = {
+      apiKey:            "YOUR_API_KEY",
+      authDomain:        "YOUR_PROJECT.firebaseapp.com",
+      projectId:         "YOUR_PROJECT_ID",
+      storageBucket:     "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId:             "YOUR_APP_ID",
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    // 掛載到 window，供全域 JS 呼叫
+    window._fb = { auth, db, GoogleAuthProvider, signInWithPopup, signOut,
+                   onAuthStateChanged, doc, setDoc, getDoc, onSnapshot };
+
+    // 監聽登入狀態
+    onAuthStateChanged(auth, user => {
+      window._fbUser = user || null;
+      if(typeof onFirebaseAuthChange === 'function') onFirebaseAuthChange(user);
+    });
+  </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1324,6 +1357,33 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <div id="profLinkedHint" style="display:none;margin-top:8px;font-size:11px;color:var(--text3)">
       ⚡ 此設定已連動 AI 深度分析模組
     </div>
+    <!-- Google 登入狀態 -->
+    <div id="fbAuthSection" style="margin-top:16px">
+      <!-- 未登入 -->
+      <div id="fbSignedOut" style="display:none">
+        <button onclick="fbSignIn()" style="display:flex;align-items:center;gap:8px;margin:0 auto;background:#fff;color:#333;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.3)">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18">
+          使用 Google 帳號登入
+        </button>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">登入後資料同步至雲端，換裝置也能使用</div>
+      </div>
+      <!-- 已登入 -->
+      <div id="fbSignedIn" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px">
+          <img id="fbUserPhoto" src="" width="28" height="28" style="border-radius:50%;display:none">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--green)" id="fbUserEmail"></div>
+            <div style="font-size:10px;color:var(--text3)">✅ 資料已雲端同步</div>
+          </div>
+          <button onclick="fbSignOut()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit">登出</button>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+          <button onclick="fbSyncNow()" style="background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:11px;padding:6px 14px;cursor:pointer;font-family:inherit">☁️ 立即同步</button>
+          <button onclick="fbPullData()" style="background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px;color:#a080ff;font-size:11px;padding:6px 14px;cursor:pointer;font-family:inherit">📥 從雲端還原</button>
+        </div>
+        <div id="fbSyncStatus" style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center"></div>
+      </div>
+    </div>
   </div>
   <div class="pref-item" onclick="editProfile()">
     <div class="pref-icon" style="background:rgba(0,212,170,.12)">✏️</div>
@@ -1336,6 +1396,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <div class="pref-item" onclick="showToast('通知設定開發中')"><div class="pref-icon" style="background:rgba(0,212,170,.12)">🔔</div><div><div class="pref-t">通知設定</div><div class="pref-s">價格警報、法人動向</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="clearAllData()"><div class="pref-icon" style="background:rgba(255,76,106,.12)">🗑️</div><div><div class="pref-t">清除所有資料</div><div class="pref-s">自選股、投組、設定</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="showToast('股析 StockAI v2.0 · FinMind 真實資料')"><div class="pref-icon" style="background:rgba(245,200,66,.12)">📡</div><div><div class="pref-t">數據來源</div><div class="pref-s">FinMind · TWSE · 每日更新</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
+  <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
   <!-- 編輯 Modal -->
   <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
     <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto">
@@ -1388,6 +1449,85 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 // ════════════════════════════════════════════════════════
 
 const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+
+// ════════════════════════════════════════════════════
+// Cloudflare KV 雲端同步層
+// 自動為每個裝置/使用者生成唯一 UID
+// 所有個人資料同時存 localStorage（快速讀取）+ KV（跨裝置同步）
+// ════════════════════════════════════════════════════
+
+// 取得或生成裝置 UID（每個裝置唯一，儲存在 localStorage）
+function getUID(){
+  let uid = localStorage.getItem('stockai_uid');
+  if(!uid){
+    // 生成 16 位隨機 ID
+    uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,9);
+    localStorage.setItem('stockai_uid', uid);
+  }
+  return uid;
+}
+
+// KV API 基礎函式
+const KV_KEYS = ['profile', 'backtest']; // 需同步的資料鍵
+
+async function kvGet(key){
+  if(!API) return null;
+  try{
+    const r = await fetch(`${API}/kv?uid=${getUID()}&key=${key}`, { method:'GET' });
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.exists ? j.data : null;
+  }catch(e){ return null; }
+}
+
+async function kvPut(key, data){
+  if(!API) return;
+  try{
+    await fetch(`${API}/kv?uid=${getUID()}&key=${key}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }catch(e){ console.warn('[KV put]', key, e.message); }
+}
+
+// 帶 debounce 的同步（避免頻繁寫入）
+const _kvDebounce = {};
+function kvPutDebounced(key, data, delay=2000){
+  clearTimeout(_kvDebounce[key]);
+  _kvDebounce[key] = setTimeout(()=> kvPut(key, data), delay);
+}
+
+// 手動立即同步（我的頁面按鈕）
+async function kvSyncNow(){
+  const statusEl = document.getElementById('kvSyncStatus');
+  if(statusEl) statusEl.textContent = '☁️ 同步中…';
+  await kvSyncDown();
+  loadProfile();
+  renderBacktestPanel();
+  if(statusEl) statusEl.innerHTML = `裝置 ID：<span id="kvUidDisplay">${getUID().slice(0,8)}…</span>`;
+  showToast('✅ 雲端資料已同步');
+}
+
+// 初始化 UID 顯示
+function initKvUidDisplay(){
+  const el = document.getElementById('kvUidDisplay');
+  if(el) el.textContent = getUID().slice(0,8)+'…';
+}
+
+// 啟動時從 KV 拉取最新資料（覆蓋本地舊資料）
+async function kvSyncDown(){
+  if(!API) return;
+  try{
+    const [profile, backtest] = await Promise.all([
+      kvGet('profile'),
+      kvGet('backtest'),
+    ]);
+    if(profile)  localStorage.setItem('stockai_profile',  JSON.stringify(profile));
+    if(backtest) localStorage.setItem('stockai_backtest', JSON.stringify(backtest));
+    console.log('[KV] synced down:', profile?'profile':'', backtest?'backtest':'');
+  }catch(e){ console.warn('[KV sync]', e.message); }
+}
 
 // ── 全域工具函式 ──────────────────────────────────────
 function setEl(id, val, color){
@@ -6144,7 +6284,10 @@ function getBtRecords(){
   try{ return JSON.parse(localStorage.getItem(BT_KEY)) || []; }
   catch(e){ return []; }
 }
-function saveBtRecords(records){ localStorage.setItem(BT_KEY, JSON.stringify(records)); }
+function saveBtRecords(records){
+  localStorage.setItem(BT_KEY, JSON.stringify(records));
+  kvPutDebounced('backtest', records); // 同步到 KV 雲端
+}
 
 // 儲存本次推薦（記錄推薦時的股價 + 推薦日期）
 async function recordStratRecommend(stratKey, stocks){
@@ -6896,7 +7039,9 @@ function saveProfile(){
   const bio    = document.getElementById('pBio').value.trim()||'';
   const risk   = document.getElementById('pRisk')?.value    || 'mid';
   const capital= document.getElementById('pCapital')?.value || 'mid';
-  localStorage.setItem(PROF_KEY, JSON.stringify({name,bio,risk,capital}));
+  const profileData = {name,bio,risk,capital};
+  localStorage.setItem(PROF_KEY, JSON.stringify(profileData));
+  kvPutDebounced('profile', profileData); // 同步到 KV 雲端
   document.getElementById('profileModal').style.display='none';
   loadProfile();
   showToast('個人資料已儲存');
@@ -6904,7 +7049,9 @@ function saveProfile(){
 
 function clearAllData(){
   if(!confirm('確定清除所有資料（自選股、投組、設定）？')) return;
-  [WL_KEY, PROF_KEY].forEach(k=>localStorage.removeItem(k));
+  [WL_KEY, PROF_KEY, BT_KEY, 'stockai_uid'].forEach(k=>localStorage.removeItem(k));
+  // 重新生成 UID（相當於新帳號）
+  getUID();
   loadProfile();
   renderWatchlist();
   renderHomeWatchlist();
@@ -6940,6 +7087,11 @@ window.addEventListener('load', async ()=>{
   loadProfile();
   renderHomeWatchlist();
   iosBanner();
+  // 背景同步雲端資料（不阻塞啟動）
+  kvSyncDown().then(()=>{
+    loadProfile();      // 用最新雲端資料重新渲染
+    renderBacktestPanel(); // 更新回測面板
+  });
   loadStockList(); // 背景載入完整台股清單（約1,800支）
 
   // 第 1 波：主圖表（台積電）
@@ -6960,6 +7112,136 @@ window.addEventListener('load', async ()=>{
 });
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+// ════════════════════════════════════════════════════
+// Firebase 雲端同步模組
+// 同步資料：個人設定(PROF_KEY) + 回測記錄(BT_KEY)
+// ════════════════════════════════════════════════════
+
+// 登入狀態變更回調
+function onFirebaseAuthChange(user){
+  const outEl = document.getElementById('fbSignedOut');
+  const inEl  = document.getElementById('fbSignedIn');
+  if(!outEl || !inEl) return;
+
+  if(user){
+    // 已登入
+    outEl.style.display = 'none';
+    inEl.style.display  = 'block';
+    const emailEl = document.getElementById('fbUserEmail');
+    const photoEl = document.getElementById('fbUserPhoto');
+    if(emailEl) emailEl.textContent = user.displayName || user.email || '';
+    if(photoEl && user.photoURL){
+      photoEl.src = user.photoURL;
+      photoEl.style.display = 'block';
+    }
+    // 登入後自動從雲端拉取最新資料
+    fbPullData();
+  } else {
+    // 未登入
+    outEl.style.display = 'block';
+    inEl.style.display  = 'none';
+  }
+}
+
+// Google 登入
+async function fbSignIn(){
+  const fb = window._fb;
+  if(!fb){ showToast('Firebase 尚未初始化，請確認設定'); return; }
+  try{
+    const provider = new fb.GoogleAuthProvider();
+    await fb.signInWithPopup(fb.auth, provider);
+    showToast('✅ 登入成功');
+  }catch(e){
+    console.error('[Firebase]', e);
+    if(e.code === 'auth/popup-blocked')
+      showToast('⚠️ 請允許彈出視窗後重試');
+    else
+      showToast('登入失敗：' + e.message);
+  }
+}
+
+// 登出
+async function fbSignOut(){
+  const fb = window._fb;
+  if(!fb) return;
+  await fb.signOut(fb.auth);
+  showToast('已登出');
+}
+
+// 取得 Firestore 文件路徑（每個 user 有自己的文件）
+function fbUserDoc(){
+  const fb   = window._fb;
+  const user = window._fbUser;
+  if(!fb || !user) return null;
+  return fb.doc(fb.db, 'users', user.uid);
+}
+
+// 上傳資料到雲端（push）
+async function fbSyncNow(){
+  const ref = fbUserDoc();
+  if(!ref){ showToast('請先登入'); return; }
+  const statusEl = document.getElementById('fbSyncStatus');
+  if(statusEl) statusEl.textContent = '⏳ 同步中…';
+  try{
+    const payload = {
+      profile:   localStorage.getItem(PROF_KEY)   || '{}',
+      backtest:  localStorage.getItem(BT_KEY)      || '[]',
+      updatedAt: new Date().toISOString(),
+    };
+    await window._fb.setDoc(ref, payload, { merge: true });
+    if(statusEl) statusEl.textContent = '✅ 已同步至雲端 ' + new Date().toLocaleTimeString('zh-TW');
+    showToast('✅ 資料已同步至雲端');
+  }catch(e){
+    console.error('[Firebase sync]', e);
+    if(statusEl) statusEl.textContent = '❌ 同步失敗：' + e.message;
+    showToast('同步失敗：' + e.message);
+  }
+}
+
+// 從雲端下載資料（pull）
+async function fbPullData(){
+  const ref = fbUserDoc();
+  if(!ref) return;
+  const statusEl = document.getElementById('fbSyncStatus');
+  if(statusEl) statusEl.textContent = '⏳ 從雲端還原中…';
+  try{
+    const snap = await window._fb.getDoc(ref);
+    if(!snap.exists()){
+      if(statusEl) statusEl.textContent = '雲端尚無資料，將在下次同步後建立';
+      // 雲端沒資料，把本機資料推上去
+      await fbSyncNow();
+      return;
+    }
+    const data = snap.data();
+    // 合併策略：雲端資料較新 → 覆蓋本機
+    if(data.profile)  localStorage.setItem(PROF_KEY,  data.profile);
+    if(data.backtest) localStorage.setItem(BT_KEY,    data.backtest);
+    // 重新渲染
+    loadProfile();
+    renderBacktestPanel();
+    if(statusEl) statusEl.textContent = '✅ 已從雲端還原 · ' + (data.updatedAt||'').slice(0,10);
+    showToast('📥 資料已從雲端還原');
+  }catch(e){
+    console.error('[Firebase pull]', e);
+    if(statusEl) statusEl.textContent = '❌ 還原失敗：' + e.message;
+  }
+}
+
+// 自動同步：每次儲存個人設定後推送到雲端
+const _origSaveProfile = saveProfile;
+saveProfile = function(){
+  _origSaveProfile();
+  // 登入狀態下自動同步
+  if(window._fbUser) setTimeout(fbSyncNow, 500);
+};
+
+// 自動同步：每次回測記錄更新後推送到雲端
+const _origSaveBtRecords = saveBtRecords;
+saveBtRecords = function(records){
+  _origSaveBtRecords(records);
+  if(window._fbUser) setTimeout(fbSyncNow, 500);
+};
 </script>
 </body>
 </html>
