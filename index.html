@@ -2200,75 +2200,97 @@ async function fmShareholder(stockId='2330', days=60){
 // 來源1：TWSE mis（盤中即時，每5秒）via allorigins proxy
 // 來源2：FinMind TaiwanStockPrice TAIEX（日K收盤，盤後）
 async function fmTWSEIndex(){
-  // 來源1：TWSE mis 即時
-  const misSrc = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0`;
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(misSrc)}`,
-    `https://corsproxy.io/?${encodeURIComponent(misSrc)}`,
-  ];
-  for(const proxy of proxies){
-    try{
-      const res  = await fetchWithTimeout(proxy, 8000);
-      const wrap = await res.json();
-      const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
-      const item = body?.msgArray?.[0];
-      if(!item) continue;
-      const price  = parseFloat(item.z || item.y || 0);   // z=最新成交, y=昨收
-      const prev   = parseFloat(item.y || 0);
-      const open   = parseFloat(item.o || 0);
-      if(price <= 0) continue;
-      const change    = price - prev;
-      const changePct = prev > 0 ? (change/prev*100) : 0;
-      const t = item.t || '';   // HH:MM:SS 盤中時間
-      console.log('[TWSE mis] 加權指數', price, t);
-      return {
-        price,
-        index:     price.toLocaleString(),
-        change:    change.toFixed(0),
-        changePct: changePct.toFixed(2),
-        open,
-        high:      parseFloat(item.h||price),
-        low:       parseFloat(item.l||price),
-        time:      t,         // 盤中時間（即時）
-        source:    'TWSE',
-        isRealtime: true,
-      };
-    }catch(e){
-      console.warn('[TWSE mis]', e.message);
-    }
+  const misSrc = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0';
+
+  function parseMis(body){
+    const item = body?.msgArray?.[0];
+    if(!item) return null;
+    const price = parseFloat(item.z || item.y || 0);
+    const prev  = parseFloat(item.y || 0);
+    if(price <= 0) return null;
+    const change    = price - prev;
+    const changePct = prev > 0 ? (change/prev*100) : 0;
+    return { price, index:price.toLocaleString(), change:change.toFixed(0),
+             changePct:changePct.toFixed(2), open:parseFloat(item.o||0),
+             high:parseFloat(item.h||price), low:parseFloat(item.l||price),
+             time:item.t||'', source:'TWSE', isRealtime:true };
   }
-  // 來源2：FinMind 日K（盤後備援）
-  const data = await fmFetch({
-    dataset:    'TaiwanStockPrice',
-    data_id:    'TAIEX',
-    start_date: nDaysAgo(5),
-    end_date:   nDaysAgo(0),
-  });
-  if(!data || !data.length) return null;
-  const latest = data[data.length-1];
-  const prev   = data.length>1 ? data[data.length-2].close : latest.open;
-  const price  = parseFloat(latest.close);
-  const change = price - parseFloat(prev);
-  return {
-    price,
-    index:     price.toLocaleString(),
-    change:    change.toFixed(0),
-    changePct: (change/parseFloat(prev)*100).toFixed(2),
-    date:      latest.date,
-    source:    'FinMind',
-    isRealtime: false,
-  };
+
+  // 來源1：Worker /intraday 代理 TWSE mis（最穩定）
+  if(API){
+    try{
+      const res = await fetchWithTimeout(
+        `${API}/intraday?symbol=${encodeURIComponent('tse_t00.tw')}&src=twse`, 8000);
+      if(res.ok){
+        const body = await res.json();
+        const d = parseMis(body);
+        if(d){ console.log('[TWSE] Worker OK', d.price); return d; }
+      }
+    }catch(e){ console.warn('[TWSE] Worker:', e.message); }
+  }
+
+  // 來源2：allorigins proxy
+  try{
+    const res  = await fetchWithTimeout(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(misSrc)}`, 6000);
+    const wrap = await res.json();
+    const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
+    const d = parseMis(body);
+    if(d){ console.log('[TWSE] allorigins OK', d.price); return d; }
+  }catch(e){ console.warn('[TWSE] allorigins:', e.message); }
+
+  // 來源3：FinMind 日K 盤後備援
+  try{
+    const data = await fmFetch({
+      dataset:'TaiwanStockPrice', data_id:'TAIEX',
+      start_date:nDaysAgo(5), end_date:nDaysAgo(0),
+    });
+    if(data?.length){
+      const latest = data[data.length-1];
+      const prev   = data.length>1 ? data[data.length-2].close : latest.open;
+      const price  = parseFloat(latest.close);
+      const change = price - parseFloat(prev);
+      return { price, index:price.toLocaleString(), change:change.toFixed(0),
+               changePct:(change/parseFloat(prev)*100).toFixed(2),
+               date:latest.date, source:'FinMind', isRealtime:false };
+    }
+  }catch(e){}
+
+  return null;
 }
 
 // ── 相容層：舊函式名稱對應到 FinMind ─────────────────
 async function yahooDirectQuote(symbol){
-  // 把 Yahoo 格式（2330.TW / ^VIX）轉換
-  if(symbol === '^VIX'){
-    // VIX 仍需 Yahoo，用備援值
-    return FALLBACK['^VIX'] || { price:18.42, changePct:1.2 };
+  // 台股用 FinMind
+  if(!symbol.startsWith('^') && !symbol.endsWith('.TW') === false){
+    const id = symbol.replace('.TW','');
+    return await fmQuote(id);
   }
-  const id = symbol.replace('.TW','');
-  return await fmQuote(id);
+  // 美股指數 / ^VIX 走 Worker /intraday（Yahoo Finance）
+  if(API){
+    try{
+      const res = await fetchWithTimeout(
+        `${API}/intraday?symbol=${encodeURIComponent(symbol)}`, 8000);
+      if(res.ok){
+        const body = await res.json();
+        const result = body?.chart?.result?.[0];
+        if(result){
+          const meta  = result.meta || {};
+          const price = meta.regularMarketPrice || meta.chartPreviousClose || 0;
+          const prev  = meta.chartPreviousClose || meta.previousClose || price;
+          if(price > 0){
+            return {
+              price,
+              changePct: prev > 0 ? (price - prev) / prev * 100 : 0,
+              change:    price - prev,
+            };
+          }
+        }
+      }
+    }catch(e){ console.warn('[Yahoo]', symbol, e.message); }
+  }
+  // 備援：FALLBACK 靜態數值
+  return FALLBACK[symbol] || null;
 }
 async function yahooDirectHistory(symbol, range, interval){
   const id   = symbol.replace('.TW','');
