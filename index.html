@@ -6739,43 +6739,50 @@ async function fetchOfficialDisposeList(){
   if(_officialDisposeCache && Date.now()-_officialDisposeCacheTs < OFFICIAL_DISPOSE_TTL)
     return _officialDisposeCache;
 
-  const result = { dispose:[], notice:[] };
+  if(!API) return {dispose:[],notice:[]};
 
   try{
-    // 方法1：FinMind TaiwanStockDayTradingSuspension
-    // 當沖暫停 = 交易所處置措施之一（免費帳號可用）
-    const suspData = await fmFetch({
-      dataset:    'TaiwanStockDayTradingSuspension',
-      start_date: nDaysAgo(10),
-      end_date:   todayStr(),
-    }, 10000).catch(()=>null);
+    const resp = await fetchWithTimeout(`${API}/dispose`, 20000);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
 
-    if(suspData && suspData.length){
-      const today  = todayStr();
-      const active = suspData.filter(r=>{
-        const start = r.start_date||r.StartDate||r.date||'';
-        const end   = r.end_date  ||r.EndDate  ||'9999';
-        return start <= today && end >= today;
-      });
-      const ids = [...new Set(active.map(r=>(r.stock_id||r.StockID||'').toString().trim()))];
-      ids.filter(id=>/^\d{4,6}$/.test(id)).forEach(id=>{
-        result.notice.push({id, src:'FinMind-Suspension'});
-      });
-      console.log('[Official] DayTradingSuspension active:', active.length, 'ids:', ids.length);
+    // debug log：讓開發者看到哪個來源成功
+    console.log('[Official] dispose:', data.dispose?.length||0,
+                'notice:', data.notice?.length||0,
+                'debug:', JSON.stringify(data.debug||{}).slice(0,300));
+
+    _officialDisposeCache   = data;
+    _officialDisposeCacheTs = Date.now();
+    return data;
+  }catch(e){
+    console.warn('[Official] /dispose failed:', e.message);
+    // fallback：用 FinMind 當沖暫停資料
+    try{
+      const suspData = await fmFetch({
+        dataset:    'TaiwanStockDayTradingSuspension',
+        start_date: nDaysAgo(10),
+        end_date:   todayStr(),
+      }, 12000).catch(()=>null);
+
+      const result = {dispose:[], notice:[]};
+      if(suspData?.length){
+        const today = todayStr();
+        const active = suspData.filter(r=>{
+          const start = r.start_date||r.StartDate||r.date||'';
+          const end   = r.end_date  ||r.EndDate  ||'9999';
+          return start <= today && end >= today;
+        });
+        const ids = [...new Set(active.map(r=>String(r.stock_id||r.StockID||'').trim()))];
+        ids.filter(id=>/^\d{4}$/.test(id)).forEach(id=>result.notice.push({id}));
+        console.log('[Official] fallback suspension:', ids.length, 'stocks');
+      }
+      _officialDisposeCache   = result;
+      _officialDisposeCacheTs = Date.now();
+      return result;
+    }catch(e2){
+      return {dispose:[],notice:[]};
     }
-  }catch(e){ console.warn('[Official] suspension:', e.message); }
-
-  try{
-    // 方法2：FinMind TaiwanStockPrice — 近5日漲停≥2次或跌停≥2次視為需要標記
-    // 這是比 TWSE HTML 更穩定的資料來源
-    // 注意：這是技術判斷，不是官方公告，已在 calcAlertStatus 中處理
-    // 這裡只補充 Suspension 資料沒涵蓋的部分
-  }catch(e){}
-
-  _officialDisposeCache   = result;
-  _officialDisposeCacheTs = Date.now();
-  console.log('[Official] dispose:', result.dispose.length, 'notice:', result.notice.length);
-  return result;
+  }
 }
 
 // 批次計算全池注意/處置/出閘（分批，避免 API rate limit）
