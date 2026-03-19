@@ -6696,7 +6696,7 @@ function onAlertScopeChange(val){
 // ── 從 Worker 抓取 TWSE 官方處置/注意股清單 ────────────
 let _officialDisposeCache = null;
 let _officialDisposeCacheTs = 0;
-const OFFICIAL_DISPOSE_TTL = 30 * 60 * 1000; // 30分鐘 cache
+const OFFICIAL_DISPOSE_TTL = 10 * 60 * 1000; // 10分鐘 cache（確保即時性）
 
 async function fetchOfficialDisposeList(){
   // cache 命中
@@ -6760,7 +6760,11 @@ async function enrichWithQuote(list, maxItems=15){
 
 // ── 主要更新函式 ──────────────────────────────────────
 async function refreshAlertStocks(manual=false){
-  if(manual) showToast('🔄 計算警示股資料…');
+  if(manual){
+    showToast('🔄 計算警示股資料…');
+    _officialDisposeCache   = null; // 手動重整時強制重抓官方清單
+    _officialDisposeCacheTs = 0;
+  }
 
   const listEl = document.getElementById('alertList');
   const noteEl = document.getElementById('alertDataNote');
@@ -6783,45 +6787,53 @@ async function refreshAlertStocks(manual=false){
   let disposeList = allAlerts.filter(d=>d.type==='dispose');
   const releaseList = allAlerts.filter(d=>d.type==='release');
 
-  // 補入官方處置股（不在技術計算結果中的，直接加入）
+  // 補入官方處置股（官方清單為主，技術計算為輔）
   for(const s of (officialData.dispose||[])){
-    if(!disposeList.find(d=>d.id===s.id)){
-      // 嘗試取得股價
+    const existing = disposeList.find(d=>d.id===s.id);
+    if(existing){
+      existing.reason   = '📋 官方處置 · ' + existing.reason;
+      existing._official = true;
+    } else {
+      const name = NAME_MAP[s.id] || s.name || s.id;
+      // 批次取價格（限流保護，最多同時10筆）
       let price=null, changePct=null;
       try{
-        const raw = await fmStockData(s.id, 5);
+        const raw = await fmStockData(s.id, 3);
         const q   = _parseQuote(raw, s.id);
         if(q){ price=q.price; changePct=q.changePct; }
       }catch(e){}
       disposeList.push({
-        id:s.id, name:s.name||NAME_MAP[s.id]||s.id,
+        id:s.id, name,
         price, changePct,
-        reason:'📋 TWSE 官方公告處置中',
+        reason:'📋 TWSE/TPEx 官方公告處置中',
         type:'dispose', limitUpCnt:0, limitDnCnt:0, volSpikeCnt:0,
-        _official: true,
+        _official:true,
       });
-    } else {
-      // 已在技術結果中，加上官方標記
-      const found = disposeList.find(d=>d.id===s.id);
-      if(found) found.reason = '📋 官方處置 · ' + found.reason;
     }
   }
 
   // 補入官方注意股
   for(const s of (officialData.notice||[])){
-    if(!noticeList.find(d=>d.id===s.id) && !disposeList.find(d=>d.id===s.id)){
+    const inDispose = disposeList.find(d=>d.id===s.id);
+    const inNotice  = noticeList.find(d=>d.id===s.id);
+    if(inDispose) continue; // 已在處置股，不重複
+    if(inNotice){
+      inNotice.reason    = '📋 官方注意 · ' + inNotice.reason;
+      inNotice._official = true;
+    } else {
+      const name = NAME_MAP[s.id] || s.name || s.id;
       let price=null, changePct=null;
       try{
-        const raw = await fmStockData(s.id, 5);
+        const raw = await fmStockData(s.id, 3);
         const q   = _parseQuote(raw, s.id);
         if(q){ price=q.price; changePct=q.changePct; }
       }catch(e){}
       noticeList.push({
-        id:s.id, name:s.name||NAME_MAP[s.id]||s.id,
+        id:s.id, name,
         price, changePct,
-        reason:'📋 TWSE 官方公告注意股',
+        reason:'📋 TWSE/TPEx 官方公告注意股',
         type:'notice', limitUpCnt:0, limitDnCnt:0, volSpikeCnt:0,
-        _official: true,
+        _official:true,
       });
     }
   }
