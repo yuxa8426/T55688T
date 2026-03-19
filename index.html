@@ -1966,45 +1966,64 @@ async function fmHistory(stockId, days=60){
 // fallback: TWSE mis 快照重建（僅當日即時價，無歷史序列）
 async function fetchIntraday(stockId){
   const symbol = stockId + '.TW';
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`)}`,
-    `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`)}`,
-  ];
-  for(const proxyUrl of proxies){
-    try{
-      const res  = await fetchWithTimeout(proxyUrl, 5000);
-      const wrap = await res.json();
-      // allorigins 把 body 包在 .contents，corsproxy 直接回 JSON
-      const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
-      const result = body?.chart?.result?.[0];
-      if(!result) continue;
-      const ts    = result.timestamp || [];
-      const q     = result.indicators?.quote?.[0] || {};
-      const close = q.close || [];
-      if(!ts.length || !close.length) continue;
+  const cached = _intradayCache.get(stockId);
+  if(cached && Date.now()-cached.ts < INTRADAY_TTL) return cached.data;
 
-      // 過濾 null，轉成時間標籤（HH:MM）
-      const pts=[], times=[];
-      for(let i=0;i<ts.length;i++){
-        const v = close[i];
-        if(v==null||isNaN(v)) continue;
-        const d = new Date(ts[i]*1000);
-        const hh = String(d.getHours()).padStart(2,'0');
-        const mm = String(d.getMinutes()).padStart(2,'0');
-        pts.push(v);
-        times.push(hh+':'+mm);
-      }
-      if(pts.length < 3) continue;
-      console.log('[Intraday] OK', pts.length, 'pts via', proxyUrl.slice(0,30));
-      const result2 = { pts, times, source:'Yahoo' };
-      _intradayCache.set(stockId, {data: result2, ts: Date.now()});
-      return result2;
-    }catch(e){
-      console.warn('[Intraday] proxy failed:', e.message);
+  // 解析 Yahoo Finance chart result
+  function parseYahoo(body){
+    const result = body?.chart?.result?.[0];
+    if(!result) return null;
+    const ts    = result.timestamp || [];
+    const close = result.indicators?.quote?.[0]?.close || [];
+    if(!ts.length || !close.length) return null;
+    const pts=[], times=[];
+    for(let i=0;i<ts.length;i++){
+      const v = close[i];
+      if(v==null||isNaN(v)) continue;
+      // 轉成台灣時間 (UTC+8)
+      const d  = new Date(ts[i]*1000 + 8*3600000);
+      const hh = String(d.getUTCHours()).padStart(2,'0');
+      const mm = String(d.getUTCMinutes()).padStart(2,'0');
+      pts.push(v);
+      times.push(hh+':'+mm);
     }
+    return pts.length >= 3 ? { pts, times, source:'Yahoo' } : null;
   }
-  // fallback：TWSE mis 只有當盤單點，無法畫線，回 null
-  console.warn('[Intraday] all sources failed, fallback to daily');
+
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
+
+  // ── 來源1：Cloudflare Worker 代理（最穩定）──────────
+  if(API){
+    try{
+      const workerUrl = `${API}/intraday?symbol=${encodeURIComponent(symbol)}`;
+      const res  = await fetchWithTimeout(workerUrl, 8000);
+      if(res.ok){
+        const body = await res.json();
+        const data = parseYahoo(body);
+        if(data){
+          console.log('[Intraday] Worker OK', data.pts.length, 'pts');
+          _intradayCache.set(stockId, {data, ts: Date.now()});
+          return data;
+        }
+      }
+    }catch(e){ console.warn('[Intraday] Worker failed:', e.message); }
+  }
+
+  // ── 來源2：allorigins proxy 備援 ─────────────────────
+  try{
+    const res  = await fetchWithTimeout(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`, 6000);
+    const wrap = await res.json();
+    const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
+    const data = parseYahoo(body);
+    if(data){
+      console.log('[Intraday] allorigins OK', data.pts.length, 'pts');
+      _intradayCache.set(stockId, {data, ts: Date.now()});
+      return data;
+    }
+  }catch(e){ console.warn('[Intraday] allorigins failed:', e.message); }
+
+  console.warn('[Intraday] all sources failed');
   return null;
 }
 
