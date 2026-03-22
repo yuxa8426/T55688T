@@ -1364,14 +1364,30 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       ⚡ 此設定已連動 AI 深度分析模組
     </div>
     <!-- Cloudflare KV 雲端同步狀態 -->
-    <div style="margin-top:16px;padding:12px 14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:12px;text-align:center">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">☁️ 裝置 ID（跨裝置同步用）</div>
-      <div style="font-size:13px;font-weight:700;color:var(--green);letter-spacing:.5px" id="kvUidDisplay">載入中…</div>
-      <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
-        <button onclick="kvSyncNow()" style="background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:11px;padding:6px 14px;cursor:pointer;font-family:inherit">↻ 立即同步</button>
-        <button onclick="copyUID()" style="background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px;color:#a080ff;font-size:11px;padding:6px 14px;cursor:pointer;font-family:inherit">📋 複製 ID</button>
+    <div style="margin-top:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">☁️</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">雲端同步</div>
+          <div style="font-size:11px;color:var(--text3)" id="kvSyncStatus">設定 Cloudflare KV 後自動同步</div>
+        </div>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">換裝置時，複製此 ID 到新裝置的 Console 輸入：<br><code style="color:var(--gold)">localStorage.setItem('stockai_uid','你的ID')</code></div>
+      <!-- 裝置 ID -->
+      <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">裝置 ID（每台裝置唯一）</div>
+        <div style="font-size:12px;font-weight:700;color:var(--green);word-break:break-all;font-family:monospace" id="kvUidDisplay">載入中…</div>
+      </div>
+      <!-- 操作按鈕 -->
+      <div style="display:flex;gap:8px">
+        <button onclick="kvSyncNow()" style="flex:1;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">↻ 立即同步</button>
+        <button onclick="copyUID()" style="flex:1;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px;color:#a080ff;font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">📋 複製 ID</button>
+      </div>
+      <!-- 換裝置說明 -->
+      <div style="font-size:10px;color:var(--text3);margin-top:10px;padding:8px;background:rgba(0,0,0,.2);border-radius:6px;line-height:1.6">
+        💡 <strong style="color:var(--text2)">換裝置步驟：</strong>先複製此 ID，在新裝置開啟 App 後按 F12 → Console，輸入：<br>
+        <code style="color:var(--gold);font-size:10px">localStorage.setItem('stockai_uid','貼上你的ID')</code><br>
+        重新整理頁面即可同步所有資料。
+      </div>
     </div>
   </div>
   <div class="pref-item" onclick="editProfile()">
@@ -1490,23 +1506,29 @@ function kvPutDebounced(key, data, delay=2000){
 // 複製 UID 到剪貼簿
 function copyUID(){
   const uid = getUID();
-  navigator.clipboard?.writeText(uid).then(()=>{
-    showToast('✅ 裝置 ID 已複製');
-  }).catch(()=>{
-    // 備援：顯示 prompt 讓用戶手動複製
-    prompt('請複製此裝置 ID：', uid);
-  });
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(uid)
+      .then(()=>showToast('✅ 裝置 ID 已複製'))
+      .catch(()=>prompt('請手動複製此裝置 ID：', uid));
+  } else {
+    prompt('請手動複製此裝置 ID：', uid);
+  }
 }
 
 // 手動立即同步（我的頁面按鈕）
 async function kvSyncNow(){
   const statusEl = document.getElementById('kvSyncStatus');
-  if(statusEl) statusEl.textContent = '☁️ 同步中…';
-  await kvSyncDown();
-  loadProfile();
-  renderBacktestPanel();
-  if(statusEl) statusEl.innerHTML = `裝置 ID：<span id="kvUidDisplay">${getUID().slice(0,8)}…</span>`;
-  showToast('✅ 雲端資料已同步');
+  if(statusEl) statusEl.textContent = '⏳ 同步中…';
+  try{
+    await kvSyncDown();
+    loadProfile();
+    renderBacktestPanel();
+    if(statusEl) statusEl.textContent = '✅ 同步完成 · ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    showToast('✅ 雲端資料已同步');
+  }catch(e){
+    if(statusEl) statusEl.textContent = '⚠️ 同步失敗（KV 未設定）';
+    showToast('⚠️ 同步失敗，請確認 KV 是否已綁定');
+  }
 }
 
 // 初始化 UID 顯示
@@ -7350,6 +7372,10 @@ function loadProfile(){
       badgeEl.style.display = 'none';
     }
   }
+
+  // 更新裝置 UID 顯示
+  const uidEl = document.getElementById('kvUidDisplay');
+  if(uidEl) uidEl.textContent = getUID();
 }
 
 function editProfile(){
