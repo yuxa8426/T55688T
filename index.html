@@ -1382,11 +1382,18 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
         <button onclick="kvSyncNow()" style="flex:1;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">↻ 立即同步</button>
         <button onclick="copyUID()" style="flex:1;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px;color:#a080ff;font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">📋 複製 ID</button>
       </div>
-      <!-- 換裝置說明 -->
-      <div style="font-size:10px;color:var(--text3);margin-top:10px;padding:8px;background:rgba(0,0,0,.2);border-radius:6px;line-height:1.6">
-        💡 <strong style="color:var(--text2)">換裝置步驟：</strong>先複製此 ID，在新裝置開啟 App 後按 F12 → Console，輸入：<br>
-        <code style="color:var(--gold);font-size:10px">localStorage.setItem('stockai_uid','貼上你的ID')</code><br>
-        重新整理頁面即可同步所有資料。
+      <!-- 換裝置：輸入 ID 還原（手機友善）-->
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:6px">📱 換裝置同步</div>
+        <div style="display:flex;gap:6px">
+          <input id="importUidInput" type="text" placeholder="貼上舊裝置的 ID"
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;font-family:monospace;outline:none;min-width:0">
+          <button onclick="importUID()"
+            style="background:var(--purple);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">匯入</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5">
+          在舊裝置點「📋 複製 ID」，將 ID 貼到上方輸入框，點匯入即可還原所有資料。
+        </div>
       </div>
     </div>
   </div>
@@ -1512,6 +1519,38 @@ function copyUID(){
       .catch(()=>prompt('請手動複製此裝置 ID：', uid));
   } else {
     prompt('請手動複製此裝置 ID：', uid);
+  }
+}
+
+// 手機換裝置：輸入舊裝置 ID 匯入資料
+async function importUID(){
+  const input = document.getElementById('importUidInput');
+  const newUid = (input?.value||'').trim();
+  if(!newUid){ showToast('請輸入裝置 ID'); return; }
+  if(!/^[a-zA-Z0-9_-]{6,64}$/.test(newUid)){
+    showToast('⚠️ ID 格式不正確，請重新確認');
+    return;
+  }
+  if(newUid === getUID()){
+    showToast('ℹ️ 這就是目前的裝置 ID');
+    return;
+  }
+  if(!confirm(`確定將裝置 ID 切換為：\n${newUid}\n\n這會從雲端載入該 ID 的所有資料（設定、回測記錄、自選股），並覆蓋目前裝置的資料。`)) return;
+
+  // 儲存新 UID
+  localStorage.setItem('stockai_uid', newUid);
+  showToast('⏳ 正在從雲端還原資料…');
+
+  // 從 KV 拉取資料
+  try{
+    await kvSyncDown();
+    loadProfile();
+    renderBacktestPanel();
+    if(input) input.value = '';
+    showToast('✅ 資料還原完成！');
+  }catch(e){
+    showToast('⚠️ 還原失敗，請確認 ID 是否正確');
+    console.error('[importUID]', e.message);
   }
 }
 
