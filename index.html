@@ -4077,42 +4077,58 @@ let _vixTimer = null;
 async function loadVix(manual=false){
   if(manual) showToast('🔄 更新 VIX…');
 
-  // ── 來源1：Cloudflare Worker /vix（伺服器端直接抓，最穩定）──
-  if(API){
-    try{
-      const resp = await fetchWithTimeout(`${API}/vix`, 12000);
-      if(resp.ok){
-        const d = await resp.json();
-        if(d.vix && d.vix > 5){
-          console.log('[VIX] Worker OK:', d.vix, d.src);
-          _applyVix(d.vix, d.chg||0, d.date||'', d.hist||[], d.src||'Worker');
-          return;
-        }
-      }
-    }catch(e){ console.warn('[VIX] Worker failed:', e.message); }
+  // 解析 Yahoo chart API 回傳值
+  function parseYahooVix(j){
+    const meta = j?.chart?.result?.[0]?.meta;
+    if(!meta) return null;
+    const price = meta.regularMarketPrice || meta.chartPreviousClose;
+    if(!price || price < 5) return null;
+    const prev  = meta.chartPreviousClose || meta.previousClose || price;
+    const qts   = j?.chart?.result?.[0]?.indicators?.quote?.[0];
+    const hist  = (qts?.close||[]).filter(v=>v!=null&&v>5).slice(-22);
+    const dt    = meta.regularMarketTime
+      ? new Date(meta.regularMarketTime*1000).toLocaleDateString('en-CA',{timeZone:'America/New_York'})
+      : '';
+    return { vix:price, chg:(price-prev)/prev*100, date:dt, hist, src:'Yahoo' };
   }
 
-  // ── 來源2：FRED 直接 fetch（無需 proxy，部分瀏覽器允許）──
+  // 來源1：Worker /intraday?symbol=^VIX（已確認可用）
+  if(API){
+    try{
+      const resp = await fetchWithTimeout(`${API}/intraday?symbol=%5EVIX`, 10000);
+      if(resp.ok){
+        const j = await resp.json();
+        const d = parseYahooVix(j);
+        if(d){ console.log('[VIX] Yahoo via Worker OK:', d.vix); _applyVix(d.vix,d.chg,d.date,d.hist,'Yahoo'); return; }
+      }
+    }catch(e){ console.warn('[VIX] Yahoo Worker:', e.message); }
+
+    // 來源2：Worker /vix（FRED/stooq）
+    try{
+      const resp = await fetchWithTimeout(`${API}/vix`, 10000);
+      if(resp.ok){
+        const d = await resp.json();
+        if(d?.vix > 5){ console.log('[VIX] Worker /vix OK:', d.vix, d.src); _applyVix(d.vix,d.chg||0,d.date||'',d.hist||[],d.src||'Worker'); return; }
+      }
+    }catch(e){ console.warn('[VIX] Worker /vix:', e.message); }
+  }
+
+  // 來源3：FRED 直接 fetch
   try{
-    const resp = await fetchWithTimeout(
-      'https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS', 6000);
+    const resp = await fetchWithTimeout('https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS', 6000);
     if(resp.ok){
-      const csv = await resp.text();
-      const rows = csv.trim().split('\n').slice(1)
-        .map(l=>{ const p=l.split(','); return {date:p[0]?.trim(), close:parseFloat(p[1])}; })
-        .filter(r=>r.date && !isNaN(r.close) && r.close>5)
+      const rows = (await resp.text()).trim().split('\n').slice(1)
+        .map(l=>{const p=l.split(',');return{date:p[0]?.trim(),close:parseFloat(p[1])};})
+        .filter(r=>r.date&&!isNaN(r.close)&&r.close>5)
         .sort((a,b)=>a.date>b.date?1:-1);
       if(rows.length){
         const last=rows[rows.length-1], prev=rows[rows.length-2];
-        console.log('[VIX] FRED direct OK:', last.close);
-        _applyVix(last.close, prev?(last.close-prev.close)/prev.close*100:0,
-                  last.date, rows.slice(-22).map(r=>r.close), 'FRED');
+        _applyVix(last.close, prev?(last.close-prev.close)/prev.close*100:0, last.date, rows.slice(-22).map(r=>r.close), 'FRED');
         return;
       }
     }
-  }catch(e){ console.warn('[VIX] FRED direct:', e.message); }
+  }catch(e){ console.warn('[VIX] FRED:', e.message); }
 
-  // ── 所有來源失敗 ──────────────────────────────────────────
   console.warn('[VIX] all sources failed');
   renderVixFallback();
   clearTimeout(_vixTimer);
@@ -4128,9 +4144,10 @@ function _applyVix(vix, chg, date, hist, src){
   if(el) el.textContent = `更新 ${ts} · ${src}`;
   clearTimeout(_vixTimer);
   const nowMin = now.getHours()*60+now.getMinutes();
-  const inUS   = nowMin>=210 && nowMin<=570;
-  _vixTimer = setTimeout(()=>loadVix(), inUS ? 90000 : 300000);
+  _vixTimer = setTimeout(()=>loadVix(), (nowMin>=210&&nowMin<=570)?90000:300000);
 }
+
+
 
 
 function renderVix(vix, changePct, dataDate, history, srcLabel=''){
