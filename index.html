@@ -1284,6 +1284,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 策略評測比較</div>
         <div style="display:flex;gap:5px">
+          <button onclick="showHistoryPanel()" style="font-size:10px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:6px;color:var(--purple);padding:3px 7px;cursor:pointer;font-family:inherit">📋 歷史</button>
           <button onclick="checkBacktestNow()" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">驗證</button>
           <button onclick="clearBacktest()" style="font-size:10px;background:none;border:1px solid rgba(255,76,106,.3);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">清除</button>
         </div>
@@ -1472,6 +1473,35 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     </div>
   </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
+  <!-- 歷史策略記錄 Modal -->
+  <div id="historyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;align-items:flex-start;overflow-y:auto">
+    <div style="background:var(--card);border-radius:0 0 20px 20px;width:100%;max-width:480px;margin:0 auto;padding:16px;min-height:100vh">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;position:sticky;top:0;background:var(--card);padding:4px 0 10px;border-bottom:1px solid var(--border)">
+        <div style="font-size:16px;font-weight:800">📋 歷史策略記錄</div>
+        <button onclick="closeHistoryModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0 4px;font-family:inherit">✕</button>
+      </div>
+      <!-- 篩選列 -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap" id="historyFilterBtns">
+        <button onclick="filterHistory('all',this)" class="hist-filter active-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:600">全部</button>
+        <button onclick="filterHistory('A',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">🚀 A</button>
+        <button onclick="filterHistory('B',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">📈 B</button>
+        <button onclick="filterHistory('C',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">💎 C</button>
+        <button onclick="filterHistory('D',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">🔄 D</button>
+        <button onclick="filterHistory('E',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">⚖️ E</button>
+        <button onclick="filterHistory('WL',this)" class="hist-filter"
+          style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit">⭐ 自選</button>
+      </div>
+      <!-- 記錄清單 -->
+      <div id="historyList"></div>
+    </div>
+  </div>
+
   <!-- 編輯 Modal -->
   <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
     <div style="background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto">
@@ -7201,6 +7231,139 @@ function renderBacktestPanel(){
   } else if(pendEl){
     pendEl.innerHTML = '';
   }
+}
+
+// ════════════════════════════════════════════════════
+// 歷史策略記錄系統
+// ════════════════════════════════════════════════════
+const STRAT_INFO = {
+  A:{name:'極致動能',icon:'🚀',color:'#ff4c6a'},
+  B:{name:'穩健成長',icon:'📈',color:'#00d4aa'},
+  C:{name:'價值發現',icon:'💎',color:'#f5c842'},
+  D:{name:'情緒反轉',icon:'🔄',color:'#a080ff'},
+  E:{name:'風險平權',icon:'⚖️',color:'#4fc3f7'},
+  WL:{name:'自選清單',icon:'⭐',color:'#ffd54f'},
+};
+let _historyFilter = 'all';
+
+function showHistoryModal(){
+  const m = document.getElementById('historyModal');
+  if(m){ m.style.display='flex'; renderHistoryList(); }
+}
+function closeHistoryModal(){
+  const m = document.getElementById('historyModal');
+  if(m) m.style.display='none';
+}
+function showHistoryPanel(){ showHistoryModal(); }
+
+function filterHistory(key, btn){
+  _historyFilter = key;
+  document.querySelectorAll('.hist-filter').forEach(b=>{
+    b.style.background = 'none';
+    b.style.color      = 'var(--text3)';
+    b.style.borderColor= 'var(--border)';
+  });
+  if(btn){
+    const si = STRAT_INFO[key];
+    const col = si ? si.color : 'var(--purple)';
+    btn.style.background   = `${col}22`;
+    btn.style.color        = col;
+    btn.style.borderColor  = col;
+  }
+  renderHistoryList();
+}
+
+function renderHistoryList(){
+  const el = document.getElementById('historyList');
+  if(!el) return;
+
+  let records = getBtRecords();
+  // 依篩選
+  if(_historyFilter !== 'all')
+    records = records.filter(r=>r.stratKey===_historyFilter);
+  // 最新在前
+  records = [...records].reverse();
+
+  if(!records.length){
+    el.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px">
+      ${_historyFilter==='all'?'尚無策略記錄，執行 AI 分析後自動累積':'此策略尚無記錄'}
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = records.map(r=>{
+    const si    = STRAT_INFO[r.stratKey] || {name:r.stratKey,icon:'📊',color:'var(--text2)'};
+    const today = todayStr();
+
+    // 計算本次記錄勝率（短期7日）
+    const done   = r.stocks.filter(s=>s.result7||s.result);
+    const wins   = done.filter(s=>(s.result7||s.result)==='win').length;
+    const losses = done.filter(s=>(s.result7||s.result)==='loss').length;
+    const flats  = done.filter(s=>(s.result7||s.result)==='flat').length;
+    const wr     = done.length ? Math.round(wins/done.length*100) : null;
+    const wrColor= wr==null?'var(--text3)':wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
+
+    // 驗證狀態
+    const days7Left = Math.ceil((new Date(r.checkDate||'9999')-new Date(today))/86400000);
+    const statusTag = r.verified
+      ? `<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(0,212,170,.15);color:var(--green)">✅ 已驗證</span>`
+      : days7Left <= 0
+      ? `<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(245,200,66,.15);color:var(--gold)">⏰ 可驗證</span>`
+      : `<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">${days7Left}天後驗</span>`;
+
+    // 股票清單
+    const stocksHTML = r.stocks.slice(0,10).map(s=>{
+      const res = s.result7 || s.result;
+      const pct = s.pct7 ?? s.pct;
+      const resIcon = res==='win'?'🟢':res==='loss'?'🔴':res==='flat'?'🟡':'⬜';
+      const pctStr  = pct!=null ? ` ${pct>=0?'+':''}${pct}%` : '';
+      const pctColor= pct==null?'var(--text3)':pct>=0?'var(--red)':'var(--green)';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer"
+        onclick="selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('home')">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:12px">${resIcon}</span>
+          <div>
+            <span style="font-size:12px;font-weight:600;color:var(--text)">${s.id} ${s.name||''}</span>
+            ${s.reason?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${s.reason}</div>`:''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:12px;font-weight:700;color:${pctColor}">${pctStr||'—'}</div>
+          <div style="font-size:9px;color:var(--text3)">AI ${s.aiWin||'—'}%</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+      <!-- 記錄頭部 -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${si.icon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${si.color}">${si.name}</div>
+            <div style="font-size:10px;color:var(--text3)">${r.date} 推薦 · ${r.stocks.length}支</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${statusTag}
+          ${wr!==null
+            ? `<div style="font-size:18px;font-weight:900;color:${wrColor}">${wr}%</div>`
+            : `<div style="font-size:11px;color:var(--text3)">—</div>`}
+        </div>
+      </div>
+      <!-- 驗證摘要（已驗證才顯示）-->
+      ${done.length
+        ? `<div style="display:flex;gap:10px;margin-bottom:8px;padding:6px 8px;background:rgba(0,0,0,.2);border-radius:6px">
+            <span style="font-size:11px;color:var(--green)">🟢 ${wins}勝</span>
+            <span style="font-size:11px;color:var(--red)">🔴 ${losses}敗</span>
+            <span style="font-size:11px;color:var(--gold)">🟡 ${flats}平</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto">共${done.length}筆驗證</span>
+          </div>`
+        : ''}
+      <!-- 股票清單（可點擊跳轉）-->
+      <div>${stocksHTML}</div>
+    </div>`;
+  }).join('');
 }
 
 // 取得回測修正摘要（給 AI 的 context）
