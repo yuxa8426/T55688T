@@ -1284,9 +1284,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 策略評測比較</div>
         <div style="display:flex;gap:5px">
-          <button onclick="showHistoryPanel()" style="font-size:10px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:6px;color:var(--purple);padding:3px 7px;cursor:pointer;font-family:inherit">📋 歷史</button>
-          <button onclick="checkBacktestNow()" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">驗證</button>
-          <button onclick="clearBacktest()" style="font-size:10px;background:none;border:1px solid rgba(255,76,106,.3);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">清除</button>
+          <button onclick="checkBacktestNow()" style="font-size:10px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.3);border-radius:6px;color:var(--green);padding:3px 8px;cursor:pointer;font-family:inherit;font-weight:600">⚡ 驗證</button>
+          <button onclick="showClearMenu()" style="font-size:10px;background:rgba(255,76,106,.08);border:1px solid rgba(255,76,106,.3);border-radius:6px;color:#ff6b6b;padding:3px 8px;cursor:pointer;font-family:inherit;font-weight:600">🗑️ 刪除</button>
         </div>
       </div>
 
@@ -1494,6 +1493,25 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
 
+
+  <!-- 刪除選單 Modal -->
+  <div id="clearMenuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end;justify-content:center">
+    <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 16px 32px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:15px;font-weight:800">🗑️ 刪除回測記錄</div>
+        <button onclick="closeClearMenu()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;font-family:inherit">✕</button>
+      </div>
+      <!-- 各策略刪除按鈕 -->
+      <div id="clearMenuList"></div>
+      <!-- 全部清除 -->
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <button onclick="clearBacktest();closeClearMenu()"
+          style="width:100%;padding:12px;background:rgba(255,76,106,.1);border:1px solid rgba(255,76,106,.3);border-radius:10px;color:#ff4c6a;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+          🗑️ 清除全部記錄
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- 編輯 Modal -->
   <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
@@ -7227,14 +7245,63 @@ function deleteStratRecords(stratKey){
   const name  = STRAT_INFO[stratKey]?.name || '策略'+stratKey;
   const count = getBtRecords().filter(r=>r.stratKey===stratKey).length;
   if(!count){ showToast('此策略無記錄'); return; }
-  if(!confirm(`確定刪除「${name}」的全部 ${count} 筆記錄？
-此操作無法復原。`)) return;
+  if(!confirm(`確定刪除「${name}」的全部 ${count} 筆記錄？`)) return;
   const records = getBtRecords().filter(r => r.stratKey !== stratKey);
   saveBtRecords(records);
   renderHistoryList();
   renderBattleBanner();
   renderBacktestPanel();
+  closeClearMenu();
   showToast(`✅ 已刪除「${name}」共 ${count} 筆`);
+}
+
+// 顯示刪除選單
+function showClearMenu(){
+  const modal = document.getElementById('clearMenuModal');
+  const list  = document.getElementById('clearMenuList');
+  if(!modal || !list) return;
+
+  const records  = getBtRecords();
+  const allKeys  = ['A','B','C','D','E','WL'];
+  const stratInfo= STRAT_INFO;
+
+  // 統計各策略筆數
+  const counts = {};
+  records.forEach(r=>{ counts[r.stratKey] = (counts[r.stratKey]||0)+1; });
+
+  const hasAny = allKeys.some(k=>counts[k]);
+  if(!hasAny){
+    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">目前無回測記錄</div>';
+  } else {
+    list.innerHTML = allKeys
+      .filter(k => counts[k] > 0)
+      .map(k=>{
+        const si  = stratInfo[k] || {icon:'📊',name:k,color:'var(--text2)'};
+        const cnt = counts[k] || 0;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface);border-radius:10px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">${si.icon}</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">${si.name}</div>
+              <div style="font-size:11px;color:var(--text3)">${cnt} 筆記錄</div>
+            </div>
+          </div>
+          <button onclick="deleteStratRecords('${k}')"
+            style="padding:6px 14px;background:rgba(255,76,106,.12);border:1px solid rgba(255,76,106,.35);border-radius:8px;color:#ff6b6b;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            刪除
+          </button>
+        </div>`;
+      }).join('');
+  }
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeClearMenu(){
+  const modal = document.getElementById('clearMenuModal');
+  if(modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 // 清除全部（保留原功能）
@@ -7292,17 +7359,32 @@ function renderBtCompareTable(){
     const wrColor = wr==null?'var(--text3)':wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
     const rankIcon = rank===0&&wr!=null?'🥇':rank===1&&wr!=null?'🥈':rank===2&&wr!=null?'🥉':'';
 
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border:1px solid ${rank===0&&wr!=null?si.color:'var(--border)'};border-radius:10px;margin-bottom:6px${rank===0&&wr!=null?';box-shadow:0 0 0 1px '+si.color+'44':''}">
-      <div style="font-size:20px;flex-shrink:0">${si.icon}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--text)">${rankIcon} ${si.name}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">
-          ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 平均${avgStr}`:`待累積（${s.pending}筆進行中）`}
+    const recCount = getBtRecords().filter(r=>r.stratKey===k).length;
+    return `<div style="background:var(--card);border:1px solid ${rank===0&&wr!=null?si.color:'var(--border)'};border-radius:12px;margin-bottom:8px;overflow:hidden${rank===0&&wr!=null?';box-shadow:0 0 0 1px '+si.color+'44':''}">
+      <!-- 主體列 -->
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 12px">
+        <div style="font-size:22px;flex-shrink:0">${si.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${rankIcon} ${si.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">
+            ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 均${avgStr}`:`待累積（${s.pending}筆中）`}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-right:6px">
+          <div style="font-size:20px;font-weight:800;color:${wrColor}">${wr!=null?wr+'%':'—'}</div>
+          <div style="font-size:9px;color:var(--text3)">${wr!=null?'實測勝率':'待驗證'}</div>
         </div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:20px;font-weight:800;color:${wrColor}">${wr!=null?wr+'%':'—'}</div>
-        <div style="font-size:9px;color:var(--text3)">${wr!=null?'實測勝率':'待驗證'}</div>
+      <!-- 操作列（常駐顯示）-->
+      <div style="display:flex;border-top:1px solid var(--border)">
+        <button onclick="filterHistory('${k}', null); showHistoryPanel();"
+          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--purple);cursor:pointer;font-family:inherit">
+          📋 查看 ${recCount} 筆記錄
+        </button>
+        <button onclick="deleteStratRecords('${k}')"
+          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;color:#ff6b6b;cursor:pointer;font-family:inherit">
+          🗑️ 刪除此策略記錄
+        </button>
       </div>
     </div>`;
   }).join('');
