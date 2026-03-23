@@ -1701,10 +1701,49 @@ const TREND_CACHE_MS = 5 * 60 * 1000; // 5分鐘快取
 
 // ── 台股名稱對照表 ────────────────────────────────────
 const NAME_MAP = {
-  '2330':'台積電','2317':'鴻海','2454':'聯發科','2412':'中華電',
-  '2308':'台達電','2382':'廣達','2303':'聯電','2002':'中鋼',
-  '2886':'兆豐金','2891':'中信金','3711':'日月光','2357':'華碩',
-  '2395':'研華','2379':'瑞昱','0050':'元大台灣50','0056':'元大高股息',
+  // 半導體/IC
+  '2330':'台積電','2303':'聯電','2454':'聯發科','2379':'瑞昱',
+  '3034':'聯詠','3661':'世芯-KY','2408':'南亞科','2337':'旺宏',
+  '3711':'日月光投控','6239':'力成','3443':'創意','5269':'祥碩',
+  '6533':'晶心科','6770':'力積電','3529':'力旺','2449':'京元電子',
+  '6415':'矽力-KY','4966':'譜瑞-KY',
+  // 電子製造/伺服器
+  '2317':'鴻海','2382':'廣達','2356':'英業達','2324':'仁寶',
+  '4938':'和碩','3231':'緯創','6669':'緯穎','3706':'神達',
+  '2357':'華碩','2376':'技嘉','2377':'微星','2395':'研華',
+  '2345':'智邦','2308':'台達電','2327':'國巨',
+  // PCB/被動元件
+  '3037':'欣興','8046':'南電','2474':'可成','3008':'大立光',
+  // 電信
+  '2412':'中華電','3045':'台灣大','4904':'遠傳',
+  // 金融
+  '2881':'富邦金','2882':'國泰金','2884':'玉山金','2886':'兆豐金',
+  '2880':'華南金','2891':'中信金','2892':'第一金','2883':'開發金',
+  '2887':'台新金','5880':'合庫金','2885':'元大金','2890':'永豐金',
+  '2888':'新光金','2889':'國票金','5876':'上海商銀','2823':'中壽',
+  // 石化/傳產/鋼鐵
+  '6505':'台塑化','1301':'台塑','1303':'南亞','1326':'台化',
+  '2002':'中鋼','1605':'華新','1101':'台泥','1102':'亞泥',
+  '1216':'統一','2912':'統一超','2207':'和泰車','2105':'正新',
+  '1722':'台肥','1402':'遠東新','2014':'中鴻',
+  // 航運/航空
+  '2609':'陽明','2603':'長榮','2615':'萬海','2618':'長榮航',
+  '2610':'華航','2634':'漢翔','5608':'四維航','2601':'益航',
+  // 電機機械
+  '3167':'大量','1533':'益航','2049':'上銀','1590':'亞德客-KY',
+  '2059':'川湖','1560':'中砂','2049':'上銀',
+  '1504':'東元','1503':'士電','1519':'華城','1521':'大亞',
+  '1524':'耿鼎','2108':'南帝','2204':'中華','2206':'三陽工業',
+  // 生技/醫療
+  '6547':'高端疫苗','4174':'浩鼎','1795':'美時','4766':'艾斯克',
+  '6196':'帝亞生技','1736':'喬山','4108':'懷特',
+  // 記憶體/其他科技
+  '4967':'十銓','3260':'威剛','8069':'元太','5871':'中租-KY',
+  // ETF
+  '0050':'元大台灣50','0056':'元大高股息',
+  '00878':'國泰永續高股息','00929':'復華台灣科技優息',
+  '00713':'元大台灣高息低波','006208':'富邦台灣50',
+  '00631L':'元大台灣50正2','00632R':'元大台灣50反1',
 };
 const SECTOR_MAP = {
   '2330':'半導體','2454':'IC設計','2317':'電子製造','2412':'電信',
@@ -4826,11 +4865,24 @@ function onSearch(v){
 
   const m = searchStocks(v, 8);
   if(!m.length){
-    // 如果本地清單還沒載完，顯示提示並嘗試直接查
+    // 代號是純數字（可能是有效但未收錄的股票）→ 直接提供查詢入口
+    const looksLikeCode = /^\d{4,6}$/.test(v.trim());
     el.style.display='block';
-    el.innerHTML=`<div style="padding:14px 16px;color:var(--text2);font-size:13px">
-      ${_stockListLoaded ? '查無股票「'+v+'」' : '🔄 資料庫載入中，請稍候再輸入…'}
-    </div>`;
+    if(looksLikeCode){
+      el.innerHTML=`
+        <div onclick="pickStock('${v.trim()}','${v.trim()}')"
+          style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;background:var(--card)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${v.trim()}</div>
+            <div style="font-size:11px;color:var(--text3)">點擊直接查詢此代號</div>
+          </div>
+          <div style="font-size:18px">→</div>
+        </div>`;
+    } else {
+      el.innerHTML=`<div style="padding:14px 16px;color:var(--text2);font-size:13px">
+        查無「${v}」，請確認股票代號或名稱
+      </div>`;
+    }
     return;
   }
 
@@ -4863,7 +4915,11 @@ async function pickStock(n, ticker){
   document.getElementById('searchInput').value='';
   document.getElementById('searchResults').style.display='none';
   document.getElementById('searchResults').innerHTML='';
-  await selectStock(null, n, ticker+'.TW');
+  const id       = String(ticker).replace(/\.TW$/i,'');
+  const realName = (n && n !== id)
+    ? n
+    : NAME_MAP[id] || STOCKS.find(s=>s.t===id)?.n || id;
+  await selectStock(null, realName, id+'.TW');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -4873,7 +4929,18 @@ function onWlSearch(v){
   if(!v.trim()){ el.innerHTML=''; return; }
   const m = searchStocks(v, 6);
   if(!m.length){
-    el.innerHTML=`<div style="padding:10px 14px;color:var(--text2);font-size:13px">${_stockListLoaded?'查無股票':'資料庫載入中…'}</div>`;
+    const looksLikeCode = /^\d{4,6}$/.test(v.trim());
+    if(looksLikeCode){
+      const id   = v.trim();
+      const name = NAME_MAP[id] || id;
+      el.innerHTML=`<div onclick="wlAddStock('${id}','${name}')"
+        style="padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--card)">
+        <div style="font-size:13px;color:var(--text)">${id} <span style="color:var(--text3)">${name !== id ? name : '點擊直接加入'}</span></div>
+        <div style="color:var(--green);font-size:18px">＋</div>
+      </div>`;
+    } else {
+      el.innerHTML=`<div style="padding:10px 14px;color:var(--text2);font-size:13px">查無「${v}」</div>`;
+    }
     return;
   }
   el.innerHTML = m.map(s=>`
