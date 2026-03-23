@@ -1263,17 +1263,36 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
     <!-- 本機回測統計 -->
     <div id="backtestPanel" style="display:none;margin-bottom:16px">
+      <!-- 標題列 -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 本機回測記錄</div>
-        <div style="display:flex;gap:6px">
-          <button onclick="checkBacktestNow()" style="font-size:11px;background:none;border:1px solid var(--border);border-radius:7px;color:var(--text3);padding:3px 8px;cursor:pointer;font-family:inherit">立即驗證</button>
-          <button onclick="clearBacktest()" style="font-size:11px;background:none;border:1px solid rgba(255,76,106,.3);border-radius:7px;color:var(--text3);padding:3px 8px;cursor:pointer;font-family:inherit">清除記錄</button>
+        <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 策略評測比較</div>
+        <div style="display:flex;gap:5px">
+          <button onclick="checkBacktestNow()" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">驗證</button>
+          <button onclick="clearBacktest()" style="font-size:10px;background:none;border:1px solid rgba(255,76,106,.3);border-radius:6px;color:var(--text3);padding:3px 7px;cursor:pointer;font-family:inherit">清除</button>
         </div>
       </div>
-      <!-- 各策略勝率統計 -->
-      <div id="backtestStats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px"></div>
+
+      <!-- 週期 Tab -->
+      <div style="display:flex;gap:4px;margin-bottom:10px;background:var(--surface);border-radius:8px;padding:3px" id="btPeriodTabs">
+        <button onclick="switchBtPeriod('short',this)" class="bt-period-tab bt-period-active"
+          style="flex:1;font-size:11px;font-weight:600;padding:5px 0;border:none;border-radius:6px;cursor:pointer;font-family:inherit;background:var(--purple);color:#fff">短期 7~14日</button>
+        <button onclick="switchBtPeriod('mid',this)" class="bt-period-tab"
+          style="flex:1;font-size:11px;font-weight:600;padding:5px 0;border:none;border-radius:6px;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3)">中期 月</button>
+        <button onclick="switchBtPeriod('long',this)" class="bt-period-tab"
+          style="flex:1;font-size:11px;font-weight:600;padding:5px 0;border:none;border-radius:6px;cursor:pointer;font-family:inherit;background:transparent;color:var(--text3)">長期 季</button>
+      </div>
+
+      <!-- 比較表 -->
+      <div id="btCompareTable" style="margin-bottom:10px"></div>
+
+      <!-- 最佳策略評語 -->
+      <div id="btVerdict" style="display:none;padding:10px 12px;background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.25);border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:8px"></div>
+
       <!-- 待驗證清單 -->
       <div id="backtestPending" style="font-size:11px;color:var(--text3)"></div>
+
+      <!-- 舊版 statsEl 保留（隱藏，供 getBacktestSummary 使用）-->
+      <div id="backtestStats" style="display:none"></div>
     </div>
 
     <!-- 結果區（AI 策略）-->
@@ -6580,21 +6599,30 @@ async function recordStratRecommend(stratKey, stocks){
     }catch(e){}
   }));
 
-  // 建立記錄
+  // 建立記錄（三週期分別追蹤）
   const record = {
     id:        Date.now(),
     stratKey,
     date:      today,
-    checkDate: addDays(today, 7),  // 7天後驗證
-    verified:  false,
+    // 三個驗證時間點
+    checkDate:  addDays(today, 7),   // 短期：7天
+    checkDate14:addDays(today, 14),  // 短期：14天
+    checkDateM: addDays(today, 30),  // 中期：30天
+    checkDateQ: addDays(today, 90),  // 長期：90天
+    // 各週期驗證狀態
+    verified:  false, verifiedM: false, verifiedQ: false,
     stocks: stocks.slice(0,10).map(s=>({
       id:      s.id,
       name:    s.name,
-      aiWin:   Math.round(s.winRate||60),  // AI 預測勝率
-      entryPx: priceMap[s.id] || null,     // 推薦時股價
-      exitPx:  null,                        // 驗證時股價
-      result:  null,                        // 'win'|'loss'|'flat'
-      pct:     null,                        // 實際漲跌幅
+      aiWin:   Math.round(s.winRate||60),
+      entryPx: priceMap[s.id] || null,
+      // 短期（7~14日）
+      exitPx7:  null, result7:  null, pct7:  null,
+      exitPx14: null, result14: null, pct14: null,
+      // 中期（月）
+      exitPxM:  null, resultM:  null, pctM:  null,
+      // 長期（季）
+      exitPxQ:  null, resultQ:  null, pctQ:  null,
     })),
   };
   records.push(record);
@@ -6611,67 +6639,166 @@ function addDays(dateStr, n){
   return d.toISOString().slice(0,10);
 }
 
-// 計算各策略的本機實測勝率
-function calcStratWinRates(){
+// 計算各策略在特定週期的勝率
+// period: 'short7'|'short14'|'mid'|'long'
+function calcStratWinRatesByPeriod(period='short7'){
   const records = getBtRecords();
-  const stats = {};
-  'ABCDE'.split('').forEach(k=>{ stats[k] = {total:0, wins:0, losses:0, pending:0}; });
+  const keys    = 'ABCDE'.split('').concat(['WL']);
+  const stats   = {};
+  keys.forEach(k=>{ stats[k] = {wins:0, losses:0, flats:0, total:0, pending:0, avgPct:0, pcts:[]}; });
+
+  const resField = {short7:'result7', short14:'result14', mid:'resultM', long:'resultQ'}[period] || 'result7';
+  const pctField = {short7:'pct7',    short14:'pct14',    mid:'pctM',    long:'pctQ'}[period]    || 'pct7';
 
   records.forEach(r=>{
     const st = stats[r.stratKey];
     if(!st) return;
     r.stocks.forEach(s=>{
-      if(s.result === 'win')   { st.total++; st.wins++; }
-      else if(s.result === 'loss'){ st.total++; st.losses++; }
-      else                         { st.pending++; }
+      const res = s[resField];
+      const pct = s[pctField];
+      if(res === 'win')  { st.total++; st.wins++;   if(pct!=null) st.pcts.push(pct); }
+      else if(res==='loss'){ st.total++; st.losses++; if(pct!=null) st.pcts.push(pct); }
+      else if(res==='flat'){ st.total++; st.flats++;  if(pct!=null) st.pcts.push(pct); }
+      else st.pending++;
     });
   });
 
-  // 計算勝率
-  Object.keys(stats).forEach(k=>{
+  keys.forEach(k=>{
     const s = stats[k];
     s.winRate = s.total > 0 ? Math.round(s.wins / s.total * 100) : null;
+    s.avgPct  = s.pcts.length > 0 ? +(s.pcts.reduce((a,b)=>a+b,0)/s.pcts.length).toFixed(2) : null;
   });
   return stats;
 }
 
-// 驗證到期的記錄（抓現在股價 vs 入場股價）
+// 舊版相容
+function calcStratWinRates(){
+  return calcStratWinRatesByPeriod('short7');
+}
+
+// 當前選擇的週期
+let _btPeriod = 'short7';
+
+function switchBtPeriod(period, btn){
+  _btPeriod = period;
+  document.querySelectorAll('.bt-period-tab').forEach(b=>{
+    b.style.background = 'transparent';
+    b.style.color      = 'var(--text3)';
+  });
+  if(btn){ btn.style.background='var(--purple)'; btn.style.color='#fff'; }
+  renderBtCompareTable();
+}
+
+// 策略評語
+function getBtVerdict(stats, period){
+  const labels  = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
+  const icons   = {A:'🚀',B:'📈',C:'💎',D:'🔄',E:'⚖️',WL:'⭐'};
+  const pLabels = {short7:'7日短期',short14:'14日短期',mid:'月中期',long:'季長期'};
+
+  // 找最高勝率策略
+  const ranked = Object.entries(stats)
+    .filter(([k,s])=>s.total>=3)
+    .sort((a,b)=>(b[1].winRate||0)-(a[1].winRate||0));
+
+  if(!ranked.length) return null;
+
+  const [bestKey, best] = ranked[0];
+  const wr = best.winRate;
+  const avg = best.avgPct;
+
+  let rating, emoji, comment;
+  if(wr >= 70){
+    rating = '優秀'; emoji = '🏆';
+    comment = `在${pLabels[period]}表現極為突出，勝率高達 ${wr}%，平均報酬 ${avg!=null?avg+'%':'—'}，顯示此策略邏輯精準，建議持續使用。`;
+  } else if(wr >= 55){
+    rating = '良好'; emoji = '✅';
+    comment = `在${pLabels[period]}表現穩定，勝率 ${wr}%，高於隨機水準，建議保持並累積更多樣本強化準確度。`;
+  } else if(wr >= 40){
+    rating = '普通'; emoji = '⚠️';
+    comment = `在${pLabels[period]}勝率僅 ${wr}%，接近隨機水準。建議調整選股條件或換用其他週期。`;
+  } else {
+    rating = '待改善'; emoji = '🔧';
+    comment = `在${pLabels[period]}勝率僅 ${wr}%，低於預期。系統將在下次分析時自動調整策略邏輯。`;
+  }
+
+  // 最差策略
+  const [worstKey, worst] = [...ranked].reverse()[0];
+  const worstComment = worst.winRate !== null && worst.winRate < 40
+    ? `<br>⚠️ 策略${worstKey}（${labels[worstKey]}）在此週期勝率最低（${worst.winRate}%），建議暫時避開。`
+    : '';
+
+  return `${emoji} <strong style="color:var(--gold)">${pLabels[period]}最佳：${icons[bestKey]} ${labels[bestKey]}</strong>（${rating}）<br>${comment}${worstComment}`;
+}
+
+// 驗證到期的記錄（四週期：7日/14日/月/季）
 async function checkBacktestNow(){
   const records = getBtRecords();
   const today   = todayStr();
-  let verified  = 0;
+  let checked   = 0;
   let changed   = false;
 
-  for(const r of records){
-    if(r.verified) continue;
-    if(r.checkDate > today) continue; // 尚未到7天
+  // 抓股價輔助（有 cache 不重複請求）
+  async function getExitPx(id){
+    try{
+      const raw = await fmStockData(id, 5);
+      const q   = _parseQuote(raw, id);
+      return q?.price || null;
+    }catch(e){ return null; }
+  }
 
-    // 取每支股票的現在股價
-    for(const s of r.stocks){
-      if(s.result) continue; // 已驗證
-      if(!s.entryPx){ s.result='flat'; s.pct=0; continue; }
-      try{
-        const raw = await fmStockData(s.id, 5);
-        const q   = _parseQuote(raw, s.id);
-        if(q?.price){
-          s.exitPx = q.price;
-          s.pct    = +((q.price - s.entryPx) / s.entryPx * 100).toFixed(2);
-          s.result = s.pct >= 2 ? 'win' : s.pct <= -2 ? 'loss' : 'flat';
-        }
-      }catch(e){ s.result = 'flat'; s.pct = 0; }
+  function calcResult(entryPx, exitPx){
+    if(!entryPx || !exitPx) return {result:'flat', pct:0};
+    const pct = +((exitPx - entryPx) / entryPx * 100).toFixed(2);
+    return { result: pct>=2?'win':pct<=-2?'loss':'flat', pct };
+  }
+
+  for(const r of records){
+    // 7日驗證
+    if(!r.verified && (r.checkDate||'9999') <= today){
+      for(const s of r.stocks){
+        if(s.result7 || !s.entryPx) continue;
+        const exitPx = await getExitPx(s.id);
+        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPx7=exitPx; s.result7=result; s.pct7=pct; }
+        else { s.result7='flat'; s.pct7=0; }
+      }
+      if(r.stocks.every(s=>s.result7)){ r.verified=true; checked++; changed=true; }
     }
-    // 全部驗證完才標記 verified
-    if(r.stocks.every(s=>s.result)){
-      r.verified = true;
-      verified++;
+    // 14日驗證
+    if(!r.verified14 && (r.checkDate14||'9999') <= today){
+      for(const s of r.stocks){
+        if(s.result14 || !s.entryPx) continue;
+        const exitPx = await getExitPx(s.id);
+        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPx14=exitPx; s.result14=result; s.pct14=pct; }
+        else { s.result14='flat'; s.pct14=0; }
+      }
+      if(r.stocks.every(s=>s.result14)){ r.verified14=true; changed=true; }
     }
-    changed = true;
+    // 月驗證
+    if(!r.verifiedM && (r.checkDateM||'9999') <= today){
+      for(const s of r.stocks){
+        if(s.resultM || !s.entryPx) continue;
+        const exitPx = await getExitPx(s.id);
+        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPxM=exitPx; s.resultM=result; s.pctM=pct; }
+        else { s.resultM='flat'; s.pctM=0; }
+      }
+      if(r.stocks.every(s=>s.resultM)){ r.verifiedM=true; changed=true; }
+    }
+    // 季驗證
+    if(!r.verifiedQ && (r.checkDateQ||'9999') <= today){
+      for(const s of r.stocks){
+        if(s.resultQ || !s.entryPx) continue;
+        const exitPx = await getExitPx(s.id);
+        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPxQ=exitPx; s.resultQ=result; s.pctQ=pct; }
+        else { s.resultQ='flat'; s.pctQ=0; }
+      }
+      if(r.stocks.every(s=>s.resultQ)){ r.verifiedQ=true; changed=true; }
+    }
   }
 
   if(changed) saveBtRecords(records);
   renderBacktestPanel();
-  if(verified > 0) showToast(`✅ 驗證完成 ${verified} 筆推薦記錄`);
-  else showToast('ℹ️ 尚無到期記錄（推薦後7天才驗證）');
+  if(checked > 0) showToast(`✅ 驗證完成 ${checked} 筆`);
+  else showToast('ℹ️ 尚無到期記錄');
 }
 
 // 清除所有回測記錄
@@ -6682,10 +6809,74 @@ function clearBacktest(){
   showToast('回測記錄已清除');
 }
 
+// 渲染比較表（依當前週期）
+function renderBtCompareTable(){
+  const tableEl   = document.getElementById('btCompareTable');
+  const verdictEl = document.getElementById('btVerdict');
+  if(!tableEl) return;
+
+  const stats    = calcStratWinRatesByPeriod(_btPeriod);
+  const stratInfo = {
+    A:{icon:'🚀',name:'極致動能',color:'#ff4c6a'},
+    B:{icon:'📈',name:'穩健成長',color:'#00d4aa'},
+    C:{icon:'💎',name:'價值發現',color:'#f5c842'},
+    D:{icon:'🔄',name:'情緒反轉',color:'#a080ff'},
+    E:{icon:'⚖️',name:'風險平權',color:'#4fc3f7'},
+    WL:{icon:'⭐',name:'自選清單',color:'#ffd54f'},
+  };
+
+  const keys = Object.keys(stratInfo).filter(k=>{
+    const s = stats[k];
+    return s && (s.total > 0 || s.pending > 0);
+  });
+
+  if(!keys.length){
+    tableEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">尚無資料，使用策略分析後自動累積</div>';
+    if(verdictEl) verdictEl.style.display='none';
+    return;
+  }
+
+  // 依勝率排序
+  const sorted = [...keys].sort((a,b)=>{
+    const wa = stats[a].winRate ?? -1;
+    const wb = stats[b].winRate ?? -1;
+    return wb - wa;
+  });
+
+  tableEl.innerHTML = sorted.map((k,rank)=>{
+    const s  = stats[k];
+    const si = stratInfo[k];
+    const wr = s.winRate;
+    const avgStr = s.avgPct!=null ? (s.avgPct>=0?'+':'')+s.avgPct+'%' : '—';
+    const wrColor = wr==null?'var(--text3)':wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
+    const rankIcon = rank===0&&wr!=null?'🥇':rank===1&&wr!=null?'🥈':rank===2&&wr!=null?'🥉':'';
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border:1px solid ${rank===0&&wr!=null?si.color:'var(--border)'};border-radius:10px;margin-bottom:6px${rank===0&&wr!=null?';box-shadow:0 0 0 1px '+si.color+'44':''}">
+      <div style="font-size:20px;flex-shrink:0">${si.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${rankIcon} ${si.name}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">
+          ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 平均${avgStr}`:`待累積（${s.pending}筆進行中）`}
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:20px;font-weight:800;color:${wrColor}">${wr!=null?wr+'%':'—'}</div>
+        <div style="font-size:9px;color:var(--text3)">${wr!=null?'實測勝率':'待驗證'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 評語
+  const verdict = getBtVerdict(stats, _btPeriod);
+  if(verdictEl){
+    if(verdict){ verdictEl.style.display='block'; verdictEl.innerHTML=verdict; }
+    else verdictEl.style.display='none';
+  }
+}
+
 // 渲染回測面板
 function renderBacktestPanel(){
   const panelEl = document.getElementById('backtestPanel');
-  const statsEl = document.getElementById('backtestStats');
   const pendEl  = document.getElementById('backtestPending');
   if(!panelEl) return;
 
@@ -6693,38 +6884,26 @@ function renderBacktestPanel(){
   if(!records.length){ panelEl.style.display='none'; return; }
   panelEl.style.display = 'block';
 
-  // 統計各策略
-  const stats = calcStratWinRates();
-  const stratInfo = { A:{icon:'🚀',color:'#ff4c6a'}, B:{icon:'📈',color:'#00d4aa'}, C:{icon:'💎',color:'#f5c842'}, D:{icon:'🔄',color:'#a080ff'}, E:{icon:'⚖️',color:'#4fc3f7'} };
+  renderBtCompareTable();
 
-  if(statsEl) statsEl.innerHTML = 'ABCDE'.split('').map(k=>{
-    const s  = stats[k];
-    const si = stratInfo[k];
-    const wr = s.winRate;
-    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center">
-      <div style="font-size:14px">${si.icon}</div>
-      <div style="font-size:9px;color:var(--text3);margin:2px 0">策略${k}</div>
-      ${wr !== null
-        ? `<div style="font-size:15px;font-weight:800;color:${si.color}">${wr}%</div>
-           <div style="font-size:9px;color:var(--text3)">${s.wins}勝/${s.losses}敗</div>`
-        : `<div style="font-size:11px;color:var(--text3);padding:4px 0">待累積</div>
-           <div style="font-size:9px;color:var(--text3)">${s.pending}筆中</div>`
-      }
-    </div>`;
-  }).join('');
-
-  // 待驗證清單
+  // 待驗證清單（顯示最近5筆、各週期狀態）
   const today   = todayStr();
-  const pending = records.filter(r=>!r.verified);
+  const pending = records.filter(r=>!r.verifiedQ); // 未完全結束
   if(pendEl && pending.length){
-    pendEl.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">` +
-      pending.slice(0,5).map(r=>{
-        const daysLeft = Math.ceil((new Date(r.checkDate) - new Date(today)) / 86400000);
-        const label    = daysLeft > 0 ? `${daysLeft}天後驗證` : '今日可驗證';
-        const col      = daysLeft <= 0 ? 'var(--gold)' : 'var(--text3)';
-        return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-          <span style="color:var(--text2)">策略${r.stratKey} · ${r.date} · ${r.stocks.length}支</span>
-          <span style="color:${col}">${label}</span>
+    pendEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">` +
+      `<div style="font-size:10px;color:var(--text3);margin-bottom:4px">📋 驗證進度</div>` +
+      pending.slice(0,4).map(r=>{
+        const days7  = Math.ceil((new Date(r.checkDate||'9999')  - new Date(today))/86400000);
+        const days30 = Math.ceil((new Date(r.checkDateM||'9999') - new Date(today))/86400000);
+        const days90 = Math.ceil((new Date(r.checkDateQ||'9999') - new Date(today))/86400000);
+        const tag = (days, done) => done ? '✅' : days<=0 ? `<span style="color:var(--gold)">可驗</span>` : `${days}日`;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <span style="color:var(--text2)">策略${r.stratKey} · ${r.date}</span>
+          <span style="display:flex;gap:6px;color:var(--text3)">
+            <span>7日:${tag(days7,r.verified)}</span>
+            <span>月:${tag(days30,r.verifiedM)}</span>
+            <span>季:${tag(days90,r.verifiedQ)}</span>
+          </span>
         </div>`;
       }).join('') + `</div>`;
   } else if(pendEl){
