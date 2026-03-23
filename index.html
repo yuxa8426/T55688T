@@ -7787,44 +7787,148 @@ function switchBtPeriod(period, btn){
 }
 
 // 策略評語
-function getBtVerdict(stats, period){
-  const labels  = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
-  const icons   = {A:'🚀',B:'📈',C:'💎',D:'🔄',E:'⚖️',WL:'⭐'};
-  const pLabels = {short7:'7日短期',short14:'14日短期',mid:'月中期',long:'季長期'};
+// ════════════════════════════════════════════════════
+// 專業策略評分系統
+// 評分準則參考：量化投資學術標準 + 台股市場特性
+// ════════════════════════════════════════════════════
 
-  // 找最高勝率策略
-  const ranked = Object.entries(stats)
-    .filter(([k,s])=>s.total>=3)
-    .sort((a,b)=>(b[1].winRate||0)-(a[1].winRate||0));
+// 勝率統計顯著性（二項分布 p 值近似）
+// 判斷勝率是否優於隨機（50%）有統計意義
+function _isStatSignificant(wins, total){
+  if(total < 5) return false; // 樣本不足
+  // 使用正態近似：z = (wins - 0.5*total) / sqrt(0.25*total)
+  const z = (wins - 0.5*total) / Math.sqrt(0.25*total);
+  return z > 1.28; // p < 0.10 單尾顯著
+}
 
-  if(!ranked.length) return null;
+// 計算策略的完整評分指標
+function calcStratMetrics(stats_entry){
+  const s = stats_entry;
+  if(!s || s.total < 3) return null;
 
-  const [bestKey, best] = ranked[0];
-  const wr = best.winRate;
-  const avg = best.avgPct;
+  const wr       = s.winRate || 0;
+  const avgPct   = s.avgPct  || 0;
+  const wins     = s.wins    || 0;
+  const losses   = s.losses  || 0;
+  const flats    = s.flats   || 0;
+  const total    = s.total   || 0;
 
-  let rating, emoji, comment;
-  if(wr >= 70){
-    rating = '優秀'; emoji = '🏆';
-    comment = `在${pLabels[period]}表現極為突出，勝率高達 ${wr}%，平均報酬 ${avg!=null?avg+'%':'—'}，顯示此策略邏輯精準，建議持續使用。`;
-  } else if(wr >= 55){
-    rating = '良好'; emoji = '✅';
-    comment = `在${pLabels[period]}表現穩定，勝率 ${wr}%，高於隨機水準，建議保持並累積更多樣本強化準確度。`;
-  } else if(wr >= 40){
-    rating = '普通'; emoji = '⚠️';
-    comment = `在${pLabels[period]}勝率僅 ${wr}%，接近隨機水準。建議調整選股條件或換用其他週期。`;
+  // ① 勝率評分（0~30分）：以 55% 為及格，70% 為滿分
+  const wrScore  = Math.min(30, Math.max(0, (wr - 40) * 30 / 30));
+
+  // ② 平均報酬評分（0~25分）：正報酬加分，負報酬扣分
+  const retScore = Math.min(25, Math.max(0, avgPct * 5 + 12.5));
+
+  // ③ 統計顯著性（0~20分）：樣本夠多且勝率顯著加分
+  const sigScore = _isStatSignificant(wins, total)
+    ? Math.min(20, total * 1.5) : Math.min(10, total * 0.8);
+
+  // ④ 一致性評分（0~15分）：勝敗比例穩定加分
+  const consistency = total > 0
+    ? 1 - Math.abs(wins/total - 0.6) / 0.6 // 以 60% 勝率為理想
+    : 0;
+  const consScore = Math.round(consistency * 15);
+
+  // ⑤ 風險調整（0~10分）：敗率低 + 平均損失小加分
+  const lossRate  = total > 0 ? losses/total : 0.5;
+  const riskScore = Math.max(0, Math.round((0.4 - lossRate) * 25));
+
+  const totalScore = Math.min(100, Math.round(
+    wrScore + retScore + sigScore + consScore + riskScore
+  ));
+
+  // 等級判定
+  let grade, gradeColor, action;
+  if(totalScore >= 75){
+    grade='S'; gradeColor='#ffd700'; action='continue'; // 繼續強化
+  } else if(totalScore >= 60){
+    grade='A'; gradeColor='var(--red)'; action='keep';   // 保持使用
+  } else if(totalScore >= 45){
+    grade='B'; gradeColor='var(--gold)'; action='tune';  // 微調參數
+  } else if(totalScore >= 30){
+    grade='C'; gradeColor='var(--text2)'; action='revise'; // 大幅修正
   } else {
-    rating = '待改善'; emoji = '🔧';
-    comment = `在${pLabels[period]}勝率僅 ${wr}%，低於預期。系統將在下次分析時自動調整策略邏輯。`;
+    grade='D'; gradeColor='var(--green)'; action='replace'; // 考慮替換
   }
 
-  // 最差策略
-  const [worstKey, worst] = [...ranked].reverse()[0];
-  const worstComment = worst.winRate !== null && worst.winRate < 40
-    ? `<br>⚠️ 策略${worstKey}（${labels[worstKey]}）在此週期勝率最低（${worst.winRate}%），建議暫時避開。`
-    : '';
+  return {
+    totalScore, grade, gradeColor, action,
+    wrScore, retScore, sigScore, consScore, riskScore,
+    isSignificant: _isStatSignificant(wins, total),
+    sampleSize: total,
+  };
+}
 
-  return `${emoji} <strong style="color:var(--gold)">${pLabels[period]}最佳：${icons[bestKey]} ${labels[bestKey]}</strong>（${rating}）<br>${comment}${worstComment}`;
+// 生成策略調整建議文字
+function _getActionAdvice(metrics, stratKey, period){
+  const pLabel = {short7:'7日',short14:'14日',mid:'月',long:'季'}[period]||period;
+  const si = STRAT_INFO[stratKey]||{name:stratKey};
+
+  const adviceMap = {
+    continue: `📈 策略表現優異，建議在${pLabel}週期持續使用，可適度增加倉位比重。`,
+    keep:     `✅ 策略表現穩定，建議保持當前參數，待樣本達20筆以上再評估是否優化。`,
+    tune:     `🔧 建議微調：提高選股門檻（如法人連買天數從3日改為5日），或縮短持有週期。`,
+    revise:   `⚠️ 建議大幅修正選股條件，可能與${pLabel}週期特性不匹配，考慮改用其他週期驗證。`,
+    replace:  `🔄 建議暫停此策略，改用量化分數更高的股票池，或切換為反向操作邏輯測試。`,
+  };
+  return adviceMap[metrics.action] || '';
+}
+
+function getBtVerdict(stats, period){
+  const labels = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
+  const icons  = {A:'🚀',B:'📈',C:'💎',D:'🔄',E:'⚖️',WL:'⭐'};
+  const pLabel = {short7:'7日短期',short14:'14日短期',mid:'月中期',long:'季長期'}[period]||period;
+
+  // 計算所有策略的完整評分
+  const evaluated = Object.entries(stats)
+    .map(([k,s])=>({ key:k, metrics: calcStratMetrics(s), s }))
+    .filter(e=>e.metrics)
+    .sort((a,b)=>b.metrics.totalScore - a.metrics.totalScore);
+
+  if(!evaluated.length) return null;
+
+  const best  = evaluated[0];
+  const worst = evaluated[evaluated.length-1];
+  const m     = best.metrics;
+  const pct   = best.s.avgPct;
+
+  // 評分分解顯示
+  const scoreBreakdown = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">
+      <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">勝率 ${Math.round(m.wrScore)}/30</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">報酬 ${Math.round(m.retScore)}/25</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">顯著性 ${Math.round(m.sigScore)}/20</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">一致性 ${Math.round(m.consScore)}/15</span>
+      <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--text3)">風控 ${Math.round(m.riskScore)}/10</span>
+    </div>`;
+
+  // 統計顯著性提示
+  const sigNote = m.isSignificant
+    ? `<span style="font-size:9px;color:var(--green)">✅ 統計顯著（p<0.10）</span>`
+    : `<span style="font-size:9px;color:var(--text3)">⚠️ 樣本尚不足夠顯著（需再累積）</span>`;
+
+  const advice = _getActionAdvice(m, best.key, period);
+
+  // 最差策略提示
+  let worstNote = '';
+  if(worst.key !== best.key && worst.metrics.totalScore < 30){
+    worstNote = `<div style="margin-top:8px;padding:6px 8px;background:rgba(255,76,106,.06);border-radius:6px;font-size:11px;color:var(--text3)">
+      ⚠️ ${icons[worst.key]}${labels[worst.key]} 評分最低（${worst.metrics.totalScore}分／等級${worst.metrics.grade}），建議暫停此策略或修正選股邏輯。
+    </div>`;
+  }
+
+  return `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:32px;font-weight:900;color:${m.gradeColor};flex-shrink:0;line-height:1">${m.grade}</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${pLabel}最佳：${icons[best.key]} ${labels[best.key]}</div>
+        <div style="font-size:10px;color:var(--text3)">綜合評分 ${m.totalScore}/100 · 樣本 ${m.sampleSize}筆 · 均報酬 ${pct!=null?(pct>=0?'+':'')+pct+'%':'—'}</div>
+      </div>
+    </div>
+    ${scoreBreakdown}
+    ${sigNote}
+    <div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.6">${advice}</div>
+    ${worstNote}`;
 }
 
 // 驗證到期的記錄（四週期：7日/14日/月/季）
@@ -7846,6 +7950,10 @@ async function checkBacktestNow(){
   function calcResult(entryPx, exitPx){
     if(!entryPx || !exitPx) return {result:'flat', pct:0};
     const pct = +((exitPx - entryPx) / entryPx * 100).toFixed(2);
+    // 勝負標準：
+    // 勝：+2% 以上（扣除手續費後仍有獲利）
+    // 敗：-2% 以下（跌破停損線）
+    // 平：-2% ~ +2%（無效交易，成本內）
     return { result: pct>=2?'win':pct<=-2?'loss':'flat', pct };
   }
 
@@ -8030,14 +8138,21 @@ function renderBtCompareTable(){
     const rankIcon = rank===0&&wr!=null?'🥇':rank===1&&wr!=null?'🥈':rank===2&&wr!=null?'🥉':'';
 
     const recCount = getBtRecords().filter(r=>r.stratKey===k).length;
+    const metrics  = calcStratMetrics(s);
+    const gradeTag = metrics
+      ? `<span style="font-size:11px;font-weight:900;color:${metrics.gradeColor};margin-left:4px">${metrics.grade}</span>`
+      : '';
+    const scoreLine = metrics
+      ? `<span style="font-size:9px;color:var(--text3);margin-left:4px">${metrics.totalScore}/100</span>`
+      : '';
     return `<div style="background:var(--card);border:1px solid ${rank===0&&wr!=null?si.color:'var(--border)'};border-radius:12px;margin-bottom:8px;overflow:hidden${rank===0&&wr!=null?';box-shadow:0 0 0 1px '+si.color+'44':''}">
       <!-- 主體列 -->
       <div style="display:flex;align-items:center;gap:10px;padding:11px 12px">
         <div style="font-size:22px;flex-shrink:0">${si.icon}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text)">${rankIcon} ${si.name}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center">${rankIcon} ${si.name}${gradeTag}${scoreLine}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">
-            ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 均${avgStr}`:`待累積（${s.pending}筆中）`}
+            ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 均${avgStr}${metrics&&metrics.isSignificant?' · ✅顯著':''}`:`待累積（${s.pending}筆中）`}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0;margin-right:6px">
@@ -8461,13 +8576,36 @@ function renderHistoryList(){
 
 // 取得回測修正摘要（給 AI 的 context）
 function getBacktestSummary(stratKey){
-  const stats = calcStratWinRates();
+  const stats = calcStratWinRatesByPeriod('short7');
   const s     = stats[stratKey];
-  if(!s || s.winRate === null) return '';
-  const dir = s.winRate >= 60 ? '繼續強化' : s.winRate >= 45 ? '小幅調整' : '大幅修正';
+  if(!s || s.winRate === null || s.total < 3) return '';
+
+  const m = calcStratMetrics(s);
+  if(!m) return '';
+
+  // 依評分等級給 AI 不同程度的調整指令
+  const directionMap = {
+    continue: `請持續使用相同選股邏輯，可提高動能/法人條件門檻以篩選更強標的。`,
+    keep:     `請保持核心邏輯，可微調：稍提高技術條件嚴格度（如均線方向確認）。`,
+    tune:     `請調整選股條件：提高入選門檻（法人連買至少5日、近10日漲幅>5%），排除橫盤整理個股。`,
+    revise:   `此策略需大幅修正：改變選股角度，考慮加入基本面條件（EPS成長、毛利率）搭配技術面，避開純動能個股。`,
+    replace:  `此策略績效不佳，請根本性改變邏輯：考慮反向（找超跌反彈）或切換為防禦型（高殖利率+低波動），捨棄原有進場條件。`,
+  };
+
   return `
 
-【本機回測修正】策略${stratKey}已驗證${s.total}次，實測勝率${s.winRate}%（${s.wins}勝/${s.losses}敗）。請${dir}此策略的選股邏輯，提升精準度。`;
+【本機回測績效反饋】策略已驗證${s.total}筆，${_periodStr(stratKey)}實測結果：
+- 綜合評分：${m.totalScore}/100（等級 ${m.grade}）
+- 實測勝率：${s.winRate}%（${s.wins}勝/${s.losses}敗/${s.flats}平）
+- 平均報酬：${s.avgPct!=null?(s.avgPct>=0?'+':'')+s.avgPct+'%':'—'}
+- 統計顯著：${m.isSignificant?'是':'否（樣本需再累積）'}
+- AI調整指令：${directionMap[m.action]}`;
+}
+
+// 策略名稱輔助
+function _periodStr(key){
+  const names = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
+  return names[key]||key;
 }
 
 // 渲染首頁累積戰績橫幅
