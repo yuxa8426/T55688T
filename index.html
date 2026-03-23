@@ -1427,6 +1427,33 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <div class="pref-item" onclick="showToast('通知設定開發中')"><div class="pref-icon" style="background:rgba(0,212,170,.12)">🔔</div><div><div class="pref-t">通知設定</div><div class="pref-s">價格警報、法人動向</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="clearAllData()"><div class="pref-icon" style="background:rgba(255,76,106,.12)">🗑️</div><div><div class="pref-t">清除所有資料</div><div class="pref-s">自選股、投組、設定</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="showToast('股析 StockAI v2.0 · FinMind 真實資料')"><div class="pref-icon" style="background:rgba(245,200,66,.12)">📡</div><div><div class="pref-t">數據來源</div><div class="pref-s">FinMind · TWSE · 每日更新</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
+  <!-- FinMind Token 設定 -->
+  <div style="margin:12px 0;padding:14px;background:rgba(245,200,66,.06);border:1px solid rgba(245,200,66,.2);border-radius:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:16px">🔑</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">FinMind API Token</div>
+        <div style="font-size:11px;color:var(--text3)" id="fmTokenStatus">載入中…</div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:8px;cursor:pointer" onclick="showFmTokenInput()">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">目前 Token（點擊更新）</div>
+      <div style="font-size:11px;color:var(--gold);font-family:monospace;word-break:break-all;max-height:32px;overflow:hidden" id="fmTokenDisplay">載入中…</div>
+    </div>
+    <!-- Token 輸入區（預設隱藏）-->
+    <div id="fmTokenInputArea" style="display:none">
+      <textarea id="fmTokenInput" rows="3" placeholder="貼上你的 FinMind Token（從 finmindtrade.com 登入後取得）"
+        style="width:100%;background:var(--surface);border:1px solid rgba(245,200,66,.4);border-radius:8px;padding:8px 10px;color:var(--text);font-size:11px;font-family:monospace;outline:none;resize:none;box-sizing:border-box;margin-bottom:6px"></textarea>
+      <div style="display:flex;gap:6px">
+        <button onclick="saveFmToken()" style="flex:1;background:var(--gold);color:#000;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✅ 儲存 Token</button>
+        <button onclick="clearFmToken()" style="background:none;border:1px solid rgba(255,76,106,.3);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit">清除</button>
+        <button onclick="document.getElementById('fmTokenInputArea').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit">取消</button>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5">
+      Token 過期時資料無法顯示。前往 <span style="color:var(--gold)">finmindtrade.com</span> → 登入 → 個人資料 → 複製 Token 貼上即可。
+    </div>
+  </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
   <!-- 編輯 Modal -->
   <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
@@ -1599,13 +1626,16 @@ function initKvUidDisplay(){
 async function kvSyncDown(){
   if(!API) return;
   try{
-    const [profile, backtest] = await Promise.all([
+    const [profile, backtest, fmtoken] = await Promise.all([
       kvGet('profile'),
       kvGet('backtest'),
+      kvGet('fmtoken'),
     ]);
     if(profile)  localStorage.setItem('stockai_profile',  JSON.stringify(profile));
     if(backtest) localStorage.setItem('stockai_backtest', JSON.stringify(backtest));
-    console.log('[KV] synced down:', profile?'profile':'', backtest?'backtest':'');
+    if(fmtoken && typeof fmtoken === 'string' && fmtoken.length > 50)
+      localStorage.setItem(FM_TOKEN_KEY, fmtoken);
+    console.log('[KV] synced down:', profile?'profile':'', backtest?'backtest':'', fmtoken?'fmtoken':'');
   }catch(e){ console.warn('[KV sync]', e.message); }
 }
 
@@ -1751,7 +1781,14 @@ function fmtPct(n){ const s=n>=0?'+':''; return s+fmt(n)+'%'; }
 // 文件：https://finmindtrade.com/analysis/#/data/api
 // ════════════════════════════════════════════════════
 
-const FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0xNiAxNjoxNjo0OSIsInVzZXJfaWQiOiJ5dXhhODQyNiIsImVtYWlsIjoieXV4YTg0MjZAZ21haWwuY29tIiwiaXAiOiIxMTQuNDcuMjAzLjExOCJ9.ptLf438h88cHveDwIe9J27oC0bGvWg4otaQHx0pxOgc';
+const FM_TOKEN_DEFAULT = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0xNiAxNjoxNjo0OSIsInVzZXJfaWQiOiJ5dXhhODQyNiIsImVtYWlsIjoieXV4YTg0MjZAZ21haWwuY29tIiwiaXAiOiIxMTQuNDcuMjAzLjExOCJ9.ptLf438h88cHveDwIe9J27oC0bGvWg4otaQHx0pxOgc';
+const FM_TOKEN_KEY = 'stockai_fm_token';
+// 動態取得 Token：優先用戶自填 > 預設值
+function getFmToken(){
+  return localStorage.getItem(FM_TOKEN_KEY) || FM_TOKEN_DEFAULT;
+}
+// FM_TOKEN 改為 getter（相容舊程式碼）
+Object.defineProperty(window, 'FM_TOKEN', { get: getFmToken });
 const FM_BASE  = 'https://api.finmindtrade.com/api/v4/data';
 // FinMind CORS proxy（t55688t.pages.dev 直連會被封鎖）
 const FM_PROXY = 'https://corsproxy.io/?url=';
@@ -1929,7 +1966,7 @@ const FM_CACHE_DEFAULT = 30 * 1000;
 async function fmFetch(params, timeout=15000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
   // 優先走 Cloudflare Worker（最穩定）；未設定時嘗試直連（本地測試用）
-  const fmParams = new URLSearchParams({ ...apiParams, token: FM_TOKEN }).toString();
+  const fmParams = new URLSearchParams({ ...apiParams, token: getFmToken() }).toString();
   const url = (typeof API !== 'undefined' && API)
     ? API.replace(/\/$/, '') + '/finmind?' + fmParams
     : FM_BASE + '?' + fmParams;
@@ -6568,16 +6605,35 @@ async function runStratAnalysis(){
       const win = Math.min(99, Math.max(1, Math.round(s.winRate||60)));
       const safe = (s.name||'').replace(/'/g,"\'");
       const safeId = (s.id||'').replace(/'/g,"\'");
+      // 查詢此股票在本策略的實測勝率
+      const btStats = calcStratWinRatesByPeriod('short7');
+      const btForStrat = btStats[key] || {};
+      const realWin  = btForStrat.winRate;   // null = 尚無實測
+      const realTotal = btForStrat.total || 0;
+
       return `<div class="sstock-card" onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
         <div class="sstock-rank">${i+1}</div>
         <div class="sstock-info">
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
           <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
         </div>
-        <div class="sstock-metrics">
-          <div class="sstock-win" style="color:${strat.color}">${win}%</div>
-          <div class="sstock-risk" style="color:${riskColor}">${riskLabel}</div>
-          <div class="sstock-risk-bar"><div class="sstock-risk-fill" style="width:${risk*10}%;background:${riskColor}"></div></div>
+        <div class="sstock-metrics" style="min-width:72px">
+          ${realWin !== null
+            ? `<!-- 有實測數據：實測大字，AI小字 -->
+               <div style="font-size:18px;font-weight:900;color:${realWin>=60?'var(--red)':realWin>=45?'var(--gold)':'var(--green)'}">${realWin}%</div>
+               <div style="font-size:9px;color:var(--green);font-weight:600">實測勝率</div>
+               <div style="font-size:9px;color:var(--text3);margin-top:2px">AI估 ${win}%</div>`
+            : `<!-- 無實測數據：AI大字（灰色），標示估算 -->
+               <div style="font-size:16px;font-weight:800;color:var(--text3)">${win}%</div>
+               <div style="font-size:9px;color:var(--text3)">AI 估算</div>
+               <div style="font-size:9px;color:rgba(255,255,255,.25);margin-top:1px">實測累積中</div>`
+          }
+          <div style="margin-top:4px">
+            <div style="font-size:9px;color:${riskColor};font-weight:600">${riskLabel}</div>
+            <div style="height:3px;background:var(--surface);border-radius:2px;margin-top:2px;overflow:hidden">
+              <div style="width:${risk*10}%;height:100%;background:${riskColor};border-radius:2px"></div>
+            </div>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -7627,6 +7683,9 @@ function loadProfile(){
   // 更新裝置 UID 顯示
   const uidEl = document.getElementById('kvUidDisplay');
   if(uidEl) uidEl.textContent = getUID();
+
+  // 更新 Token 狀態
+  renderFmTokenStatus();
 }
 
 function editProfile(){
@@ -7674,6 +7733,61 @@ function saveProfile(){
   document.getElementById('profileModal').style.display='none';
   loadProfile();
   showToast('個人資料已儲存');
+}
+
+// ── FinMind Token 管理函式 ───────────────────────────
+function renderFmTokenStatus(){
+  const token   = localStorage.getItem(FM_TOKEN_KEY);
+  const statusEl = document.getElementById('fmTokenStatus');
+  const displayEl= document.getElementById('fmTokenDisplay');
+  if(!statusEl || !displayEl) return;
+
+  if(token){
+    const preview = token.slice(0,20)+'…'+token.slice(-8);
+    statusEl.textContent  = '✅ 使用自訂 Token';
+    statusEl.style.color  = 'var(--green)';
+    displayEl.textContent = preview;
+  } else {
+    statusEl.textContent  = '⚠️ 使用預設 Token（可能已過期）';
+    statusEl.style.color  = 'var(--gold)';
+    displayEl.textContent = FM_TOKEN_DEFAULT.slice(0,20)+'…（預設值）';
+  }
+}
+
+function showFmTokenInput(){
+  const area = document.getElementById('fmTokenInputArea');
+  if(!area) return;
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+  if(area.style.display === 'block'){
+    const input = document.getElementById('fmTokenInput');
+    if(input) input.value = localStorage.getItem(FM_TOKEN_KEY) || '';
+    setTimeout(()=>input?.focus(), 100);
+  }
+}
+
+function saveFmToken(){
+  const input = document.getElementById('fmTokenInput');
+  const token = (input?.value||'').trim();
+  if(!token){ showToast('請輸入 Token'); return; }
+  if(token.length < 50){ showToast('⚠️ Token 長度不足，請確認是否完整複製'); return; }
+
+  localStorage.setItem(FM_TOKEN_KEY, token);
+  // 同時同步到 KV
+  kvPutDebounced('fmtoken', token);
+  // 清除 FinMind cache（讓舊 cache 失效，用新 token 重新抓）
+  _fmCache.clear();
+  document.getElementById('fmTokenInputArea').style.display = 'none';
+  renderFmTokenStatus();
+  showToast('✅ Token 已儲存，資料將自動更新');
+}
+
+function clearFmToken(){
+  if(!confirm('清除自訂 Token 後將使用預設 Token（可能已過期）。確定清除？')) return;
+  localStorage.removeItem(FM_TOKEN_KEY);
+  _fmCache.clear();
+  document.getElementById('fmTokenInputArea').style.display = 'none';
+  renderFmTokenStatus();
+  showToast('已清除自訂 Token');
 }
 
 function clearAllData(){
