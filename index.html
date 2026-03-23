@@ -6628,76 +6628,102 @@ function openAddWatchlist(){}
 function closeAddWatchlist(){}
 
 // ── 五大策略定義 ─────────────────────────────────────
+const JSON_FORMAT = `請直接輸出JSON，禁止任何開場白、說明或markdown格式：
+{"stocks":[{"id":"4位數字代號","name":"股名","sector":"產業","winRate":0-100,"risk":1-10,"reason":"15字以內原因"}]}`;
+
 const STRATEGIES = {
   A:{
     name:'策略 A — 極致動能',
     icon:'🚀',
     color:'#ff4c6a',
     desc:'金流（外資/投信買超）與消息面動能各佔 40% 權重，技術突破佔 20%，追求短期爆發性機會。適合積極型投資人，持有週期約 2~4 週。',
-    prompt: (market) => `你是台股量化策略分析師。請使用「極致動能策略」（金流動能40%+消息面動能40%+技術突破20%），從以下市場背景選出10支最具爆發潛力的台股。
+    prompt: (market) => `台股量化分析師任務：使用「極致動能策略」從台灣上市上櫃全市場（含半導體、AI、航運、金融、生技、傳產等所有類股）選出10支最具爆發潛力的股票。
 
-市場背景：${market}
+【市場背景】${market}
 
-選股條件：外資或投信連續買超、近5日漲幅突出、成交量放大1.5倍以上、消息面有正向催化。
+【選股條件】
+- 外資或投信連續3日以上買超
+- 近5日漲幅突出且成交量放大1.5倍以上
+- 消息面有正向催化（法說會、新訂單、技術突破）
+- 不限定特定產業，全市場尋找最強動能
 
-請直接輸出JSON（不含markdown格式）：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":勝率數字0-100,"risk":風險係數1-10,"reason":"20字以內的關鍵原因"}]}`
+【多樣化要求】10支中需包含至少3種不同產業類別
+
+` + JSON_FORMAT
   },
   B:{
     name:'策略 B — 穩健成長',
     icon:'📈',
     color:'#00d4aa',
     desc:'獲利成長能力佔 60% 權重，配合季節性週期規律避開淡季，法人動向佔 40%。適合穩健型投資人，持有週期約 1~3 個月。',
-    prompt: (market) => `你是台股量化策略分析師。請使用「穩健成長策略」（獲利成長60%+法人動向40%），避開淡季，選出10支台股。
+    prompt: (market) => `台股量化分析師任務：使用「穩健成長策略」從台灣上市上櫃全市場選出10支兼顧成長與穩定的股票。
 
-市場背景：${market}
+【市場背景】${market}
 
-選股條件：近四季EPS成長、法人持續買超、產業景氣上行、非傳統淡季、毛利率穩健。
+【選股條件】
+- 近四季EPS持續成長，毛利率穩健
+- 法人（外資+投信）合計買超
+- 所屬產業景氣上行或復甦初期，非傳統淡季
+- 不限定特定產業，包含金融、電信、民生消費等穩健型均可
 
-請直接輸出JSON（不含markdown格式）：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":勝率數字0-100,"risk":風險係數1-10,"reason":"20字以內的關鍵原因"}]}`
+【多樣化要求】10支中需包含至少4種不同產業類別
+
+` + JSON_FORMAT
   },
   C:{
     name:'策略 C — 價值發現',
     icon:'💎',
     color:'#f5c842',
     desc:'專注低本益比（PE）且大戶開始建倉的標的，尋找被市場低估但籌碼開始集中的機會。適合長線價值型投資人，持有週期約 3~6 個月。',
-    prompt: (market) => `你是台股量化策略分析師。請使用「價值發現策略」（低PE+大戶建倉），選出10支被低估的台股。
+    prompt: (market) => `台股量化分析師任務：使用「價值發現策略」從台灣上市上櫃全市場尋找10支被低估的潛力股。
 
-市場背景：${market}
+【市場背景】${market}
 
-選股條件：本益比低於產業平均、外資或投信近期由賣轉買、股價在年線附近或以下、基本面無重大疑慮。
+【選股條件】
+- 本益比低於同業平均20%以上
+- 外資或投信近期由賣轉買或開始建倉
+- 股價在年線（MA250）附近或以下，基本面穩健
+- 特別關注：傳產、金融、中小型股、近期受錯殺的題材股
 
-請直接輸出JSON（不含markdown格式）：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":勝率數字0-100,"risk":風險係數1-10,"reason":"20字以內的關鍵原因"}]}`
+【多樣化要求】10支需包含至少4種不同產業，避免集中半導體
+
+` + JSON_FORMAT
   },
   D:{
     name:'策略 D — 情緒反轉',
     icon:'🔄',
     color:'#a080ff',
     desc:'當消息面極度恐慌（VIX高、新聞負面）但金流開始止跌回升時進場，捕捉逆向反彈機會。高報酬高風險，適合專業型投資人。',
-    prompt: (market) => `你是台股量化策略分析師。請使用「情緒反轉策略」（恐慌底部+金流止跌），選出10支具反轉潛力的台股。
+    prompt: (market) => `台股量化分析師任務：使用「情緒反轉策略」從台灣上市上櫃全市場找出10支具反轉潛力的超跌股。
 
-市場背景：${market}
+【市場背景】${market}
 
-選股條件：近期跌幅超過15%、RSI超賣（<30）、外資賣超趨緩或轉買、基本面未惡化、消息面恐慌情緒極端。
+【選股條件】
+- 近30日跌幅超過15%（相對大盤顯著弱勢）
+- RSI進入超賣區（低於30）或剛脫離超賣
+- 外資賣超趨緩、融券餘額高（軋空潛力）
+- 基本面未惡化，包含航運、生技、金融、電子等均可
 
-請直接輸出JSON（不含markdown格式）：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":勝率數字0-100,"risk":風險係數1-10,"reason":"20字以內的關鍵原因"}]}`
+` + JSON_FORMAT
   },
   E:{
     name:'策略 E — 風險平權',
     icon:'⚖️',
     color:'#4fc3f7',
     desc:'整合前四項策略，以最小化整體波動為目標，自動平衡動能、成長、價值、反轉四個維度。適合希望分散風險的投資人。',
-    prompt: (market) => `你是台股量化策略分析師。請使用「風險平權策略」（整合動能25%+成長25%+價值25%+反轉25%），選出10支組合波動最小的台股組合。
+    prompt: (market) => `台股量化分析師任務：使用「風險平權策略」從台灣上市上櫃全市場建構10支低波動分散組合。
 
-市場背景：${market}
+【市場背景】${market}
 
-選股條件：各類型均衡分配（2~3支動能股、2~3支成長股、2~3支價值股、1~2支反轉股），整體Beta值低，降低單一策略集中風險。
+【配置要求（必須均衡）】
+- 動能型 2~3支：近期強勢、外資買超
+- 成長型 2~3支：獲利穩定成長
+- 價值型 2~3支：低估值、高殖利率
+- 反轉型 1~2支：超跌但基本面穩健
 
-請直接輸出JSON（不含markdown格式）：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":勝率數字0-100,"risk":風險係數1-10,"reason":"20字以內的關鍵原因"}]}`
+【分散要求】10支必須來自至少5種不同產業，整體Beta低於1.0
+
+` + JSON_FORMAT
   },
 };
 
@@ -6767,17 +6793,63 @@ async function runStratAnalysis(){
   resultEl.style.display = 'none';
 
   try{
-    // 取得當前市場背景（從 _lastAIContext）
-    const ctx = _lastAIContext || {};
-    const market = [
-      ctx.name ? `目前分析標的：${ctx.name}` : '台股大盤',
-      ctx.finalScore ? `技術評分 ${ctx.finalScore.toFixed(1)}/10` : '',
-      ctx.rsi ? `RSI ${ctx.rsi}` : '',
-      `今日：${new Date().toLocaleDateString('zh-TW')}`,
-    ].filter(Boolean).join('，');
+    // ── 組合豐富市場背景（法人 + 指數 + VIX + 技術面）──────
+    showToast('🔍 收集市場資料中…');
 
-    // 加入本機回測修正數據，讓 AI 參考過去準確率調整策略
+    // 並行取得：大盤指數 + 全市場法人 + VIX 快取
+    const [idxData, instMkt] = await Promise.all([
+      fmTWSEIndex().catch(()=>null),
+      fmFetch({
+        dataset: 'TaiwanStockTotalInstitutionalInvestors',
+        start_date: nDaysAgo(5), end_date: nDaysAgo(0),
+      }, 12000).catch(()=>null),
+    ]);
+
+    // 加權指數
+    const idxStr = idxData
+      ? `加權指數 ${Number(idxData.index||0).toLocaleString()}（${parseFloat(idxData.changePct||0)>=0?'+':''}${idxData.changePct}%）`
+      : '加權指數資料取得中';
+
+    // 三大法人今日合計
+    let foreignNet=0, trustNet=0, dealerNet=0;
+    if(instMkt?.length){
+      const dates = [...new Set(instMkt.map(r=>r.date))].sort();
+      const latest = dates[dates.length-1];
+      instMkt.filter(r=>r.date===latest).forEach(r=>{
+        const nm  = r.name||r.institutional_investors||'';
+        const net = parseInt(r.buy||0) - parseInt(r.sell||0);
+        if(nm.includes('外資')||nm.includes('Foreign')) foreignNet += net;
+        else if(nm.includes('投信'))  trustNet  += net;
+        else if(nm.includes('自營'))  dealerNet += net;
+      });
+    }
+    const fmt3 = v => (v>=0?'+':'')+Math.round(v/10000)+'億';
+    const instStr = instMkt?.length
+      ? `外資${fmt3(foreignNet)}、投信${fmt3(trustNet)}、自營${fmt3(dealerNet)}`
+      : '法人資料載入中';
+
+    // VIX
+    const vixCache = loadVixCache();
+    const vixStr   = vixCache ? `VIX ${vixCache.vix.toFixed(1)}（${vixCache.vix<15?'低波動':vixCache.vix<25?'正常':vixCache.vix<35?'緊張':'極度恐慌'}）` : '';
+
+    // 個人風險偏好
+    const prof = JSON.parse(localStorage.getItem('stockai_profile')||'{}');
+    const riskMap = {low:'保守型',mid:'穩健型',high:'積極型',pro:'專業型'};
+    const profStr = prof.risk ? `投資人風格：${riskMap[prof.risk]||'穩健型'}` : '';
+
+    // 本機回測修正
     const btSummary = getBacktestSummary(key);
+
+    // 組合完整 market context
+    const market = [
+      `分析日期：${new Date().toLocaleDateString('zh-TW')}`,
+      idxStr,
+      `三大法人：${instStr}`,
+      vixStr,
+      profStr,
+      '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
+    ].filter(Boolean).join('；');
+
     const prompt = strat.prompt(market + btSummary);
     const WORKER = (typeof API !== 'undefined' && API)
       ? API.replace(/\/$/, '') + '/v1/messages'
