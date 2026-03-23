@@ -6646,6 +6646,282 @@ function openAddWatchlist(){}
 function closeAddWatchlist(){}
 
 // ── 五大策略定義 ─────────────────────────────────────
+// ════════════════════════════════════════════════════
+// 真實量化篩選引擎 v2
+// 核心策略：用「全市場批次 dataset」一次取得 1,800 支
+// 只需 3 次 API 請求，不消耗大量配額
+// ════════════════════════════════════════════════════
+
+// 全市場量化快取（每日只算一次）
+const FULL_QUANT_KEY = 'stockai_full_quant';
+const FULL_QUANT_TTL = _msTillMidnight;  // 快取到午夜
+
+// 全市場批次量化：3次API取得全部1800支的指標
+async function buildFullMarketQuant(){
+  // 檢查快取
+  try{
+    const cached = JSON.parse(localStorage.getItem(FULL_QUANT_KEY)||'null');
+    if(cached && cached.ts && Date.now()-cached.ts < 4*60*60*1000){ // 4小時快取
+      console.log('[FullQuant] cache hit, stocks:', Object.keys(cached.data).length);
+      return cached.data;
+    }
+  }catch(e){}
+
+  console.log('[FullQuant] building full market quant scores...');
+  const today   = todayStr();
+  const weekAgo = nDaysAgo(7);
+
+  // ── 3次並行 API 取得全市場資料 ────────────────────────
+  const [dayTradingData, instData, priceToday] = await Promise.all([
+    // 1. 當日沖銷（含成交量、漲跌幅，全市場一次取完）
+    fmFetch({ dataset:'TaiwanStockDayTrading',
+      start_date: weekAgo, end_date: today }, 20000).catch(()=>null),
+
+    // 2. 三大法人（全市場，一次取完）
+    fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
+      start_date: weekAgo, end_date: today }, 20000).catch(()=>null),
+
+    // 3. 個股 PER/PBR（含股價，全市場一次取完）
+    fmFetch({ dataset:'TaiwanStockPER',
+      start_date: nDaysAgo(3), end_date: today }, 20000).catch(()=>null),
+  ]);
+
+  const scoreMap = {}; // stock_id → {score, ret5, vol, instScore, pe, pb}
+
+  // ── 解析當日沖銷（取近5日漲跌幅 + 量能）────────────────
+  if(dayTradingData?.length){
+    const byId = {};
+    dayTradingData.forEach(r=>{
+      const id  = r.stock_id;
+      const dt  = r.date||'';
+      if(!byId[id]) byId[id] = [];
+      byId[id].push({ date:dt,
+        close:   parseFloat(r.close||0),
+        volume:  parseInt(r.Trading_Volume||r.close_volume||0),
+        change:  parseFloat(r.spread||r.price_change||0),
+      });
+    });
+
+    Object.entries(byId).forEach(([id, rows])=>{
+      if(rows.length < 2) return;
+      rows.sort((a,b)=>a.date>b.date?1:-1);
+      const last   = rows[rows.length-1];
+      const first  = rows[0];
+      if(!last.close || !first.close) return;
+
+      const ret5   = (last.close - first.close) / first.close * 100;
+      const vols   = rows.map(r=>r.volume).filter(v=>v>0);
+      const avgVol = vols.length ? vols.slice(0,-1).reduce((a,b)=>a+b,0)/Math.max(vols.length-1,1) : 0;
+      const lastVol= vols[vols.length-1] || 0;
+      const volRatio = avgVol > 0 ? lastVol/avgVol : 1;
+
+      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
+      scoreMap[id].ret5     = +ret5.toFixed(2);
+      scoreMap[id].volRatio = +volRatio.toFixed(2);
+      scoreMap[id].name     = NAME_MAP[id] || id;
+    });
+  }
+
+  // ── 解析三大法人（近7日累計）────────────────────────
+  if(instData?.length){
+    const byId = {};
+    instData.forEach(r=>{
+      const id  = r.stock_id;
+      const nm  = r.name||r.institutional_investors||'';
+      const net = parseInt(r.buy||0)-parseInt(r.sell||0);
+      if(!byId[id]) byId[id] = {foreign:0, trust:0};
+      if(nm.includes('外資')||nm.includes('Foreign')) byId[id].foreign += net;
+      else if(nm.includes('投信')) byId[id].trust += net;
+    });
+    Object.entries(byId).forEach(([id, inst])=>{
+      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
+      scoreMap[id].instScore = (inst.foreign>0?2:inst.foreign<0?-2:0) + (inst.trust>0?1:0);
+    });
+  }
+
+  // ── 解析 PER/PBR（估值）────────────────────────────
+  if(priceToday?.length){
+    const latest = {};
+    priceToday.forEach(r=>{
+      const id = r.stock_id;
+      if(!latest[id] || r.date > latest[id].date) latest[id] = r;
+    });
+    Object.entries(latest).forEach(([id, r])=>{
+      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
+      scoreMap[id].pe   = parseFloat(r.PER||r.per||0)||null;
+      scoreMap[id].pb   = parseFloat(r.PBR||r.pbr||0)||null;
+      scoreMap[id].close= parseFloat(r.closing_price||r.close||0)||null;
+    });
+  }
+
+  // 存快取
+  try{
+    localStorage.setItem(FULL_QUANT_KEY, JSON.stringify({
+      ts: Date.now(), data: scoreMap
+    }));
+  }catch(e){}
+
+  console.log('[FullQuant] built scores for', Object.keys(scoreMap).length, 'stocks');
+  return scoreMap;
+}
+
+// 依策略計算單支股票的加權分數
+function calcScoreForStrat(data, stratKey){
+  const {ret5=0, volRatio=1, instScore=0, pe=null} = data;
+  let score = 50;
+  if(stratKey==='A'){ // 極致動能
+    score = 50 + ret5*3 + (volRatio-1)*10 + instScore*5;
+  } else if(stratKey==='B'){ // 穩健成長
+    score = 50 + instScore*10 + ret5*1 + (pe&&pe>0&&pe<25?8:0);
+  } else if(stratKey==='C'){ // 價值發現
+    const valuePts = pe&&pe>0&&pe<15 ? 20 : pe&&pe<20 ? 10 : 0;
+    score = 50 + valuePts - ret5*0.5 + instScore*4;
+  } else if(stratKey==='D'){ // 情緒反轉
+    score = 50 + (ret5<-10?20:ret5<-5?10:0) + instScore*3;
+  } else { // E 風險平權
+    score = 50 + instScore*5 + (Math.abs(ret5)<5?8:0) + (pe&&pe>0&&pe<30?5:0);
+  }
+  return Math.min(99, Math.max(1, Math.round(score)));
+}
+
+// 量化股票池（100支，涵蓋各大類股）—— 作為備援（全市場 dataset 失敗時使用）
+const QUANT_POOL = [
+  // 半導體/IC設計
+  {id:'2330',name:'台積電',s:'半導體'},{id:'2303',name:'聯電',s:'半導體'},
+  {id:'2454',name:'聯發科',s:'IC設計'},{id:'3034',name:'聯詠',s:'IC設計'},
+  {id:'2379',name:'瑞昱',s:'IC設計'},{id:'3661',name:'世芯-KY',s:'IC設計'},
+  {id:'5269',name:'祥碩',s:'IC設計'},{id:'6533',name:'晶心科',s:'IC設計'},
+  {id:'3443',name:'創意',s:'IC設計'},{id:'6415',name:'矽力-KY',s:'IC設計'},
+  {id:'2337',name:'旺宏',s:'記憶體'},{id:'2408',name:'南亞科',s:'記憶體'},
+  {id:'3711',name:'日月光投控',s:'封測'},{id:'6770',name:'力積電',s:'半導體'},
+  // AI/伺服器/電子製造
+  {id:'2382',name:'廣達',s:'AI伺服器'},{id:'6669',name:'緯穎',s:'AI伺服器'},
+  {id:'3231',name:'緯創',s:'電子製造'},{id:'2317',name:'鴻海',s:'電子製造'},
+  {id:'2356',name:'英業達',s:'電子製造'},{id:'4938',name:'和碩',s:'電子製造'},
+  {id:'2376',name:'技嘉',s:'主機板'},{id:'2377',name:'微星',s:'主機板'},
+  {id:'2357',name:'華碩',s:'電腦'},{id:'2395',name:'研華',s:'工業電腦'},
+  {id:'2345',name:'智邦',s:'網通'},{id:'3706',name:'神達',s:'伺服器'},
+  // 電子零組件/PCB
+  {id:'2308',name:'台達電',s:'電源'},{id:'2327',name:'國巨',s:'被動元件'},
+  {id:'3037',name:'欣興',s:'PCB'},{id:'8046',name:'南電',s:'PCB'},
+  {id:'2301',name:'光寶科',s:'電子製造'},{id:'3008',name:'大立光',s:'光學'},
+  // 金融
+  {id:'2881',name:'富邦金',s:'金融'},{id:'2882',name:'國泰金',s:'金融'},
+  {id:'2884',name:'玉山金',s:'金融'},{id:'2886',name:'兆豐金',s:'金融'},
+  {id:'2891',name:'中信金',s:'金融'},{id:'2892',name:'第一金',s:'金融'},
+  {id:'5880',name:'合庫金',s:'金融'},{id:'2880',name:'華南金',s:'金融'},
+  {id:'2887',name:'台新金',s:'金融'},{id:'2885',name:'元大金',s:'金融'},
+  // 電信/網通
+  {id:'2412',name:'中華電',s:'電信'},{id:'3045',name:'台灣大',s:'電信'},
+  {id:'4904',name:'遠傳',s:'電信'},
+  // 石化/傳產
+  {id:'6505',name:'台塑化',s:'石化'},{id:'1301',name:'台塑',s:'石化'},
+  {id:'1303',name:'南亞',s:'石化'},{id:'1326',name:'台化',s:'石化'},
+  {id:'2002',name:'中鋼',s:'鋼鐵'},{id:'1101',name:'台泥',s:'水泥'},
+  {id:'1216',name:'統一',s:'食品'},{id:'2912',name:'統一超',s:'零售'},
+  {id:'2207',name:'和泰車',s:'汽車'},{id:'9910',name:'豐泰',s:'消費'},
+  {id:'1605',name:'華新',s:'電纜'},{id:'2049',name:'上銀',s:'機械'},
+  {id:'1590',name:'亞德客-KY',s:'氣動'},{id:'2059',name:'川湖',s:'機械'},
+  // 航運/航空
+  {id:'2609',name:'陽明',s:'航運'},{id:'2603',name:'長榮',s:'航運'},
+  {id:'2615',name:'萬海',s:'航運'},{id:'2618',name:'長榮航',s:'航空'},
+  {id:'2610',name:'華航',s:'航空'},{id:'2634',name:'漢翔',s:'航空'},
+  // 生技
+  {id:'4967',name:'十銓',s:'記憶模組'},{id:'3260',name:'威剛',s:'記憶模組'},
+  {id:'8069',name:'元太',s:'電子紙'},{id:'6547',name:'高端疫苗',s:'生技'},
+  // ETF
+  {id:'0050',name:'元大台灣50',s:'ETF'},{id:'0056',name:'元大高股息',s:'ETF'},
+  {id:'00878',name:'國泰永續高股息',s:'ETF'},{id:'00929',name:'復華科技優息',s:'ETF'},
+];
+
+// 用真實數據計算量化分數
+async function calcQuantScore(stockId, stratKey){
+  try{
+    const [raw, inst] = await Promise.all([
+      fmStockData(stockId, 30),
+      fmInstitutional(stockId).catch(()=>null),
+    ]);
+    if(!raw || raw.length < 10) return null;
+
+    const prices = raw.map(r=>parseFloat(r.close||0)).filter(v=>v>0);
+    const vols   = raw.map(r=>parseInt(r.Trading_Volume||0));
+    if(prices.length < 10) return null;
+
+    const last   = prices[prices.length-1];
+    const prev5  = prices.slice(-6,-1);
+    const prev20 = prices.slice(-21,-1);
+
+    // 計算指標
+    const ma5  = prev5.reduce((a,b)=>a+b,0)  / prev5.length;
+    const ma20 = prev20.reduce((a,b)=>a+b,0) / prev20.length;
+    const ret5 = prev5.length ? (last - prices[prices.length-6]) / prices[prices.length-6] * 100 : 0;
+    const ret20= prev20.length ? (last - prices[prices.length-21]) / prices[prices.length-21] * 100 : 0;
+
+    const avgVol20 = vols.slice(-21,-1).reduce((a,b)=>a+b,0) / 20;
+    const vol5     = vols.slice(-5).reduce((a,b)=>a+b,0) / 5;
+    const volRatio = avgVol20 > 0 ? vol5 / avgVol20 : 1;
+
+    // RSI(14)
+    const gains=[], losses=[];
+    for(let i=Math.max(1,prices.length-15);i<prices.length;i++){
+      const d=prices[i]-prices[i-1];
+      d>0?gains.push(d):losses.push(Math.abs(d));
+    }
+    const avgG = gains.length  ? gains.reduce((a,b)=>a+b,0)/14  : 0;
+    const avgL = losses.length ? losses.reduce((a,b)=>a+b,0)/14 : 0.001;
+    const rsi  = 100 - 100/(1+avgG/avgL);
+
+    // 法人分數
+    const instScore = inst ? (
+      (inst.foreignShares||0) > 0 ? 2 :
+      (inst.foreignShares||0) < 0 ? -2 : 0
+    ) + (
+      (inst.trustShares||0) > 0 ? 1 : 0
+    ) : 0;
+
+    // 依策略計算加權分數（0~100）
+    let score = 50;
+    if(stratKey === 'A'){ // 極致動能：漲幅+量能+法人
+      score = Math.min(99, Math.max(1,
+        50 + ret5*3 + (volRatio-1)*10 + instScore*5 +
+        (ma5>ma20?5:0) + (rsi>55?5:rsi<45?-5:0)
+      ));
+    } else if(stratKey === 'B'){ // 穩健成長：MA排列+法人+低波動
+      const trend = ma5>ma20 ? 1 : 0;
+      score = Math.min(99, Math.max(1,
+        50 + trend*10 + instScore*8 + ret20*0.5 + (rsi>50&&rsi<70?5:0)
+      ));
+    } else if(stratKey === 'C'){ // 價值發現：超跌+法人轉買
+      const oversold = rsi < 40 ? 15 : rsi < 50 ? 8 : 0;
+      const nearMA   = Math.abs(last-ma20)/ma20 < 0.05 ? 10 : 0;
+      score = Math.min(99, Math.max(1,
+        50 + oversold + nearMA + instScore*5 - ret5*0.5
+      ));
+    } else if(stratKey === 'D'){ // 情緒反轉：超賣+止跌
+      const deepOversold = rsi < 30 ? 20 : rsi < 40 ? 10 : 0;
+      const bounce = ret5 > 0 && ret20 < -10 ? 15 : 0;
+      score = Math.min(99, Math.max(1,
+        50 + deepOversold + bounce + instScore*3 - (ret20>0?5:0)
+      ));
+    } else { // E 風險平權：均衡分數
+      score = Math.min(99, Math.max(1,
+        50 + (ma5>ma20?5:0) + instScore*4 +
+        (rsi>45&&rsi<65?8:0) + (volRatio>0.8&&volRatio<1.5?5:0)
+      ));
+    }
+
+    return {
+      score: Math.round(score),
+      rsi:   Math.round(rsi),
+      ret5:  +ret5.toFixed(2),
+      ret20: +ret20.toFixed(2),
+      volRatio: +volRatio.toFixed(2),
+      instScore,
+      ma5Above20: ma5 > ma20,
+    };
+  }catch(e){ return null; }
+}
+
 const JSON_FORMAT = `請直接輸出JSON，禁止任何開場白、說明或markdown格式：
 {"stocks":[{"id":"4位數字代號","name":"股名","sector":"產業","winRate":0-100,"risk":1-10,"reason":"15字以內原因"}]}`;
 
@@ -6811,8 +7087,70 @@ async function runStratAnalysis(){
   resultEl.style.display = 'none';
 
   try{
-    // ── 組合豐富市場背景（法人 + 指數 + VIX + 技術面）──────
-    showToast('🔍 收集市場資料中…');
+    // ══ 第一步：全市場量化篩選（3次API取1800支）══════════
+    runBtn.textContent = '⏳ 全市場量化掃描中（第1/2步）…';
+    showToast('🔢 掃描全市場1800支股票…', 4000);
+
+    let scored = [];
+    let quantScopeLabel = '';
+
+    try{
+      // 優先：全市場批次（只需3次API）
+      const fullQuant = await buildFullMarketQuant();
+      const stockCount = Object.keys(fullQuant).length;
+
+      if(stockCount >= 100){
+        // 全市場成功：對所有股票計算策略分數
+        const allScored = Object.entries(fullQuant)
+          .map(([id, data])=>({
+            id,
+            name: data.name || NAME_MAP[id] || id,
+            s:    '—',
+            quant:{ ...data, score: calcScoreForStrat(data, key) }
+          }))
+          .filter(s=>s.quant.score > 0);
+
+        allScored.sort((a,b)=>b.quant.score-a.quant.score);
+        scored = allScored.slice(0,30); // 取前30名給AI
+        quantScopeLabel = `全市場${stockCount}支`;
+        console.log('[FullQuant] scope:', stockCount, 'top30 score range:',
+          scored[0]?.quant.score, '~', scored[29]?.quant.score);
+      } else {
+        throw new Error('full quant insufficient');
+      }
+    }catch(e){
+      // 備援：100支固定池
+      console.warn('[FullQuant] fallback to QUANT_POOL:', e.message);
+      const BATCH_SIZE = 5;
+      for(let i=0; i<QUANT_POOL.length; i+=BATCH_SIZE){
+        const batch = QUANT_POOL.slice(i, i+BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(async stock=>{
+            const q = await calcQuantScore(stock.id, key);
+            return q ? {...stock, quant:q} : null;
+          })
+        );
+        results.forEach(r=>{ if(r) scored.push(r); });
+        if(i+BATCH_SIZE < QUANT_POOL.length)
+          await new Promise(r=>setTimeout(r,200));
+      }
+      scored.sort((a,b)=>(b.quant.score||0)-(a.quant.score||0));
+      scored = scored.slice(0,30);
+      quantScopeLabel = '精選100支';
+    }
+
+    const top20 = scored.slice(0,20);
+
+    // 組合量化摘要
+    const quantSummary = top20.map((s,i)=>{
+      const q = s.quant;
+      return `${i+1}.${s.id}${s.name}(量化${q.score},5日${q.ret5>=0?'+':''}${q.ret5}%,法人${q.instScore>0?'買':q.instScore<0?'賣':'中'}${q.pe?',PE'+q.pe:''})`
+    }).join(' ');
+
+    runBtn.textContent = '⏳ AI 深度分析中（第2/2步）…';
+    showToast(`🤖 AI 從${quantScopeLabel}中選出最佳10支…`, 4000);
+
+    // ══ 第二步：收集市場背景 ══════════════════════════════
 
     // 並行取得：大盤指數 + 全市場法人 + VIX 快取
     const [idxData, instMkt] = await Promise.all([
@@ -6868,7 +7206,10 @@ async function runStratAnalysis(){
       '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
     ].filter(Boolean).join('；');
 
-    const prompt = strat.prompt(market + btSummary);
+    const quantContext = top20.length >= 5
+      ? `\n\n【量化預篩結果（真實數據計算，分數越高越符合此策略）】\n${quantSummary}\n請優先從以上量化排名靠前的股票中選出10支，並說明選擇理由。`
+      : '';
+    const prompt = strat.prompt(market + btSummary + quantContext);
     const WORKER = (typeof API !== 'undefined' && API)
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
@@ -6907,7 +7248,7 @@ async function runStratAnalysis(){
     recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
 
     // 渲染結果
-    titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選`;
+    titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選（掃描${quantScopeLabel}）`;
     listEl.innerHTML = stocks.slice(0,10).map((s,i)=>{
       const risk = Math.min(10, Math.max(1, Math.round(s.risk||5)));
       const riskColor = risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
@@ -6926,6 +7267,16 @@ async function runStratAnalysis(){
         <div class="sstock-info">
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
           <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
+          ${(()=>{
+            const q = top20.find(t=>t.id===s.id)?.quant;
+            if(!q) return '';
+            return `<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
+              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(124,92,252,.15);color:var(--purple)">量化 ${q.score}</span>
+              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text3)">RSI ${q.rsi}</span>
+              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${q.ret5>=0?'rgba(255,76,106,.12)':'rgba(0,212,170,.12)'};color:${q.ret5>=0?'var(--red)':'var(--green)'}">5日${q.ret5>=0?'+':''}${q.ret5}%</span>
+              ${q.instScore>0?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(0,212,170,.12);color:var(--green)">法人買</span>`:q.instScore<0?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,76,106,.1);color:var(--red)">法人賣</span>`:''}
+            </div>`;
+          })()}
         </div>
         <div class="sstock-metrics" style="min-width:72px">
           ${realWin !== null
