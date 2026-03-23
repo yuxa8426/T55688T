@@ -303,6 +303,23 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
 <!-- ═══ PAGE: 總覽 ═══ -->
 <div class="page active" id="page-home">
+  <!-- 累積戰績橫幅（有資料才顯示）-->
+  <div id="battleBanner" style="display:none;margin:12px 16px 0;padding:10px 14px;background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,170,.1));border:1px solid rgba(124,92,252,.3);border-radius:12px;cursor:pointer" onclick="switchPage('watchlist')">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">📊</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--purple)">AI 策略實測戰績</div>
+          <div style="font-size:12px;color:var(--text2)" id="battleBannerText">累積中…</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:22px;font-weight:900" id="battleBannerWR">—</div>
+        <div style="font-size:9px;color:var(--text3)">整體勝率</div>
+      </div>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:4px" id="battleBannerBars"></div>
+  </div>
   <div class="header">
     <div><h1>股析</h1><p id="hdr-sub">2025年3月5日 · 台灣大盤 ▲0.74%</p></div>
     <div class="avatar" id="headerAvatar">股</div>
@@ -1486,9 +1503,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 </div><!-- /app -->
 
 <nav class="nav">
-  <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>總覽</span></button>
+  <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>分析</span></button>
   <button class="nav-btn" id="nb-explore" onclick="switchPage('explore')"><span>🔍</span><span>探索</span></button>
-  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🎯</span><span>策略</span></button>
+  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>策略回測</span></button>
   <button class="nav-btn" id="nb-portfolio" onclick="switchPage('portfolio')"><span>⚠️</span><span>警示</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
@@ -4312,6 +4329,7 @@ async function loadVix(manual=false){
 }
 
 function _applyVix(vix, chg, date, hist, src){
+  saveVixCache(vix, chg, date, hist, src); // 成功時存快取
   renderVix(vix, chg, date, hist, src);
   markFresh('vix');
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
@@ -4391,22 +4409,60 @@ function renderVix(vix, changePct, dataDate, history, srcLabel=''){
   }
 }
 
+const VIX_CACHE_KEY = 'stockai_vix_cache';
+
+// 儲存成功取得的 VIX 到 localStorage
+function saveVixCache(vix, chg, date, hist, src){
+  try{
+    localStorage.setItem(VIX_CACHE_KEY, JSON.stringify({
+      vix, chg, date, hist, src,
+      savedAt: Date.now()
+    }));
+  }catch(e){}
+}
+
+// 讀取 VIX 快取（7天內有效）
+function loadVixCache(){
+  try{
+    const d = JSON.parse(localStorage.getItem(VIX_CACHE_KEY)||'null');
+    if(!d || !d.vix) return null;
+    const age = Date.now() - (d.savedAt||0);
+    if(age > 7*24*60*60*1000) return null; // 超過7天就廢棄
+    return d;
+  }catch(e){ return null; }
+}
+
 function renderVixFallback(){
-  const numEl = document.getElementById('vixNum');
-  if(numEl) numEl.innerHTML = `<span style="font-size:20px;color:var(--text3)">—</span>`;
-  const chgEl = document.getElementById('vixChg');
-  if(chgEl){ chgEl.textContent='⚠️ 資料暫無法取得'; chgEl.style.color='var(--text3)'; }
-  const ddEl = document.getElementById('vixDataDate');
-  if(ddEl) ddEl.textContent='已嘗試 FRED · stooq · Yahoo Finance，請稍後再試';
-  const noteEl = document.getElementById('vixNote');
-  if(noteEl) noteEl.innerHTML='<strong class="purple">🤖</strong> VIX 目前無法從四個備援來源取得（FinMind · stooq · Yahoo）。可能原因：CORS 限制或 proxy 暫停。請點 ↻ 手動重試，2 分鐘後將自動重試。';
-  // 更新時間戳
-  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  const el = document.getElementById('vixUpdateTime'); if(el) el.textContent='嘗試更新 '+ts;
-  // 繼續定時重試
+  // 先嘗試用昨日快取值
+  const cached = loadVixCache();
+  if(cached && cached.vix > 5){
+    // 有快取：顯示快取值並加上「昨日」標示
+    renderVix(cached.vix, cached.chg||0, cached.date||'', cached.hist||[], cached.src||'快取');
+    // 覆蓋日期顯示，加上「昨收」標示
+    const ddEl = document.getElementById('vixDataDate');
+    if(ddEl) ddEl.textContent = `昨收 ${cached.date||'—'} · 即時資料更新中`;
+    const noteEl = document.getElementById('vixNote');
+    if(noteEl){
+      const age = Math.round((Date.now()-(cached.savedAt||0))/3600000);
+      noteEl.innerHTML = `<strong class="purple">🤖</strong> 顯示 ${age} 小時前的快取數據（VIX ${cached.vix.toFixed(1)}）。即時資料暫時無法取得，2 分鐘後自動重試。`;
+    }
+    const elT = document.getElementById('vixUpdateTime');
+    if(elT) elT.textContent = '昨日快取 · 更新中…';
+  } else {
+    // 無快取：顯示空白
+    const numEl = document.getElementById('vixNum');
+    if(numEl) numEl.innerHTML = `<span style="font-size:20px;color:var(--text3)">—</span>`;
+    const chgEl = document.getElementById('vixChg');
+    if(chgEl){ chgEl.textContent='即時資料更新中'; chgEl.style.color='var(--text3)'; }
+    const ddEl = document.getElementById('vixDataDate');
+    if(ddEl) ddEl.textContent='2 分鐘後自動重試';
+    const noteEl = document.getElementById('vixNote');
+    if(noteEl) noteEl.innerHTML='<strong class="purple">🤖</strong> VIX 即時資料暫時無法取得，正在重試中…';
+    const elT = document.getElementById('vixUpdateTime');
+    if(elT) elT.textContent='更新中…';
+  }
   clearTimeout(_vixTimer);
-  _vixTimer = setTimeout(()=>loadVix(), 120000); // 2分鐘後重試
+  _vixTimer = setTimeout(()=>loadVix(), 120000);
 }
 
 // ── 三大法人（真實 TWSE）────────────────────────────
@@ -7098,17 +7154,126 @@ function getBacktestSummary(stratKey){
 【本機回測修正】策略${stratKey}已驗證${s.total}次，實測勝率${s.winRate}%（${s.wins}勝/${s.losses}敗）。請${dir}此策略的選股邏輯，提升精準度。`;
 }
 
+// 渲染首頁累積戰績橫幅
+function renderBattleBanner(){
+  const banner = document.getElementById('battleBanner');
+  if(!banner) return;
+
+  const records  = getBtRecords();
+  const verified = records.filter(r => r.verified);
+  if(!verified.length){ banner.style.display='none'; return; }
+
+  // 彙整所有週期（短期為主）
+  let totalWins=0, totalLosses=0, totalFlats=0;
+  let days = Math.ceil((Date.now() - Math.min(...records.map(r=>new Date(r.date).getTime()))) / 86400000);
+
+  verified.forEach(r=>{
+    r.stocks.forEach(s=>{
+      if(s.result7==='win')   totalWins++;
+      else if(s.result7==='loss') totalLosses++;
+      else if(s.result7==='flat') totalFlats++;
+      // 相容舊格式
+      else if(s.result==='win')  totalWins++;
+      else if(s.result==='loss') totalLosses++;
+      else if(s.result==='flat') totalFlats++;
+    });
+  });
+
+  const total = totalWins + totalLosses + totalFlats;
+  if(total < 3){ banner.style.display='none'; return; }
+
+  const wr    = Math.round(totalWins/total*100);
+  const wrColor = wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
+
+  banner.style.display = 'block';
+
+  const wrEl   = document.getElementById('battleBannerWR');
+  const textEl = document.getElementById('battleBannerText');
+  const barsEl = document.getElementById('battleBannerBars');
+  if(wrEl){   wrEl.textContent = wr+'%'; wrEl.style.color = wrColor; }
+  if(textEl)  textEl.textContent = `已驗證 ${total} 筆 · 累積 ${days} 天 · ✅${totalWins} ❌${totalLosses} ⚖️${totalFlats}`;
+
+  // 各策略小色條
+  if(barsEl){
+    const stratInfo = {A:{icon:'🚀',c:'#ff4c6a'},B:{icon:'📈',c:'#00d4aa'},C:{icon:'💎',c:'#f5c842'},D:{icon:'🔄',c:'#a080ff'},E:{icon:'⚖️',c:'#4fc3f7'},WL:{icon:'⭐',c:'#ffd54f'}};
+    const stats = calcStratWinRatesByPeriod('short7');
+    barsEl.innerHTML = Object.entries(stratInfo).map(([k,si])=>{
+      const s  = stats[k];
+      if(!s || s.total < 2) return '';
+      const wr = s.winRate;
+      const col= wr>=60?si.c:wr>=45?'var(--gold)':'var(--green)';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--text3)">${si.icon}</div>
+        <div style="height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:2px;overflow:hidden">
+          <div style="width:${wr}%;height:100%;background:${col};border-radius:2px"></div>
+        </div>
+        <div style="font-size:9px;font-weight:700;color:${col};margin-top:1px">${wr}%</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── 自動回測觸發機制 ─────────────────────────────────
+// 每週一（或進入策略頁時若有 7 天未自動分析）自動跑一輪 A/B 策略並記錄
+const AUTO_BT_KEY = 'stockai_auto_bt_ts';
+const AUTO_BT_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7天
+
+async function autoRunBacktest(){
+  const lastRun = parseInt(localStorage.getItem(AUTO_BT_KEY)||'0');
+  const now     = Date.now();
+  if(now - lastRun < AUTO_BT_INTERVAL) return; // 7天內不重複執行
+
+  console.log('[AutoBT] Starting auto backtest run...');
+  localStorage.setItem(AUTO_BT_KEY, String(now));
+
+  // 依序跑策略 A 和 B（靜默模式，不顯示結果UI）
+  for(const key of ['A','B']){
+    try{
+      const strat = STRATEGIES[key];
+      if(!strat) continue;
+      const bt = getBacktestSummary(key);
+      const prompt = strat.prompt.replace('{{BT_SUMMARY}}', bt||'')
+        + '\n請直接輸出 JSON，無需說明。';
+      const resp = await fetch(`${API}/v1/messages`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ model:'gemini-2.5-flash-lite', max_tokens:1000,
+          messages:[{role:'user', content:prompt}] })
+      });
+      if(!resp.ok) continue;
+      const d = await resp.json();
+      const text = d?.content?.[0]?.text||'';
+      const clean = text.replace(/```json|```/g,'').trim();
+      const json  = JSON.parse(clean);
+      const stocks = json.stocks||[];
+      if(stocks.length >= 3){
+        await recordStratRecommend(key, stocks);
+        console.log('[AutoBT] Recorded strat', key, stocks.length, 'stocks');
+      }
+      await new Promise(r=>setTimeout(r, 3000)); // 避免 rate limit
+    }catch(e){ console.warn('[AutoBT] strat', key, e.message); }
+  }
+}
+
 // 每次進入策略頁自動觸發到期驗證
 function autoCheckBacktest(){
   const records = getBtRecords();
   const today   = todayStr();
-  const hasExpired = records.some(r=>!r.verified && r.checkDate <= today);
+  const hasExpired = records.some(r=>
+    (!r.verified  && (r.checkDate||'9999')  <= today) ||
+    (!r.verified14&& (r.checkDate14||'9999')<= today) ||
+    (!r.verifiedM && (r.checkDateM||'9999') <= today) ||
+    (!r.verifiedQ && (r.checkDateQ||'9999') <= today)
+  );
   if(hasExpired){
     console.log('[Backtest] auto-checking expired records...');
-    checkBacktestNow();
+    checkBacktestNow().then(()=>{ renderBattleBanner(); });
   } else {
     renderBacktestPanel();
+    renderBattleBanner();
   }
+  // 嘗試自動回測（靜默）
+  setTimeout(()=>autoRunBacktest(), 5000);
 }
 
 // ════════════════════════════════════════════════════
@@ -7941,6 +8106,8 @@ window.addEventListener('load', async ()=>{
   // 第 5 波：趨勢股（錯開 1.5s，讓主圖表先完成渲染）
   setTimeout(()=>refreshTrendStocks(), 1500);
 
+  // 第 6 波：累積戰績橫幅（資料有才顯示）
+  setTimeout(()=>renderBattleBanner(), 2000);
 
   // ── 自動定時重整（盤中1分鐘、盤外5分鐘）
   scheduleAutoRefresh();
