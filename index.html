@@ -1445,6 +1445,26 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   <div class="pref-item" onclick="showToast('通知設定開發中')"><div class="pref-icon" style="background:rgba(0,212,170,.12)">🔔</div><div><div class="pref-t">通知設定</div><div class="pref-s">價格警報、法人動向</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="clearAllData()"><div class="pref-icon" style="background:rgba(255,76,106,.12)">🗑️</div><div><div class="pref-t">清除所有資料</div><div class="pref-s">自選股、投組、設定</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="showToast('股析 StockAI v2.0 · FinMind 真實資料')"><div class="pref-icon" style="background:rgba(245,200,66,.12)">📡</div><div><div class="pref-t">數據來源</div><div class="pref-s">FinMind · TWSE · 每日更新</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
+  <!-- API 配額儀表板 -->
+  <div style="margin:4px 0 12px;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">📊 今日 API 配額</div>
+      <div style="font-size:11px;color:var(--text3)" id="quotaResetTime">00:00 重置</div>
+    </div>
+    <!-- 進度條 -->
+    <div style="background:var(--surface);border-radius:4px;height:8px;overflow:hidden;margin-bottom:6px">
+      <div id="quotaBar" style="height:100%;border-radius:4px;transition:width .3s;background:var(--green);width:0%"></div>
+    </div>
+    <!-- 數字 -->
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:12px;color:var(--text2)">已使用 <strong id="quotaCount" style="color:var(--text)">0</strong> / <span id="quotaLimit">550</span> 次</div>
+      <div style="font-size:11px;font-weight:700" id="quotaStatus">正常</div>
+    </div>
+    <!-- 節省提示 -->
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5" id="quotaTips">
+      盤後資料快取至午夜，重複查詢不消耗額度。
+    </div>
+  </div>
   <!-- FinMind Token 設定 -->
   <div style="margin:12px 0;padding:14px;background:rgba(245,200,66,.06);border:1px solid rgba(245,200,66,.2);border-radius:12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -2052,17 +2072,62 @@ const FM_CACHE_TTL_MAP = {
 };
 const FM_CACHE_DEFAULT = ()=> _isTradingSession() ? 60*1000 : _msTillMidnight();
 
-// 計算距離午夜的毫秒數（盤後資料 cache 到明天）
+// 計算距離午夜的毫秒數
 function _msTillMidnight(){
   const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const midnight = new Date(tw);
   midnight.setHours(24,0,0,0);
-  return Math.max(midnight - tw, 30*60*1000); // 最少 30 分鐘
+  return Math.max(midnight - tw, 30*60*1000);
+}
+
+// ════════════════════════════════════════════════════
+// ★ 請求配額管理器（Token 保護機制）
+// 追蹤每日 API 請求次數，接近上限時自動限流
+// ════════════════════════════════════════════════════
+const QUOTA_KEY     = 'stockai_quota';
+const QUOTA_LIMIT   = 550;  // 安全上限（免費方案約 600/日）
+const QUOTA_WARN    = 450;  // 警告門檻
+
+function _getQuota(){
+  try{
+    const d = JSON.parse(localStorage.getItem(QUOTA_KEY)||'{}');
+    const today = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
+    // 跨日重置
+    if(d.date !== today) return { date:today, count:0, blocked:false };
+    return d;
+  }catch(e){ return { date:'', count:0, blocked:false }; }
+}
+
+function _saveQuota(q){ localStorage.setItem(QUOTA_KEY, JSON.stringify(q)); }
+
+function _incQuota(){
+  const q = _getQuota();
+  q.count++;
+  // 達到安全上限：封鎖非必要請求
+  if(q.count >= QUOTA_LIMIT && !q.blocked){
+    q.blocked = true;
+    console.warn('[Quota] 今日請求達上限，非必要請求已暫停');
+    showToast('⚠️ 今日 API 額度接近上限，部分資料將使用快取', 5000);
+  }
+  _saveQuota(q);
+  return q;
+}
+
+// 取得配額狀態（供 UI 顯示）
+function getQuotaStatus(){
+  const q = _getQuota();
+  const pct = Math.round(q.count / QUOTA_LIMIT * 100);
+  return { count: q.count, limit: QUOTA_LIMIT, pct, blocked: q.blocked,
+           warn: q.count >= QUOTA_WARN, level: q.blocked?'danger':q.count>=QUOTA_WARN?'warn':'ok' };
+}
+
+// 是否允許非必要請求（新聞、籌碼分析等）
+function _canFetchOptional(){
+  return !_getQuota().blocked;
 }
 
 async function fmFetch(params, timeout=15000){
-  const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
-  // 優先走 Cloudflare Worker（最穩定）；未設定時嘗試直連（本地測試用）
+  const { _ttl, _optional, ...apiParams } = params;
   const fmParams = new URLSearchParams({ ...apiParams, token: getFmToken() }).toString();
   const url = (typeof API !== 'undefined' && API)
     ? API.replace(/\/$/, '') + '/finmind?' + fmParams
@@ -2074,6 +2139,13 @@ async function fmFetch(params, timeout=15000){
   const hit = _fmCache.get(url);
   const age = hit ? Date.now()-hit.ts : Infinity;
   if(hit && age < ttl) return hit.data;
+
+  // 配額保護：非必要請求且已達警告門檻 → 直接回傳舊快取（stale也行）
+  if(_optional && _getQuota().blocked){
+    if(hit) return hit.data; // 回傳 stale 快取
+    console.warn('[Quota] blocked optional request:', params.dataset);
+    return null;
+  }
 
   // stale-while-revalidate：資料稍舊但仍可用，先回傳舊值同時背景更新
   if(hit && age < ttl*4){
@@ -2092,6 +2164,8 @@ async function fmFetch(params, timeout=15000){
 
   // in-flight dedup：同一請求已在飛行中，等它完成
   if(_fmFlight.has(url)) return _fmFlight.get(url);
+
+  _incQuota(); // ← 實際發出請求前計數
 
   const p = (async()=>{
     try{
@@ -2339,13 +2413,13 @@ async function fmShareholder(stockId='2330', days=60){
       end_date:   todayStr(),
     }, 15000).catch(()=>null),
     fmFetch({
-      dataset:    'TaiwanStockMarginPurchaseShortSale',
+      dataset:    'TaiwanStockMarginPurchaseShortSale', _optional:true,
       data_id:    stockId,
       start_date: nDaysAgo(10),
       end_date:   todayStr(),
     }, 15000).catch(()=>null),
     fmFetch({
-      dataset:    'TaiwanStockShareholding',
+      dataset:    'TaiwanStockShareholding', _optional:true,
       data_id:    stockId,
       start_date: nDaysAgo(10),
       end_date:   todayStr(),
@@ -6121,8 +6195,8 @@ async function loadNews(stockId){
 
   // 並行抓：個股新聞 + 大盤通用新聞（2330 作為市場代表）
   const [stockNews, marketNews] = await Promise.all([
-    id !== '2330' ? fmFetch({ dataset:'TaiwanStockNews', data_id:id,    start_date:nDaysAgo(7), end_date:todayStr() }) : Promise.resolve(null),
-    fmFetch({ dataset:'TaiwanStockNews', data_id:'2330', start_date:nDaysAgo(3), end_date:todayStr() }),
+    id !== '2330' ? fmFetch({ dataset:'TaiwanStockNews', data_id:id,    start_date:nDaysAgo(7), end_date:todayStr(), _optional:true }) : Promise.resolve(null),
+    fmFetch({ dataset:'TaiwanStockNews', data_id:'2330', start_date:nDaysAgo(3), end_date:todayStr(), _optional:true }),
   ]);
 
   // 個股專屬新聞（置頂橫幅）
@@ -8161,6 +8235,8 @@ function loadProfile(){
 
   // 更新 Token 狀態
   renderFmTokenStatus();
+  // 更新配額儀表板
+  renderQuotaDashboard();
 }
 
 function editProfile(){
@@ -8211,6 +8287,47 @@ function saveProfile(){
 }
 
 // ── FinMind Token 管理函式 ───────────────────────────
+// 渲染 API 配額儀表板
+function renderQuotaDashboard(){
+  const q      = getQuotaStatus();
+  const barEl  = document.getElementById('quotaBar');
+  const cntEl  = document.getElementById('quotaCount');
+  const stEl   = document.getElementById('quotaStatus');
+  const tipsEl = document.getElementById('quotaTips');
+  const resetEl= document.getElementById('quotaResetTime');
+  if(!barEl) return;
+
+  const pct   = Math.min(q.pct, 100);
+  const color = q.blocked ? 'var(--red)' : q.warn ? 'var(--gold)' : 'var(--green)';
+
+  barEl.style.width      = pct + '%';
+  barEl.style.background = color;
+  if(cntEl) cntEl.textContent = q.count;
+  if(cntEl) cntEl.style.color = color;
+
+  if(stEl){
+    stEl.style.color = color;
+    stEl.textContent = q.blocked ? '🔴 已達上限' : q.warn ? '🟡 注意' : '🟢 正常';
+  }
+
+  // 計算重置倒數
+  const tw       = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const midnight = new Date(tw); midnight.setHours(24,0,0,0);
+  const diffMs   = midnight - tw;
+  const hh       = String(Math.floor(diffMs/3600000)).padStart(2,'0');
+  const mm       = String(Math.floor(diffMs%3600000/60000)).padStart(2,'0');
+  if(resetEl) resetEl.textContent = `${hh}:${mm} 後重置`;
+
+  if(tipsEl){
+    if(q.blocked)
+      tipsEl.innerHTML = '⚠️ 今日額度已達上限。新聞、籌碼等非必要資料已暫停請求，明日 00:00 自動恢復。';
+    else if(q.warn)
+      tipsEl.innerHTML = `⚠️ 已用 ${pct}%，系統已自動節流非必要請求。盤後資料快取至午夜。`;
+    else
+      tipsEl.innerHTML = `盤後資料快取至午夜，重複查詢不消耗額度。今日剩餘約 ${q.limit-q.count} 次。`;
+  }
+}
+
 function renderFmTokenStatus(){
   const token   = localStorage.getItem(FM_TOKEN_KEY);
   const statusEl = document.getElementById('fmTokenStatus');
