@@ -1757,7 +1757,7 @@ function switchPage(n){
 
 // ── Toast ────────────────────────────────────────────
 let tt;
-function showToast(msg){
+function showToast(msg, duration=3000){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(tt); tt=setTimeout(()=>t.classList.remove('show'),2500);
@@ -1949,19 +1949,30 @@ function _isTradingSession(){
   return wd>0 && wd<6 && tot>=555 && tot<=815;
 }
 const FM_CACHE_TTL_MAP = {
-  TaiwanStockPrice:              ()=> _isTradingSession() ? 30*1000 : 5*60*1000,
-  TaiwanStockInstitutionalInvestorsBuySell: 5*60*1000, // 法人：5分鐘
-  TaiwanStockShareholding:       10*60*1000, // 大戶持股：10分鐘
-  TaiwanStockTotalInstitutionalInvestors:   5*60*1000,
-  TaiwanStockTotalMarginPurchaseShortSale:  5*60*1000,
-  TaiwanOptionInstitutionalInvestors:       5*60*1000,
-  TaiwanFuturesInstitutionalInvestors:      5*60*1000,
-  TaiwanMarginPurchaseShortSale:            5*60*1000,
-  TaiwanStockNews:               5*60*1000,  // 新聞：5分鐘
-  CBOE_VIX:                      3*60*1000,  // VIX：3分鐘
-  TaiwanStockInfo:              60*60*1000,  // 股票清單：60分鐘
+  // 盤中每分鐘更新，盤後當天不會再變 → cache 到隔天
+  TaiwanStockPrice: ()=> _isTradingSession() ? 60*1000 : _msTillMidnight(),
+  // 法人/籌碼：盤後才更新，直接 cache 到明天
+  TaiwanStockInstitutionalInvestorsBuySell: ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanStockShareholding:       ()=> _isTradingSession() ? 15*60*1000 : _msTillMidnight(),
+  TaiwanStockTotalInstitutionalInvestors:   ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanStockTotalMarginPurchaseShortSale:  ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanOptionInstitutionalInvestors:       ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanFuturesInstitutionalInvestors:      ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanStockMarginPurchaseShortSale:       ()=> _isTradingSession() ? 10*60*1000 : _msTillMidnight(),
+  TaiwanStockDayTradingSuspension: _msTillMidnight(),
+  TaiwanStockNews:               30*60*1000,    // 新聞：30分鐘
+  CBOE_VIX:                       5*60*1000,    // VIX：5分鐘
+  TaiwanStockInfo:               24*60*60*1000, // 股票清單：24小時
 };
-const FM_CACHE_DEFAULT = 30 * 1000;
+const FM_CACHE_DEFAULT = ()=> _isTradingSession() ? 60*1000 : _msTillMidnight();
+
+// 計算距離午夜的毫秒數（盤後資料 cache 到明天）
+function _msTillMidnight(){
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const midnight = new Date(tw);
+  midnight.setHours(24,0,0,0);
+  return Math.max(midnight - tw, 30*60*1000); // 最少 30 分鐘
+}
 
 async function fmFetch(params, timeout=15000){
   const { _ttl, ...apiParams } = params; // _ttl 不傳給 API
@@ -1999,6 +2010,15 @@ async function fmFetch(params, timeout=15000){
   const p = (async()=>{
     try{
       const res = await fetchWithTimeout(url, timeout);
+      if(res.status === 402){
+        console.warn('[FinMind] 今日 API 額度已達上限，明天 00:00 自動重置');
+        // 顯示全域提示（只顯示一次）
+        if(!window._fm402shown){
+          window._fm402shown = true;
+          showToast('⚠️ FinMind 今日額度用完，明日 00:00 重置。請到「我的」更新 Token 或明日再試。', 6000);
+        }
+        throw new Error('HTTP 402');
+      }
       if(!res.ok) throw new Error('HTTP '+res.status);
       const raw  = await res.json();
       // corsproxy.io 有時包在 .contents 字串裡
