@@ -1274,9 +1274,87 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
     <!-- 執行按鈕 -->
     <button onclick="runStratAnalysis()" id="stratRunBtn"
-      style="width:100%;padding:14px;background:linear-gradient(135deg,var(--purple),#5040c0);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:16px;letter-spacing:.5px">
+      style="width:100%;padding:14px;background:linear-gradient(135deg,var(--purple),#5040c0);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px;letter-spacing:.5px">
       🤖 AI 策略分析 → 選出10支股票
     </button>
+
+    <!-- 自訂策略指令區 -->
+    <div style="margin-bottom:16px">
+      <button onclick="toggleCustomStrat()" id="customStratToggle"
+        style="width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:space-between">
+        <span>🛠️ 自訂策略指令（設計者模式）</span>
+        <span id="customStratArrow" style="font-size:14px;transition:transform .2s">▾</span>
+      </button>
+      <div id="customStratPanel" style="display:none;margin-top:6px;background:var(--card);border:1px solid rgba(245,200,66,.3);border-radius:12px;padding:14px;overflow:hidden">
+
+        <!-- 說明 -->
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;padding:8px 10px;background:rgba(245,200,66,.06);border-radius:8px">
+          💡 在此輸入自訂選股條件，系統會用<strong style="color:var(--gold)">真實量化數據</strong>先篩選，再交由 AI 依你的條件選出股票並記錄回測。
+        </div>
+
+        <!-- 策略名稱 -->
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">策略名稱</div>
+        <input id="customStratName" type="text" placeholder="例如：高殖利率防禦型、AI概念強勢股…"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;box-sizing:border-box">
+
+        <!-- 選股條件指令 -->
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">選股條件指令</div>
+        <textarea id="customStratPrompt" rows="5" placeholder="例如：
+- 近5日外資買超且成交量放大
+- 股價突破60日均線
+- 不包含金融股和ETF
+- 重點關注AI伺服器、散熱、CoWoS相關供應鏈
+- 市值500億以下中小型股優先"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;line-height:1.6;margin-bottom:10px"></textarea>
+
+        <!-- 快速範本 -->
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">快速套用範本：</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+          <button onclick="applyCustomTemplate('momentum')"
+            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,76,106,.4);background:rgba(255,76,106,.08);color:var(--red);cursor:pointer;font-family:inherit">🚀 動能強選</button>
+          <button onclick="applyCustomTemplate('value')"
+            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(245,200,66,.4);background:rgba(245,200,66,.08);color:var(--gold);cursor:pointer;font-family:inherit">💎 低估值</button>
+          <button onclick="applyCustomTemplate('income')"
+            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(0,212,170,.4);background:rgba(0,212,170,.08);color:var(--green);cursor:pointer;font-family:inherit">💰 高殖利率</button>
+          <button onclick="applyCustomTemplate('smallcap')"
+            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(124,92,252,.4);background:rgba(124,92,252,.08);color:var(--purple);cursor:pointer;font-family:inherit">🔬 中小型成長</button>
+          <button onclick="applyCustomTemplate('ai_chain')"
+            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(79,195,247,.4);background:rgba(79,195,247,.08);color:#4fc3f7;cursor:pointer;font-family:inherit">🧠 AI供應鏈</button>
+        </div>
+
+        <!-- 回測設定 -->
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">驗證週期</div>
+            <select id="customStratPeriod"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:7px 8px;font-family:inherit;outline:none">
+              <option value="7">短期（7日）</option>
+              <option value="14">短期（14日）</option>
+              <option value="30" selected>中期（30日）</option>
+              <option value="90">長期（90日）</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">選股數量</div>
+            <select id="customStratCount"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:7px 8px;font-family:inherit;outline:none">
+              <option value="5">5支</option>
+              <option value="10" selected>10支</option>
+              <option value="15">15支</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 執行按鈕 -->
+        <button onclick="runCustomStratAnalysis()" id="customStratRunBtn"
+          style="width:100%;padding:12px;background:linear-gradient(135deg,var(--gold),#c8960a);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit">
+          ⚡ 執行自訂策略回測
+        </button>
+
+        <!-- 結果區 -->
+        <div id="customStratResult" style="display:none;margin-top:12px"></div>
+      </div>
+    </div>
 
     <!-- 本機回測統計 -->
     <div id="backtestPanel" style="display:none;margin-bottom:16px">
@@ -7314,6 +7392,247 @@ async function runStratAnalysis(){
     runBtn.textContent = '🤖 AI 策略分析 → 選出10支股票';
     if(runningEl) runningEl.style.display = 'none';
   }
+}
+
+// ════════════════════════════════════════════════════
+// 自訂策略回測系統
+// ════════════════════════════════════════════════════
+
+// 展開/收合面板
+function toggleCustomStrat(){
+  const panel = document.getElementById('customStratPanel');
+  const arrow = document.getElementById('customStratArrow');
+  if(!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  if(arrow) arrow.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// 快速範本
+const CUSTOM_TEMPLATES = {
+  momentum:{
+    name:'動能強選',
+    prompt:`- 近5日外資持續買超，投信同向
+- 近5日漲幅>5%，成交量放大超過1.5倍
+- 股價站上20日均線且均線向上
+- 優先選擇半導體、AI、伺服器相關類股
+- 排除近期有重大利空消息的股票`
+  },
+  value:{
+    name:'低估值布局',
+    prompt:`- 本益比(PE)低於同業平均，最好在15以下
+- 股價跌破年線或接近年線下方（超跌）
+- 近期外資由賣轉買或減少賣超
+- 基本面穩健：無虧損、負債比合理
+- 優先選擇傳產、金融、民生消費類股`
+  },
+  income:{
+    name:'高殖利率防禦',
+    prompt:`- 預估殖利率>5%（高股息）
+- 近3年穩定配息，無減配紀錄
+- 股價波動度低（Beta < 0.8）
+- 法人持股穩定，無大量賣超
+- 優先選擇金融、電信、公用事業、傳產`
+  },
+  smallcap:{
+    name:'中小型成長股',
+    prompt:`- 市值500億元以下中小型股
+- 近四季EPS年增率>20%
+- 外資或投信最近開始建倉（籌碼集中）
+- 產業處於成長趨勢（AI、電動車、低軌衛星等新興題材）
+- 排除ETF、金融股、公用事業`
+  },
+  ai_chain:{
+    name:'AI供應鏈',
+    prompt:`- 主要受惠AI伺服器、HBM、CoWoS、散熱、電源等供應鏈
+- 近期有法人買超或外資增持
+- 股價未過度追高（5日漲幅<15%）
+- 包含：IC設計、封裝測試、PCB、散熱、機殼等相關族群
+- 優先選擇有實際出貨給Nvidia、AMD、AWS客戶的公司`
+  },
+};
+
+function applyCustomTemplate(key){
+  const t = CUSTOM_TEMPLATES[key];
+  if(!t) return;
+  const nameEl   = document.getElementById('customStratName');
+  const promptEl = document.getElementById('customStratPrompt');
+  if(nameEl)   nameEl.value   = t.name;
+  if(promptEl) promptEl.value = t.prompt;
+  // 展開面板
+  const panel = document.getElementById('customStratPanel');
+  if(panel && panel.style.display==='none') toggleCustomStrat();
+  showToast(`✅ 已套用「${t.name}」範本`);
+}
+
+// 執行自訂策略分析
+async function runCustomStratAnalysis(){
+  const nameEl    = document.getElementById('customStratName');
+  const promptEl  = document.getElementById('customStratPrompt');
+  const periodEl  = document.getElementById('customStratPeriod');
+  const countEl   = document.getElementById('customStratCount');
+  const runBtn    = document.getElementById('customStratRunBtn');
+  const resultEl  = document.getElementById('customStratResult');
+
+  const stratName  = (nameEl?.value||'').trim() || '自訂策略';
+  const userPrompt = (promptEl?.value||'').trim();
+  const period     = parseInt(periodEl?.value||'30');
+  const count      = parseInt(countEl?.value||'10');
+
+  if(!userPrompt){ showToast('請輸入選股條件'); return; }
+
+  runBtn.disabled = true;
+  runBtn.textContent = '⏳ 量化掃描 + AI 分析中…';
+  if(resultEl) resultEl.style.display = 'none';
+
+  try{
+    // 第一步：全市場量化篩選
+    showToast('🔢 量化掃描全市場…', 4000);
+    const fullQuant = await buildFullMarketQuant().catch(()=>null);
+
+    let quantContext = '';
+    let top30 = [];
+
+    if(fullQuant && Object.keys(fullQuant).length >= 100){
+      // 用綜合分數排序（不指定策略，取平衡分數）
+      const allScored = Object.entries(fullQuant)
+        .map(([id,data])=>({
+          id, name: data.name||NAME_MAP[id]||id,
+          score: Math.round(50 + (data.instScore||0)*5 + (data.ret5||0)*1)
+        }))
+        .sort((a,b)=>b.score-a.score);
+      top30 = allScored.slice(0,40); // 給 AI 更多選擇
+      const count30 = Object.keys(fullQuant).length;
+      quantContext = `\n\n【量化預篩（已從全市場${count30}支中初步篩選前40名）】\n`+
+        top30.slice(0,30).map((s,i)=>`${i+1}.${s.id}${s.name}(綜合${s.score})`).join(' ');
+    }
+
+    // 第二步：AI 依用戶指令選股
+    showToast('🤖 AI 依你的條件選股…', 4000);
+    const today = new Date().toLocaleDateString('zh-TW');
+    const vixCache = loadVixCache();
+    const vixStr = vixCache ? `VIX ${vixCache.vix.toFixed(1)}` : '';
+
+    const fullPrompt = `你是台股選股助理。請嚴格依照以下設計者指定的條件，從台灣上市上櫃全市場選出${count}支股票。
+
+【分析日期】${today}
+【市場狀況】${vixStr}
+【設計者策略名稱】${stratName}
+【設計者選股條件】
+${userPrompt}
+${quantContext}
+
+【輸出要求】
+- 嚴格遵守設計者條件，不可自行更改
+- 每支股票說明符合哪個條件
+- 輸出${count}支，JSON格式
+
+請直接輸出JSON，無任何說明：
+{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":0-100,"risk":1-10,"reason":"符合條件的15字說明"}]}`;
+
+    const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
+    if(!WORKER) throw new Error('API 未設定');
+
+    const resp = await fetchWithTimeout(WORKER, 45000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:2000,
+        messages:[{role:'user', content:fullPrompt}]
+      })
+    });
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data  = await resp.json();
+    const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
+    const clean = text.replace(/\`\`\`json|\`\`\`/g,'').trim();
+    const parsed= JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
+    const stocks= parsed.stocks||[];
+    if(!stocks.length) throw new Error('無結果');
+
+    // 記錄到回測系統（key 用 'CUSTOM_' + 時間戳）
+    const customKey = 'CUS';
+    await recordCustomBacktest(stratName, stocks, period);
+
+    // 渲染結果
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div style="padding:10px 12px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:10px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">🛠️ ${stratName}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">已記錄回測 · ${period}日後驗證 · 共${stocks.length}支</div>
+      </div>
+      ${stocks.map((s,i)=>{
+        const risk=Math.min(10,Math.max(1,Math.round(s.risk||5)));
+        const riskColor=risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
+        const win=Math.min(99,Math.max(1,Math.round(s.winRate||60)));
+        const safe=(s.name||'').replace(/'/g,"\'");
+        const safeId=(s.id||'').replace(/'/g,"\'");
+        return `<div class="sstock-card" onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
+          <div class="sstock-rank">${i+1}</div>
+          <div class="sstock-info">
+            <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3)">${s.sector||''}</span></div>
+            <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
+          </div>
+          <div class="sstock-metrics" style="min-width:64px;text-align:right">
+            <div style="font-size:15px;font-weight:800;color:var(--text3)">${win}%</div>
+            <div style="font-size:9px;color:var(--text3)">AI估算</div>
+            <div style="font-size:9px;color:${riskColor};margin-top:3px;font-weight:600">${risk>=8?'高':risk>=5?'中':'低'}風險</div>
+          </div>
+        </div>`;
+      }).join('')}`;
+
+    showToast(`✅ 「${stratName}」選出 ${stocks.length} 支，已記錄回測`);
+
+  }catch(e){
+    const is429 = e.message.includes('429');
+    if(resultEl){
+      resultEl.style.display='block';
+      resultEl.innerHTML=`<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;background:var(--card);border-radius:10px">
+        ${is429?'⏳ AI 請求過於頻繁，請等30秒後重試':'❌ 分析失敗：'+e.message}
+      </div>`;
+    }
+  }finally{
+    runBtn.disabled=false;
+    runBtn.textContent='⚡ 執行自訂策略回測';
+  }
+}
+
+// 記錄自訂策略到回測系統
+async function recordCustomBacktest(stratName, stocks, period){
+  const records = getBtRecords();
+  const today   = todayStr();
+  const priceMap= {};
+  await Promise.all(stocks.slice(0,10).map(async s=>{
+    try{
+      const raw = await fmStockData(s.id, 5);
+      const q   = _parseQuote(raw, s.id);
+      if(q?.price) priceMap[s.id] = q.price;
+    }catch(e){}
+  }));
+
+  const record = {
+    id:           Date.now(),
+    stratKey:     'WL',  // 歸入自選清單類別
+    customName:   stratName,
+    isCustom:     true,
+    date:         today,
+    checkDate:    addDays(today, Math.min(period, 14)),
+    checkDate14:  addDays(today, 14),
+    checkDateM:   addDays(today, 30),
+    checkDateQ:   addDays(today, 90),
+    verified:false, verified14:false, verifiedM:false, verifiedQ:false,
+    stocks: stocks.slice(0,10).map(s=>({
+      id:s.id, name:s.name, aiWin:Math.round(s.winRate||60),
+      entryPx: priceMap[s.id]||null,
+      result7:null, pct7:null, exitPx7:null,
+      result14:null, pct14:null, exitPx14:null,
+      resultM:null, pctM:null, exitPxM:null,
+      resultQ:null, pctQ:null, exitPxQ:null,
+    })),
+  };
+  records.push(record);
+  if(records.length > 80) records.splice(0, records.length-80);
+  saveBtRecords(records);
+  renderBacktestPanel();
+  renderBattleBanner();
 }
 
 // ════════════════════════════════════════════════════
