@@ -1493,70 +1493,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     </div>
   </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
-  <!-- 歷史策略記錄 Modal -->
-  <div id="historyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:flex-start;overflow-y:auto">
-    <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;padding-bottom:40px;min-height:100vh">
 
-      <!-- 頂部 Header（sticky）-->
-      <div style="position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);padding:14px 16px 10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:16px;font-weight:800">📋 歷史策略記錄</div>
-          <button onclick="closeHistoryModal()" style="background:rgba(255,255,255,.08);border:none;color:var(--text);font-size:16px;cursor:pointer;padding:4px 10px;border-radius:8px;font-family:inherit">✕ 關閉</button>
-        </div>
-
-        <!-- 搜尋框 -->
-        <div style="position:relative;margin-bottom:8px">
-          <input id="historySearch" type="text" placeholder="搜尋股票代號或名稱…"
-            oninput="onHistorySearch(this.value)"
-            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px 8px 32px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
-        </div>
-
-        <!-- 策略篩選 -->
-        <div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none" id="historyFilterBtns">
-          <button onclick="filterHistory('all',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
-          <button onclick="filterHistory('A',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🚀 極致動能</button>
-          <button onclick="filterHistory('B',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📈 穩健成長</button>
-          <button onclick="filterHistory('C',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💎 價值發現</button>
-          <button onclick="filterHistory('D',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🔄 情緒反轉</button>
-          <button onclick="filterHistory('E',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⚖️ 風險平權</button>
-          <button onclick="filterHistory('WL',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⭐ 自選清單</button>
-        </div>
-
-        <!-- 排序 + 週期切換 -->
-        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
-          <select id="historySortSel" onchange="onHistorySort(this.value)"
-            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:5px 8px;font-family:inherit;outline:none;cursor:pointer">
-            <option value="date_desc">最新優先</option>
-            <option value="date_asc">最舊優先</option>
-            <option value="wr_desc">勝率高→低</option>
-            <option value="wr_asc">勝率低→高</option>
-            <option value="pending">待驗證優先</option>
-          </select>
-          <select id="historyPeriodSel" onchange="onHistoryPeriod(this.value)"
-            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:5px 8px;font-family:inherit;outline:none;cursor:pointer">
-            <option value="7">短期 7 日</option>
-            <option value="14">短期 14 日</option>
-            <option value="30">中期 月</option>
-            <option value="90">長期 季</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- 統計摘要列 -->
-      <div id="historySummaryBar" style="margin:10px 16px 0;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;display:none"></div>
-
-      <!-- 記錄清單 -->
-      <div id="historyList" style="padding:10px 16px 0"></div>
-    </div>
-  </div>
 
   <!-- 編輯 Modal -->
   <div id="profileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end">
@@ -7365,12 +7302,19 @@ let _expandedRecords = new Set(); // 展開的記錄 id
 function showHistoryModal(){
   const m = document.getElementById('historyModal');
   if(!m) return;
-  m.style.display='flex';
+  m.style.display = 'flex';
+  // 重置搜尋狀態
+  const searchEl = document.getElementById('historySearch');
+  if(searchEl) searchEl.value = '';
+  _historySearch = '';
   renderHistoryList();
+  // 防止背景 body 捲動
+  document.body.style.overflow = 'hidden';
 }
 function closeHistoryModal(){
   const m = document.getElementById('historyModal');
   if(m) m.style.display='none';
+  document.body.style.overflow = '';
 }
 function showHistoryPanel(){ showHistoryModal(); }
 
@@ -8658,5 +8602,70 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
 
 
 </script>
+
+  <!-- 歷史策略記錄 Modal -->
+  <div id="historyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:flex-start;overflow-y:auto">
+    <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;padding-bottom:40px;min-height:100vh">
+
+      <!-- 頂部 Header（sticky）-->
+      <div style="position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);padding:14px 16px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:16px;font-weight:800">📋 歷史策略記錄</div>
+          <button onclick="closeHistoryModal()" style="background:rgba(255,255,255,.08);border:none;color:var(--text);font-size:16px;cursor:pointer;padding:4px 10px;border-radius:8px;font-family:inherit">✕ 關閉</button>
+        </div>
+
+        <!-- 搜尋框 -->
+        <div style="position:relative;margin-bottom:8px">
+          <input id="historySearch" type="text" placeholder="搜尋股票代號或名稱…"
+            oninput="onHistorySearch(this.value)"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px 8px 32px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
+        </div>
+
+        <!-- 策略篩選 -->
+        <div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none" id="historyFilterBtns">
+          <button onclick="filterHistory('all',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
+          <button onclick="filterHistory('A',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🚀 極致動能</button>
+          <button onclick="filterHistory('B',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📈 穩健成長</button>
+          <button onclick="filterHistory('C',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💎 價值發現</button>
+          <button onclick="filterHistory('D',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🔄 情緒反轉</button>
+          <button onclick="filterHistory('E',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⚖️ 風險平權</button>
+          <button onclick="filterHistory('WL',this)" class="hist-filter"
+            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⭐ 自選清單</button>
+        </div>
+
+        <!-- 排序 + 週期切換 -->
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+          <select id="historySortSel" onchange="onHistorySort(this.value)"
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:5px 8px;font-family:inherit;outline:none;cursor:pointer">
+            <option value="date_desc">最新優先</option>
+            <option value="date_asc">最舊優先</option>
+            <option value="wr_desc">勝率高→低</option>
+            <option value="wr_asc">勝率低→高</option>
+            <option value="pending">待驗證優先</option>
+          </select>
+          <select id="historyPeriodSel" onchange="onHistoryPeriod(this.value)"
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:5px 8px;font-family:inherit;outline:none;cursor:pointer">
+            <option value="7">短期 7 日</option>
+            <option value="14">短期 14 日</option>
+            <option value="30">中期 月</option>
+            <option value="90">長期 季</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 統計摘要列 -->
+      <div id="historySummaryBar" style="margin:10px 16px 0;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;display:none"></div>
+
+      <!-- 記錄清單 -->
+      <div id="historyList" style="padding:10px 16px 0"></div>
+    </div>
+  </div>
 </body>
 </html>
