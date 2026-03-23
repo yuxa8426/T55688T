@@ -7211,11 +7211,43 @@ async function checkBacktestNow(){
 }
 
 // 清除所有回測記錄
+// 刪除單筆記錄（by record.id）
+function deleteRecord(id){
+  const records = getBtRecords().filter(r => r.id !== id);
+  saveBtRecords(records);
+  _expandedRecords.delete(id);
+  renderHistoryList();
+  renderBattleBanner();
+  renderBacktestPanel();
+  showToast('已刪除此筆記錄');
+}
+
+// 刪除特定策略的所有記錄
+function deleteStratRecords(stratKey){
+  const name  = STRAT_INFO[stratKey]?.name || '策略'+stratKey;
+  const count = getBtRecords().filter(r=>r.stratKey===stratKey).length;
+  if(!count){ showToast('此策略無記錄'); return; }
+  if(!confirm(`確定刪除「${name}」的全部 ${count} 筆記錄？
+此操作無法復原。`)) return;
+  const records = getBtRecords().filter(r => r.stratKey !== stratKey);
+  saveBtRecords(records);
+  renderHistoryList();
+  renderBattleBanner();
+  renderBacktestPanel();
+  showToast(`✅ 已刪除「${name}」共 ${count} 筆`);
+}
+
+// 清除全部（保留原功能）
 function clearBacktest(){
-  if(!confirm('確定清除所有回測記錄？')) return;
+  const total = getBtRecords().length;
+  if(!total){ showToast('目前無回測記錄'); return; }
+  if(!confirm(`確定清除全部 ${total} 筆回測記錄？
+此操作無法復原。`)) return;
   localStorage.removeItem(BT_KEY);
   renderBacktestPanel();
-  showToast('回測記錄已清除');
+  renderBattleBanner();
+  renderHistoryList();
+  showToast('已清除全部回測記錄');
 }
 
 // 渲染比較表（依當前週期）
@@ -7408,6 +7440,19 @@ function filterHistory(key, btn){
     btn.style.fontWeight  = '700';
   }
   renderHistoryList();
+  // 更新「刪除此策略」按鈕狀態
+  const delBtn = document.getElementById('historyDeleteStratBtn');
+  if(delBtn){
+    if(key === 'all'){
+      delBtn.style.display = 'none';
+    } else {
+      const si   = STRAT_INFO[key] || {};
+      const cnt  = getBtRecords().filter(r=>r.stratKey===key).length;
+      delBtn.style.display  = cnt ? 'inline-block' : 'none';
+      delBtn.textContent    = `🗑️ 刪除「${si.name||key}」(${cnt})`;
+      delBtn.onclick        = () => deleteStratRecords(key);
+    }
+  }
 }
 
 // 搜尋
@@ -7646,8 +7691,13 @@ function renderHistoryList(){
               </div>` : '<div style="font-size:10px;color:var(--text3);margin-top:2px">驗證後顯示成績</div>'}
             </div>
           </div>
-          <!-- 展開箭頭 -->
-          <div style="color:var(--text3);font-size:16px;margin-left:8px;transform:rotate(${isExp?'180':'0'}deg);transition:transform .2s">▾</div>
+          <!-- 操作按鈕 -->
+          <div style="display:flex;align-items:center;gap:4px;margin-left:8px;flex-shrink:0">
+            <button onclick="event.stopPropagation();deleteRecord(${r.id})"
+              style="font-size:11px;padding:3px 7px;border-radius:6px;border:1px solid rgba(255,76,106,.3);background:rgba(255,76,106,.08);color:#ff6b6b;cursor:pointer;font-family:inherit;opacity:.7"
+              title="刪除此筆">🗑️</button>
+            <div style="color:var(--text3);font-size:16px;transform:rotate(${isExp?'180':'0'}deg);transition:transform .2s">▾</div>
+          </div>
         </div>
         ${stockAvatars}
       </div>
@@ -8712,8 +8762,13 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
             style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⭐ 自選清單</button>
         </div>
 
+        <!-- 策略刪除按鈕（篩選特定策略後才出現）-->
+        <div style="margin-top:6px;min-height:24px">
+          <button id="historyDeleteStratBtn" style="display:none;font-size:10px;padding:3px 10px;border-radius:6px;border:1px solid rgba(255,76,106,.4);background:rgba(255,76,106,.08);color:#ff6b6b;cursor:pointer;font-family:inherit;font-weight:600"></button>
+        </div>
+
         <!-- 排序 + 週期切換 -->
-        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
           <select id="historySortSel" onchange="onHistorySort(this.value)"
             style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:5px 8px;font-family:inherit;outline:none;cursor:pointer">
             <option value="date_desc">最新優先</option>
