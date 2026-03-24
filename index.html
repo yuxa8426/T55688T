@@ -1833,7 +1833,8 @@ const TREND_SIGNALS = {
 
 let _trendCache = null;
 let _trendCacheTime = 0;
-const TREND_CACHE_MS = 5 * 60 * 1000; // 5分鐘快取
+// 趨勢股快取：盤中30分鐘、盤外到午夜（原本5分鐘每次30次請求，改為節流模式）
+const TREND_CACHE_MS = ()=> _isTradingSession() ? 30*60*1000 : _msTillMidnight();
 
 // ── 台股名稱對照表 ────────────────────────────────────
 const NAME_MAP = {
@@ -2061,14 +2062,24 @@ function scheduleAutoRefresh(){
   const isWeekend= now.getDay()===0||now.getDay()===6;
   const inSession= !isWeekend && totalMin>=555 && totalMin<=810;
 
-  const interval = inSession ? 60000 : 600000; // 盤中1分鐘，盤外10分鐘
+  // 盤外：30分鐘（股價不變），盤中：3分鐘（日K 無需每分鐘更新）
+  const interval = inSession ? 3*60*1000 : 30*60*1000;
   _autoRefreshTimer = setTimeout(async ()=>{
     if(currentTicker && currentName){
       const stockId = currentTicker.replace('.TW','');
-      // autoRefresh：只重抓最新報價（5天）+ 法人，歷史已有 fmFetch cache
+
+      // 盤外：直接用 cache，不打 API（股價已收盤不再變動）
+      if(!inSession){
+        const cachedQ    = _fmCache;
+        const cachedData = fmQuote(stockId); // 直接命中 cache，不發請求
+        scheduleAutoRefresh();
+        return;
+      }
+
+      // 盤中：每5分鐘重抓報價，法人30分鐘才重抓（命中快取不算請求）
       const [q, inst] = await Promise.all([
         fmQuote(stockId),
-        fmInstitutional(stockId),
+        fmInstitutional(stockId),  // 盤中 TTL 10分鐘，命中快取不打 API
       ]);
       // 從 cache 取歷史（60天，已有 cache 直接命中）
       const h = await fmHistory(stockId, 60);
@@ -2172,11 +2183,17 @@ function _saveQuota(q){ localStorage.setItem(QUOTA_KEY, JSON.stringify(q)); }
 function _incQuota(){
   const q = _getQuota();
   q.count++;
+  // 每50次輸出一次統計（幫助診斷）
+  if(q.count % 50 === 0) console.log('[Quota] used:', q.count, '/', QUOTA_LIMIT);
+  // 達到警告門檻
+  if(q.count === QUOTA_WARN){
+    showToast('⚠️ API 今日已用 '+QUOTA_WARN+' 次，非必要資料自動節流', 4000);
+  }
   // 達到安全上限：封鎖非必要請求
   if(q.count >= QUOTA_LIMIT && !q.blocked){
     q.blocked = true;
     console.warn('[Quota] 今日請求達上限，非必要請求已暫停');
-    showToast('⚠️ 今日 API 額度接近上限，部分資料將使用快取', 5000);
+    showToast('⚠️ 今日 API 額度已達上限，部分資料將使用快取', 5000);
   }
   _saveQuota(q);
   return q;
@@ -6077,7 +6094,8 @@ async function refreshTrendStocks(manual=false){
   if(manual) showToast('🔄 更新趨勢股…');
 
   // 快取檢查
-  if(!manual && _trendCache && Date.now()-_trendCacheTime < TREND_CACHE_MS){
+  const trendTTL = typeof TREND_CACHE_MS === 'function' ? TREND_CACHE_MS() : TREND_CACHE_MS;
+  if(!manual && _trendCache && Date.now()-_trendCacheTime < trendTTL){
     renderTrendList(_trendCache);
     return;
   }
@@ -6086,14 +6104,57 @@ async function refreshTrendStocks(manual=false){
   const timeEl = document.getElementById('trendUpdateTime');
   if(listEl) listEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">⏳ 分析趨勢中（約15秒）…</div>`;
 
-  // 分批抓取（每批5支，避免API限速）
-  const BATCH = 5;
-  const results = [];
-  for(let i=0; i<TREND_POOL.length; i+=BATCH){
-    const batch = TREND_POOL.slice(i, i+BATCH);
-    const scored = await Promise.all(batch.map(s=>scoreTrendStock(s)));
-    scored.forEach(r=>{ if(r && r.score>0) results.push(r); });
-    if(i+BATCH < TREND_POOL.length) await new Promise(r=>setTimeout(r,300));
+  // 優先用全市場快取（buildFullMarketQuant 已抓過）
+  let results = [];
+  const fullQuant = await (async()=>{
+    try{
+      const cached = JSON.parse(localStorage.getItem('stockai_full_quant')||'null');
+      if(cached?.ts && Date.now()-cached.ts < 4*60*60*1000) return cached.data;
+    }catch(e){}
+    return null;
+  })();
+
+  if(fullQuant && Object.keys(fullQuant).length >= 50){
+    // 全市場快取命中：直接從快取計算，零額外 API 請求
+    console.log('[Trend] using full quant cache, 0 API requests');
+    for(const stock of TREND_POOL){
+      const q = fullQuant[stock.id];
+      if(!q) continue;
+      const score = Math.round(50 + (q.ret5||0)*2 + (q.instScore||0)*8 +
+        (q.volRatio>1.3?5:0));
+      if(score > 0) results.push({
+        ...stock, score,
+        changePct: q.ret5||0,
+        price: null, // 無精確股價，僅用相對分數排序
+        inst:  q.instScore>0?{foreignShares:1,trustShares:0,totalShares:1}:null,
+        signals: [
+          q.ret5>3?'breakout':null,
+          q.instScore>0?'foreign':null,
+          q.volRatio>1.5?'volume':null,
+          q.ret5>0&&q.instScore>0?'momentum':null,
+        ].filter(Boolean),
+        _fromCache: true,
+      });
+    }
+    if(results.length < 5){
+      // 快取資料不足，fallback 到個別請求
+      goto_individual: {
+        // 空區塊，下面會繼續
+      }
+    }
+  }
+
+  if(results.length < 5){
+    // 快取不可用：分批個別請求（最多15支節省配額）
+    console.log('[Trend] individual API requests for', Math.min(TREND_POOL.length,15), 'stocks');
+    const BATCH = 5;
+    const limitedPool = TREND_POOL.slice(0, 15); // 最多15支
+    for(let i=0; i<limitedPool.length; i+=BATCH){
+      const batch = limitedPool.slice(i, i+BATCH);
+      const scored = await Promise.all(batch.map(s=>scoreTrendStock(s)));
+      scored.forEach(r=>{ if(r && r.score>0) results.push(r); });
+      if(i+BATCH < limitedPool.length) await new Promise(r=>setTimeout(r,300));
+    }
   }
 
   // 排序取前8名
@@ -6451,7 +6512,8 @@ async function refreshPulse(){
   const m      = now.getHours()*60+now.getMinutes();
   const isWeek = now.getDay()===0||now.getDay()===6;
   const inSess = !isWeek && m>=555 && m<=810;
-  _pulseTimer  = setTimeout(refreshPulse, inSess ? 60000 : 300000);
+  // 盤中5分鐘，盤外30分鐘
+  _pulseTimer  = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
 }
 
 function updatePulse(instData, indexData){
