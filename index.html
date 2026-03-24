@@ -12,16 +12,16 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#0a0a0f;--card:#1e1e2a;--surface:#1c1c26;
-  --border:rgba(255,255,255,0.08);
-  --green:#00d4aa;--red:#ff4c6a;--gold:#f5c842;--purple:#7c5cfc;
-  --text:#f0f0f8;--text2:#8888aa;--text3:#454560;
+  --bg:#07070e;--card:#1a1a28;--surface:#12121e;
+  --border:rgba(255,255,255,0.12);
+  --green:#00d4aa;--red:#ff4c6a;--gold:#f5c842;--purple:#9b7ffe;
+  --text:#f0f0f8;--text2:#9090b8;--text3:#8080a8;
 }
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans TC',sans-serif;min-height:100vh;overflow-x:hidden}
 #app{max-width:480px;margin:0 auto;padding-bottom:80px}
 .page{display:none}.page.active{display:block}
 .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(10,10,15,0.96);border-top:1px solid var(--border);display:flex;z-index:999;padding-bottom:env(safe-area-inset-bottom,0px)}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;gap:3px;cursor:pointer;border:none;background:none;color:var(--text3);transition:color .15s}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 0 8px;gap:3px;cursor:pointer;border:none;background:none;color:var(--text2);transition:color .15s}
 .nav-btn.active{color:var(--green)}
 .nav-btn span:first-child{font-size:22px;line-height:1}
 .nav-btn span:last-child{font-size:10px;font-weight:600}
@@ -96,20 +96,20 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .sstock-rank{font-size:18px;font-weight:800;color:var(--text3);width:24px;flex-shrink:0;text-align:center}
 .sstock-info{flex:1;min-width:0}
 .sstock-name{font-size:14px;font-weight:700}
-.sstock-reason{font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sstock-reason{font-size:11px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sstock-metrics{text-align:right;flex-shrink:0}
 .sstock-win{font-size:16px;font-weight:800;color:var(--red)}
 .sstock-risk{font-size:10px;color:var(--text3);margin-top:2px}
 .sstock-risk-bar{width:48px;height:4px;border-radius:2px;background:var(--surface);margin-top:3px;overflow:hidden}
 .sstock-risk-fill{height:100%;border-radius:2px;transition:width .5s}
-.deep-btn{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;transition:all .2s;color:var(--text)}
+.deep-btn{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:12px;padding:11px 12px;cursor:pointer;font-family:inherit;text-align:left;width:100%;transition:all .2s;color:var(--text)}
 .deep-btn:active,.deep-btn.loading{opacity:.7;background:rgba(124,92,252,.1);border-color:var(--purple)}
 .deep-btn.done{border-color:rgba(0,212,170,.3);background:rgba(0,212,170,.05)}
 .ai-tag{font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
 .ai-card h3{font-size:16px;font-weight:700;margin-bottom:8px}
 .ai-card p{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px}
 .metrics{display:flex;gap:10px}
-.metric{flex:1;background:rgba(255,255,255,.04);border-radius:10px;padding:10px 12px;border:1px solid var(--border)}
+.metric{flex:1;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;border:1px solid var(--border)}
 .metric .ml{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase}
 .metric .mv{font-size:16px;font-weight:700;margin-top:3px}
 .sig{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-top:12px;border:1px solid;cursor:pointer}
@@ -119,7 +119,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .inst-row-item{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .inst-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .inst-nm{font-size:13px;font-weight:600}
-.inst-sub{font-size:11px;color:var(--text3)}
+.inst-sub{font-size:11px;color:var(--text2)}
 .bar-wrap{flex:1.5}
 .bar-track{height:6px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden}
 .bar-fill{height:100%;border-radius:999px;transition:width .8s ease}
@@ -152,7 +152,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .conc-fill{height:100%;border-radius:999px;transition:width .8s ease}
 .conc-val{font-size:11px;font-weight:700;width:34px;text-align:right}
 .trend-boxes{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
-.tbox{flex:1;background:rgba(255,255,255,.03);border-radius:10px;padding:10px;border:1px solid var(--border);text-align:center}
+.tbox{flex:1;background:rgba(255,255,255,.06);border-radius:10px;padding:10px;border:1px solid var(--border);text-align:center}
 .tbox .ti{font-size:18px;margin-bottom:3px}
 .tbox .tl{font-size:10px;color:var(--text3)}
 .tbox .tv{font-size:14px;font-weight:700;margin-top:2px}
@@ -175,7 +175,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .vzone.z1{background:rgba(0,212,170,.12)}.vzone.z2{background:rgba(245,200,66,.12)}.vzone.z3{background:rgba(255,149,0,.12)}.vzone.z4{background:rgba(255,76,106,.12)}
 .vzone.active.z1{background:rgba(0,212,170,.3);color:var(--green)}.vzone.active.z2{background:rgba(245,200,66,.3);color:var(--gold)}.vzone.active.z3{background:rgba(255,149,0,.3);color:#ff9500}.vzone.active.z4{background:rgba(255,76,106,.3);color:var(--red)}
 .vix-stats{display:flex;gap:8px;margin-bottom:12px}
-.vstat{flex:1;background:rgba(255,255,255,.03);border-radius:8px;padding:9px 10px;border:1px solid var(--border)}
+.vstat{flex:1;background:rgba(255,255,255,.06);border-radius:8px;padding:9px 10px;border:1px solid var(--border)}
 .vstat .vl{font-size:10px;color:var(--text3);font-weight:600}
 .vstat .vv{font-size:15px;font-weight:700;margin-top:2px}
 .vix-note{background:rgba(124,92,252,.08);border-radius:10px;padding:10px 12px;border:1px solid rgba(124,92,252,.2);font-size:12px;color:var(--text2);line-height:1.6}
@@ -186,7 +186,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .mb{flex:1;border-radius:3px 3px 0 0;min-height:4px}
 .vol-time-row{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:14px}
 .vol-stats3{display:flex;gap:8px;margin-bottom:14px}
-.vs3{flex:1;background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px;border:1px solid var(--border);text-align:center}
+.vs3{flex:1;background:rgba(255,255,255,.06);border-radius:8px;padding:8px 10px;border:1px solid var(--border);text-align:center}
 .vs3 .vsl{font-size:10px;color:var(--text3);font-weight:600}
 .vs3 .vsv{font-size:13px;font-weight:700;margin-top:3px}
 .breakdown{display:flex;gap:0;padding-top:12px;border-top:1px solid var(--border)}
@@ -233,8 +233,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .sector-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sector-drawer-body{flex:1;overflow-y:auto;padding:0 0 80px}
 /* 股票卡 */
-.sstock-card{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s;gap:10px}
-.sstock-card:active{background:rgba(255,255,255,.05)}
+.sstock-card{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s;gap:10px}
+.sstock-card:active{background:rgba(255,255,255,.09)}
 .sstock-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0}
 .badge-leader{background:rgba(245,200,66,.2);color:var(--gold)}
 .badge-buy{background:rgba(255,76,106,.15);color:var(--red)}
@@ -325,7 +325,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <div class="avatar" id="headerAvatar">股</div>
   </div>
   <!-- 常駐免責聲明 -->
-  <div style="margin:0 16px 10px;padding:7px 12px;background:rgba(255,255,255,.04);border-radius:8px;border-left:3px solid rgba(245,200,66,.5)">
+  <div style="margin:0 16px 10px;padding:7px 12px;background:rgba(255,255,255,.08);border-radius:8px;border-left:3px solid rgba(245,200,66,.5)">
     <span style="font-size:11px;color:var(--text3)">⚠️ 本平台資訊僅供參考，不構成投資建議，投資盈虧自負。</span>
   </div>
   <div class="search">
@@ -474,7 +474,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <!-- 多空區域標籤 -->
       <div style="display:flex;gap:6px;margin-bottom:12px">
         <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(255,76,106,.08);color:var(--red)">PCR &lt; 0.8 多方</span>
-        <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(255,255,255,.05);color:var(--text3)">0.8~1.2 中性</span>
+        <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(255,255,255,.09);color:var(--text3)">0.8~1.2 中性</span>
         <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(0,212,170,.08);color:var(--green)">PCR &gt; 1.2 空方</span>
       </div>
       <!-- AI 分析 -->
@@ -522,15 +522,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       </div>
       <!-- 投信/自營商列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">投信淨部位</div>
           <div style="font-size:14px;font-weight:700" id="futTrustNet">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">自營商淨部位</div>
           <div style="font-size:14px;font-weight:700" id="futDealerNet">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:8px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">散戶小台</div>
           <div style="font-size:14px;font-weight:700" id="futRetailNet">—</div>
         </div>
@@ -610,7 +610,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <p id="aiBody" style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">載入中…</p>
 
     <!-- 短/中/長期 Tab -->
-    <div style="display:flex;background:rgba(255,255,255,.05);border-radius:10px;padding:3px;margin-bottom:14px" id="periodTabs">
+    <div style="display:flex;background:rgba(255,255,255,.09);border-radius:10px;padding:3px;margin-bottom:14px" id="periodTabs">
       <button onclick="showPeriod('short')" id="ptab-short"
         style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--green);color:#000">
         短期 5日
@@ -628,15 +628,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <!-- 短期面板 -->
     <div id="panel-short">
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">RSI(14)</div>
           <div style="font-size:18px;font-weight:700" id="s-rsi">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">5日動能</div>
           <div style="font-size:18px;font-weight:700" id="s-mom">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">法人近5日</div>
           <div style="font-size:18px;font-weight:700" id="s-inst">—</div>
         </div>
@@ -660,15 +660,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
     <!-- 中期面板 -->
     <div id="panel-mid" style="display:none">
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">MA20</div>
           <div style="font-size:18px;font-weight:700" id="m-ma20">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">月漲幅</div>
           <div style="font-size:18px;font-weight:700" id="m-month">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:10px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">月位置</div>
           <div style="font-size:18px;font-weight:700" id="m-pos">—</div>
         </div>
@@ -696,15 +696,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
       <!-- 行1：均線組 -->
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA60 季線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma60">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA120 半年線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma120">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA250 年線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma250">—</div>
         </div>
@@ -712,15 +712,15 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
       <!-- 行2：漲幅組 -->
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">季漲幅（60日）</div>
           <div style="font-size:16px;font-weight:700" id="l-quarter">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">半年漲幅</div>
           <div style="font-size:16px;font-weight:700" id="l-half">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">年漲幅（52W）</div>
           <div style="font-size:16px;font-weight:700" id="l-year">—</div>
         </div>
@@ -728,7 +728,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
       <!-- 行3：52週高低 + 週期 -->
       <div style="display:flex;gap:6px;margin-bottom:10px">
-        <div style="flex:1.4;background:rgba(255,255,255,.05);border-radius:10px;padding:9px">
+        <div style="flex:1.4;background:rgba(255,255,255,.09);border-radius:10px;padding:9px">
           <div style="font-size:9px;color:var(--text3);margin-bottom:4px">52週高低點</div>
           <div style="font-size:11px" id="l-52w">—</div>
           <!-- 52週位置條 -->
@@ -737,7 +737,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
           </div>
           <div style="font-size:9px;color:var(--text3);margin-top:2px" id="l-52w-pos">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.05);border-radius:10px;padding:9px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">週期規律</div>
           <div style="font-size:15px;font-weight:700" id="l-cycle">—</div>
         </div>
@@ -788,19 +788,19 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
         <div id="scoreBar" style="height:100%;border-radius:999px;width:0%;transition:width .8s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,#ff4c6a,#f5c842,#00d4aa)"></div>
       </div>
       <div style="display:flex;gap:6px">
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:7px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:2px">短期</div>
           <div style="font-size:14px;font-weight:700" id="scoreTech">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:7px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:2px">中期</div>
           <div style="font-size:14px;font-weight:700" id="scoreInst">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:7px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:2px">長期</div>
           <div style="font-size:14px;font-weight:700" id="scoreMom">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.04);border-radius:8px;padding:7px;text-align:center">
+        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
           <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人</div>
           <div style="font-size:14px;font-weight:700" id="scoreInstVal">—</div>
         </div>
@@ -3793,7 +3793,7 @@ function updateAI(name, q){
       actionTitle = '中性整理，觀望為主';
       actionDesc  = `多空訊號均衡，現價於 ${support}～${resist} 區間整理。建議等待方向確立後再行判斷，不宜貿然追高或殺低。`;
       actionColor = 'var(--text2)';
-      actionBg    = 'rgba(255,255,255,.04)';
+      actionBg    = 'rgba(255,255,255,.08)';
     } else if(finalScore >= 3.5){
       actionIcon  = '🟩';
       actionTitle = '指標偏弱，留意下行風險';
@@ -8208,7 +8208,7 @@ function renderBacktestPanel(){
   }
 
   if(pendEl && pending.length){
-    pendEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">` +
+    pendEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:8px">` +
       `<div style="font-size:10px;color:var(--text3);margin-bottom:4px">📋 驗證進度</div>` +
       pending.map(r=>{
         const d7  = daysLeft(r.checkDate);
@@ -8236,7 +8236,7 @@ function renderBacktestPanel(){
           return `<span style="color:var(--text3)">${label}${days}天</span>`;
         }
 
-        return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+        return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08)">
           <span style="color:var(--text2);font-weight:600">${icon} 策略${r.stratKey} · ${r.date}</span>
           <span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
             ${fmtDays(d7,  r.verified,   '7日')}
@@ -8506,7 +8506,7 @@ function renderHistoryList(){
         (s.id||'').toLowerCase().includes(_historySearch) ||
         (s.name||'').toLowerCase().includes(_historySearch)
       );
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer${highlight?';background:rgba(245,200,66,.06);margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:4px':''}"
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer${highlight?';background:rgba(245,200,66,.06);margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:4px':''}"
         onclick="selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('home')">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
           <span style="font-size:14px;flex-shrink:0">${resIcon}</span>
@@ -9558,7 +9558,7 @@ function iosBanner(){
     sessionStorage.setItem('b','1');
     const b=document.createElement('div');
     b.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:420px;background:#1e1e2a;border:1px solid rgba(0,212,170,.3);border-radius:14px;padding:14px 16px;z-index:9998;display:flex;gap:12px;align-items:flex-start;box-shadow:0 8px 30px rgba(0,0,0,.6)';
-    b.innerHTML='<span style="font-size:28px">📊</span><div style="flex:1"><div style="font-size:14px;font-weight:700;margin-bottom:3px;color:#f0f0f8">加入主畫面使用</div><div style="font-size:12px;color:#8888aa;line-height:1.5">Safari 底部點 <strong style="color:#00d4aa">分享 ⬆</strong> → <strong style="color:#00d4aa">加入主畫面</strong></div></div><span onclick="this.parentElement.remove()" style="font-size:20px;color:#555570;cursor:pointer;padding:2px 4px;line-height:1">✕</span>';
+    b.innerHTML='<span style="font-size:28px">📊</span><div style="flex:1"><div style="font-size:14px;font-weight:700;margin-bottom:3px;color:#f0f0f8">加入主畫面使用</div><div style="font-size:12px;color:#8888aa;line-height:1.5">Safari 底部點 <strong style="color:#00d4aa">分享 ⬆</strong> → <strong style="color:#00d4aa">加入主畫面</strong></div></div><span onclick="this.parentElement.remove()" style="font-size:20px;color:var(--text3);cursor:pointer;padding:2px 4px;line-height:1">✕</span>';
     document.body.appendChild(b);
   }
 }
