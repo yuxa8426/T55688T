@@ -296,6 +296,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* ── 台灣股市慣例：紅漲綠跌 ── */
 .up{color:var(--red)}.dn{color:var(--green)}.gold{color:var(--gold)}.purple{color:var(--purple)}
+
+@keyframes obFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -9629,6 +9631,9 @@ function iosBanner(){
 // 初始化
 // ════════════════════════════════════════════════════
 window.addEventListener('load', async ()=>{
+  // ── Onboarding（最優先，新用戶直接顯示）
+  initOnboarding();
+
   // ── 即時時鐘 + 新鮮度計時器（第一優先）
   startClock();
   startFreshnessTicker();
@@ -9674,6 +9679,141 @@ window.addEventListener('load', async ()=>{
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
+// ════════════════════════════════════════════════════
+// Onboarding 首次使用引導系統
+// ════════════════════════════════════════════════════
+const OB_KEY = 'stockai_onboarded_v1';
+let _obStep  = 0;
+
+const OB_SLIDES = [
+  {
+    icon: '📊',
+    title: '歡迎使用 股析 StockAI',
+    desc: '結合真實市場數據與 AI 智能分析的台股研究工具，讓你的投資決策更有依據。',
+    color: '#9b7ffe',
+    detail: '每日更新 · 真實 FinMind 數據 · AI 策略篩選',
+  },
+  {
+    icon: '🔍',
+    title: '搜尋任何台股',
+    desc: '在首頁頂部輸入股票代號（如 2330）或名稱，即可查看走勢、法人動向、AI 分析。',
+    color: '#00d4aa',
+    detail: '支援上市上櫃 1,800+ 支股票',
+    demo: `<div style="background:#1a1a28;border-radius:12px;padding:10px 14px;margin-top:14px;display:flex;align-items:center;gap:8px;border:1px solid rgba(155,127,254,.4)">
+      <span style="color:#8080a8">🔍</span>
+      <span style="color:#9b7ffe">2330</span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px;color:#8080a8">台積電 · 半導體</span>
+    </div>`,
+  },
+  {
+    icon: '🤖',
+    title: 'AI 策略選股',
+    desc: '五大量化策略結合全市場 1,800 支股票掃描，用真實數據幫你找出潛力標的。',
+    color: '#ff4c6a',
+    detail: '極致動能 · 穩健成長 · 價值發現 · 情緒反轉 · 風險平權',
+    demo: `<div style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap">
+      ${['🚀 動能','📈 成長','💎 價值','🔄 反轉','⚖️ 平權'].map(s=>
+        `<span style="font-size:11px;padding:4px 10px;border-radius:20px;background:rgba(255,76,106,.12);color:#ff4c6a;border:1px solid rgba(255,76,106,.3)">${s}</span>`
+      ).join('')}
+    </div>`,
+  },
+  {
+    icon: '📋',
+    title: '策略回測驗證',
+    desc: 'AI 每次推薦都會記錄入場價，7日、14日、月、季後自動比對漲跌，讓你看見真實勝率。',
+    color: '#f5c842',
+    detail: '不是 AI 估算，是真實驗證的數字',
+    demo: `<div style="display:flex;gap:10px;margin-top:14px">
+      <div style="flex:1;background:#1a1a28;border-radius:10px;padding:10px;text-align:center;border:1px solid rgba(245,200,66,.3)">
+        <div style="font-size:22px;font-weight:900;color:#f5c842">68%</div>
+        <div style="font-size:9px;color:#8080a8;margin-top:2px">實測勝率</div>
+      </div>
+      <div style="flex:1;background:#1a1a28;border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#00d4aa">A</div>
+        <div style="font-size:9px;color:#8080a8;margin-top:2px">策略等級</div>
+      </div>
+      <div style="flex:1;background:#1a1a28;border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#9b7ffe">47</div>
+        <div style="font-size:9px;color:#8080a8;margin-top:2px">已驗證筆</div>
+      </div>
+    </div>`,
+  },
+  {
+    icon: '⚠️',
+    title: '關於資料來源',
+    desc: '股析使用 FinMind 免費 API，每日有請求次數限制。若資料無法顯示，可在「我的」頁面更新 Token 或等隔日重置。',
+    color: '#f5c842',
+    detail: '投資有風險，本工具僅供參考，不構成投資建議',
+    isLast: true,
+  },
+];
+
+function obRender(){
+  const slide = OB_SLIDES[_obStep];
+  if(!slide) return;
+
+  // 更新進度點
+  const dotsEl = document.getElementById('obDots');
+  if(dotsEl) dotsEl.innerHTML = OB_SLIDES.map((_,i)=>
+    `<div style="width:${i===_obStep?20:6}px;height:6px;border-radius:3px;background:${i===_obStep?slide.color:'#2a2a3a'};transition:all .3s"></div>`
+  ).join('');
+
+  // 渲染 slide
+  const slidesEl = document.getElementById('obSlides');
+  if(slidesEl){
+    slidesEl.innerHTML = `
+      <div style="padding:32px 24px 16px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;animation:obFadeIn .3s ease">
+        <div style="font-size:64px;text-align:center;margin-bottom:20px;filter:drop-shadow(0 0 20px ${slide.color}44)">${slide.icon}</div>
+        <h2 style="font-size:22px;font-weight:800;color:#f0f0f8;text-align:center;margin-bottom:12px;line-height:1.3">${slide.title}</h2>
+        <p style="font-size:14px;color:#9090b8;text-align:center;line-height:1.7;margin-bottom:8px">${slide.desc}</p>
+        <div style="font-size:11px;color:${slide.color};text-align:center;font-weight:600">${slide.detail}</div>
+        ${slide.demo||''}
+      </div>`;
+  }
+
+  // 更新按鈕
+  const nextBtn = document.getElementById('obNextBtn');
+  const skipBtn = document.getElementById('obSkipBtn');
+  if(nextBtn){
+    nextBtn.textContent = slide.isLast ? '🚀 開始使用' : '繼續';
+    nextBtn.style.background = slide.isLast
+      ? `linear-gradient(135deg,${slide.color},${slide.color}88)`
+      : 'linear-gradient(135deg,#9b7ffe,#5040c0)';
+  }
+  if(skipBtn) skipBtn.style.display = slide.isLast ? 'none' : 'block';
+}
+
+function obNext(){
+  if(_obStep < OB_SLIDES.length-1){
+    _obStep++;
+    obRender();
+  } else {
+    obFinish();
+  }
+}
+
+function obFinish(){
+  localStorage.setItem(OB_KEY, '1');
+  const modal = document.getElementById('onboardingModal');
+  if(modal){
+    modal.style.opacity = '0';
+    modal.style.transition = 'opacity .4s';
+    setTimeout(()=>{ modal.style.display='none'; }, 400);
+  }
+  document.body.style.overflow = '';
+}
+
+function initOnboarding(){
+  // 已看過就不顯示
+  if(localStorage.getItem(OB_KEY)) return;
+  const modal = document.getElementById('onboardingModal');
+  if(!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  _obStep = 0;
+  obRender();
+}
 
 </script>
 
@@ -9746,5 +9886,17 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').cat
       <div id="historyList" style="padding:10px 16px 0"></div>
     </div>
   </div>
+
+<!-- ════ ONBOARDING Modal ════ -->
+<div id="onboardingModal" style="display:none;position:fixed;inset:0;z-index:99999;background:#07070e;overflow:hidden">
+  <div style="height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto">
+    <div style="display:flex;justify-content:center;gap:8px;padding:20px 0 0" id="obDots"></div>
+    <div style="flex:1;overflow:hidden;position:relative" id="obSlides"></div>
+    <div style="padding:16px 24px 40px;display:flex;flex-direction:column;gap:10px">
+      <button id="obNextBtn" onclick="obNext()" style="width:100%;padding:15px;background:linear-gradient(135deg,#9b7ffe,#5040c0);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">繼續</button>
+      <button id="obSkipBtn" onclick="obFinish()" style="background:none;border:none;color:#8080a8;font-size:13px;cursor:pointer;font-family:inherit;padding:4px">略過引導</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
