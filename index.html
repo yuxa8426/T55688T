@@ -8667,8 +8667,8 @@ function _renderSummaryBar(records){
       <div style="font-size:18px;font-weight:900;color:${wrColor}">${overallWR!=null?overallWR+'%':'—'}</div>
     </div>
     <div style="display:flex;gap:12px">
-      <span style="font-size:11px;color:var(--red)">🟢 ${allWins}勝</span>
-      <span style="font-size:11px;color:var(--green)">🔴 ${allLosses}敗</span>
+      <span style="font-size:11px;color:var(--red)">🔴 ${allWins}勝</span>
+      <span style="font-size:11px;color:var(--green)">🟢 ${allLosses}敗</span>
       <span style="font-size:11px;color:var(--gold)">🟡 ${allFlats}平</span>
       <span style="font-size:11px;color:var(--text3);margin-left:auto">共${allDone}筆驗證</span>
     </div>`;
@@ -8763,7 +8763,7 @@ function renderHistoryList(){
     const stocksHTML = isExp ? r.stocks.map(s=>{
       const res     = s[f.res];
       const pct     = s[f.pct];
-      const resIcon = res==='win'?'🟢':res==='loss'?'🔴':res==='flat'?'🟡':'⬜';
+      const resIcon = res==='win'?'🔴':res==='loss'?'🟢':res==='flat'?'🟡':'⬜'; // 台股慣例：紅=漲=勝，綠=跌=敗
       const pctStr  = pct!=null ? (pct>=0?'+':'')+pct+'%' : '待驗';
       const pctColor= pct==null?'var(--text3)':pct>=2?'var(--red)':pct<=-2?'var(--green)':'var(--gold)';
       const highlight = _historySearch && (
@@ -8792,8 +8792,8 @@ function renderHistoryList(){
       <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
         ${r.stocks.slice(0,8).map(s=>{
           const res = s[f.res];
-          const col = res==='win'?'rgba(255,76,106,.2)':res==='loss'?'rgba(0,212,170,.2)':res==='flat'?'rgba(245,200,66,.2)':'rgba(255,255,255,.06)';
-          const textCol = res==='win'?'var(--red)':res==='loss'?'var(--green)':res==='flat'?'var(--gold)':'var(--text3)';
+          const col = res==='win'?'rgba(255,76,106,.2)':res==='loss'?'rgba(0,212,170,.2)':res==='flat'?'rgba(245,200,66,.2)':'rgba(255,255,255,.06)'; // 已正確：紅底=勝
+          const textCol = res==='win'?'var(--red)':res==='loss'?'var(--green)':res==='flat'?'var(--gold)':'var(--text3)'; // 已正確：紅=勝
           return `<div style="font-size:10px;padding:2px 6px;border-radius:4px;background:${col};color:${textCol};cursor:pointer"
             onclick="event.stopPropagation();selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('home')">${s.id}</div>`;
         }).join('')}
@@ -8815,8 +8815,8 @@ function renderHistoryList(){
               </div>
               <div style="font-size:10px;color:var(--text3)">${r.date} · ${periodLabel}週期 · ${r.stocks.length}支</div>
               ${st.done >= 1 ? `<div style="font-size:10px;margin-top:3px">
-                <span style="color:var(--red)">🟢${st.wins}</span>
-                <span style="color:var(--green);margin-left:5px">🔴${st.losses}</span>
+                <span style="color:var(--red)">🔴${st.wins}</span>
+                <span style="color:var(--green);margin-left:5px">🟢${st.losses}</span>
                 <span style="color:var(--gold);margin-left:5px">🟡${st.flats}</span>
                 ${st.avgPct!=null?`<span style="color:${st.avgPct>=0?'var(--red)':'var(--green)'};margin-left:5px">均${st.avgPct>=0?'+':''}${st.avgPct}%</span>`:''}
               </div>` : '<div style="font-size:10px;color:var(--text3);margin-top:2px">驗證後顯示成績</div>'}
