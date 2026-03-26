@@ -298,10 +298,29 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .up{color:var(--red)}.dn{color:var(--green)}.gold{color:var(--gold)}.purple{color:var(--purple)}
 
 @keyframes obFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bannerSlideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes hintPulse{0%,100%{opacity:.5}50%{opacity:1}}
+#globalErrorBanner{animation:bannerSlideDown .3s ease;font-family:inherit}
+
+/* 鍵盤彈起時的 modal 調整 */
+.keyboard-open .modal-scroll{max-height:50vh !important;overflow-y:auto}
+.keyboard-open #nav{display:none}
+/* iOS 安全區域 */
+#nav{padding-bottom:env(safe-area-inset-bottom,0px)}
+.page{padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+/* 輸入框 focus 時自動捲動 */
+input:focus, textarea:focus{scroll-margin-bottom:80px}
 </style>
 </head>
 <body>
 <div id="app">
+
+<!-- 全域錯誤橫幅（跨頁面顯示）-->
+<div id="globalErrorBanner" style="display:none;position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:9000;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;font-size:12px;font-weight:600;align-items:center;gap:8px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.4)" onclick="dismissErrorBanner()">
+  <span id="globalErrorIcon" style="font-size:16px;flex-shrink:0">⚠️</span>
+  <span id="globalErrorText" style="flex:1;line-height:1.4"></span>
+  <span style="color:rgba(255,255,255,.5);font-size:16px;flex-shrink:0">✕</span>
+</div>
 
 <!-- ═══ PAGE: 總覽 ═══ -->
 <div class="page active" id="page-home">
@@ -332,7 +351,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
   </div>
   <div class="search">
     <span style="font-size:16px;color:var(--text3)">🔍</span>
-    <input type="text" id="searchInput" placeholder="搜尋股票、ETF、指數…" oninput="onSearch(this.value)">
+    <input type="text" id="searchInput" placeholder="搜尋股票、ETF、指數…" oninput="onSearch(this.value)" onfocus="onSearchFocus()" autocomplete="off" autocorrect="off" autocapitalize="off">
   </div>
   <div id="searchResults"></div>
 
@@ -397,7 +416,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       </div>
     </div>
     <svg class="chart-area" id="chartSvg" viewBox="0 0 320 130" preserveAspectRatio="none"
-         onmousemove="chartHover(event)" onmouseleave="chartLeave()" ontouchmove="chartTouch(event)" ontouchend="chartLeave()">
+         onmousemove="chartHover(event)" onmouseleave="chartLeave()"
+         ontouchstart="chartTouchStart(event)" ontouchmove="chartTouch(event)" ontouchend="chartTouchEnd(event)"
+         style="touch-action:pan-y">
       <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4aa" stop-opacity=".3" id="cgStop"/><stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/></linearGradient></defs>
       <path id="chartFill" fill="url(#cg)"/>
       <path id="chartLine" fill="none" stroke="#00d4aa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
@@ -406,11 +427,14 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <circle id="chartHoverDot" r="4" fill="white" stroke="#00d4aa" stroke-width="2" display="none"/>
       <circle id="chartDot" r="5" fill="#00d4aa"/>
     </svg>
-    <!-- 懸浮 tooltip -->
-    <div id="chartTooltip" style="display:none;position:absolute;background:rgba(20,20,35,.92);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:6px 10px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap">
-      <div style="font-weight:700;color:var(--text)" id="ttPrice">—</div>
-      <div style="color:var(--text3)" id="ttDate">—</div>
+    <!-- 懸浮 tooltip（長按查價）-->
+    <div id="chartTooltip" style="display:none;position:absolute;background:rgba(14,14,22,.95);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+      <div style="font-size:14px;font-weight:800;color:var(--text);letter-spacing:.3px" id="ttPrice">—</div>
+      <div style="color:var(--text2);margin-top:2px" id="ttDate">—</div>
+      <div style="color:var(--text3);font-size:10px;margin-top:1px" id="ttChange">—</div>
     </div>
+    <!-- 長按提示（首次使用）-->
+    <div id="chartLongPressHint" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text2);pointer-events:none;background:rgba(20,20,35,.8);padding:3px 8px;border-radius:10px;white-space:nowrap;animation:hintPulse 2s ease-in-out infinite">👆 長按查看價格</div>
     <div class="chart-time" id="chartTime"><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span></div>
     <div class="vol-sec">
       <div class="vol-head"><span>📊 成交量</span><span id="stockVolText" class="up">38,472 張 · 均量 ×1.4</span></div>
@@ -1301,7 +1325,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 
         <!-- 選股條件指令 -->
         <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">選股條件指令</div>
-        <textarea id="customStratPrompt" rows="5" placeholder="例如：
+        <textarea id="customStratPrompt" rows="4" placeholder="例如：
 - 近5日外資買超且成交量放大
 - 股價突破60日均線
 - 不包含金融股和ETF
@@ -1403,8 +1427,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
       <!-- 新增股票列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input id="wlAddInput" type="text" placeholder="輸入股票代號，例如 2330"
+          inputmode="numeric" enterkeyhint="done" autocomplete="off"
           style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"
-          oninput="onWlSearch(this.value)" onkeydown="if(event.key==='Enter')wlAddFromInput()">
+          oninput="onWlSearch(this.value)" onkeydown="if(event.key==='Enter'){wlAddFromInput();this.blur()}">
         <button onclick="wlAddFromInput()"
           style="background:var(--green);color:#000;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">＋</button>
       </div>
@@ -2261,10 +2286,7 @@ async function fmFetch(params, timeout=15000){
       if(res.status === 402){
         console.warn('[FinMind] 今日 API 額度已達上限，明天 00:00 自動重置');
         // 顯示全域提示（只顯示一次）
-        if(!window._fm402shown){
-          window._fm402shown = true;
-          showToast('⚠️ FinMind 今日額度用完，明日 00:00 重置。請到「我的」更新 Token 或明日再試。', 6000);
-        }
+        _handle402();
         throw new Error('HTTP 402');
       }
       if(!res.ok) throw new Error('HTTP '+res.status);
@@ -2277,7 +2299,12 @@ async function fmFetch(params, timeout=15000){
       _fmCache.set(url, {data, ts:Date.now()});
       return data;
     }catch(e){
-      console.warn('FinMind failed:', params.dataset, e.message);
+      const msg = e.message||'';
+      // 友善錯誤分類
+      if(msg.includes('402'))      { console.warn('[FinMind 402]', params.dataset); }
+      else if(msg.includes('400')) { console.warn('[FinMind 400] Token 需更新:', params.dataset); showErrorBanner('token400'); }
+      else if(msg.includes('timeout')){ console.warn('[FinMind timeout]', params.dataset); showErrorBanner('timeout'); }
+      else console.warn('[FinMind]', params.dataset, msg);
       return null;
     }finally{
       _fmFlight.delete(url);
@@ -3939,7 +3966,12 @@ function updateChartTimeLabels(dates, total){
 }
 
 // ── Crosshair 互動 ───────────────────────────────────
-function chartHover(e){
+let _chartLongPressTimer = null;
+let _chartIsLongPress    = false;
+let _chartHintShown      = !!localStorage.getItem('stockai_chart_hint');
+
+// 核心：計算並顯示指定座標的 tooltip
+function _showChartTip(clientX, clientY){
   const svg   = document.getElementById('chartSvg');
   const tip   = document.getElementById('chartTooltip');
   const cross = document.getElementById('chartCross');
@@ -3948,56 +3980,115 @@ function chartHover(e){
 
   const rect  = svg.getBoundingClientRect();
   const svgW  = 320, svgH = 130;
-  // 將螢幕座標換算成 SVG 座標
-  const rawX  = (e.clientX - rect.left) / rect.width * svgW;
+  const rawX  = (clientX - rect.left) / rect.width * svgW;
   const clampX= Math.max(0, Math.min(svgW, rawX));
 
   const { pts, dates, color } = _chartData;
   const pad = 10, rng = Math.max(...pts)-Math.min(...pts) || Math.min(...pts)*0.01||1;
   const mn  = Math.min(...pts);
 
-  // 最近資料點
-  const idx  = Math.round(clampX / svgW * (pts.length-1));
-  const safeIdx = Math.max(0, Math.min(pts.length-1, idx));
-  const price= pts[safeIdx];
-  const date = dates[safeIdx] || '';
-  const x    = safeIdx/(pts.length-1)*svgW;
-  const y    = svgH-pad - ((price-mn)/rng)*(svgH-pad*2);
+  const idx    = Math.round(clampX / svgW * (pts.length-1));
+  const si     = Math.max(0, Math.min(pts.length-1, idx));
+  const price  = pts[si];
+  const date   = dates[si] || '';
+  const x      = si/(pts.length-1)*svgW;
+  const y      = svgH-pad - ((price-mn)/rng)*(svgH-pad*2);
 
-  // crosshair
-  cross.setAttribute('x1', x.toFixed(1)); cross.setAttribute('x2', x.toFixed(1));
-  cross.setAttribute('display','inline');
-  hdot.setAttribute('cx', x.toFixed(1)); hdot.setAttribute('cy', y.toFixed(1));
-  hdot.setAttribute('display','inline');
+  // crosshair + dot
+  if(cross){ cross.setAttribute('x1',x.toFixed(1)); cross.setAttribute('x2',x.toFixed(1)); cross.setAttribute('display','inline'); }
+  if(hdot){  hdot.setAttribute('cx',x.toFixed(1));  hdot.setAttribute('cy',y.toFixed(1));  hdot.setAttribute('display','inline');
+    hdot.setAttribute('r', _chartIsLongPress ? '6' : '4');
+    hdot.setAttribute('stroke', color);
+  }
 
-  // tooltip
-  const ttPrice = document.getElementById('ttPrice');
-  const ttDate  = document.getElementById('ttDate');
-  if(ttPrice) ttPrice.textContent = '$'+fmt(price);
-  if(ttDate)  ttDate.textContent  = date || '—';
-  if(ttPrice) ttPrice.style.color = color;
+  // tooltip 內容
+  const ttPrice  = document.getElementById('ttPrice');
+  const ttDate   = document.getElementById('ttDate');
+  const ttChange = document.getElementById('ttChange');
+  if(ttPrice){ ttPrice.textContent = '$'+fmt(price); ttPrice.style.color = color; }
+  if(ttDate)  ttDate.textContent   = date || '—';
+  // 顯示相對前一點的漲跌
+  if(ttChange && si > 0){
+    const prev  = pts[si-1];
+    const diff  = price - prev;
+    const pct   = prev > 0 ? (diff/prev*100).toFixed(2) : '0';
+    ttChange.textContent = `${diff>=0?'+':''}${diff.toFixed(2)} (${diff>=0?'+':''}${pct}%)`;
+    ttChange.style.color = diff>=0?'var(--red)':'var(--green)';
+  } else if(ttChange){
+    ttChange.textContent = '';
+  }
 
-  // 定位 tooltip（防止超出卡片右側）
-  const cardEl  = svg.closest('.chart-card');
-  const cardRect= cardEl ? cardEl.getBoundingClientRect() : rect;
-  const tipLeft = (e.clientX - cardRect.left) + 12;
-  const tipTop  = (e.clientY - cardRect.top)  - 10;
-  tip.style.display = 'block';
-  tip.style.left    = (tipLeft > cardRect.width-100 ? tipLeft-110 : tipLeft) + 'px';
-  tip.style.top     = tipTop + 'px';
+  // 定位 tooltip（確保不超出畫面）
+  const cardEl   = svg.closest('.chart-card');
+  const cardRect = cardEl ? cardEl.getBoundingClientRect() : rect;
+  const tipLeft  = (clientX - cardRect.left) + 14;
+  const tipTop   = (clientY - cardRect.top)  - 56;
+  if(tip){
+    tip.style.display = 'block';
+    // 水平：防超出右側
+    const safeLeft = tipLeft > cardRect.width - 130 ? tipLeft - 140 : tipLeft;
+    tip.style.left = Math.max(4, safeLeft) + 'px';
+    // 垂直：優先顯示在手指上方，空間不夠則顯示在下方
+    const tipH  = tip.offsetHeight || 52;
+    const safeTop = tipTop - tipH < 0 ? (clientY - cardRect.top) + 12 : tipTop;
+    tip.style.top = Math.max(2, safeTop) + 'px';
+    // 長按樣式加強
+    tip.style.transform   = _chartIsLongPress ? 'scale(1.06)' : 'scale(1)';
+    tip.style.transition  = 'transform .15s, border-color .15s';
+    tip.style.borderColor = _chartIsLongPress ? color : 'rgba(255,255,255,.18)';
+    tip.style.boxShadow   = _chartIsLongPress
+      ? `0 4px 20px ${color}44` : '0 4px 20px rgba(0,0,0,.5)';
+  }
 }
 
+function chartHover(e){ _chartIsLongPress=false; _showChartTip(e.clientX, e.clientY); }
+
 function chartLeave(){
+  if(_chartLongPressTimer){ clearTimeout(_chartLongPressTimer); _chartLongPressTimer=null; }
+  _chartIsLongPress = false;
   const cross = document.getElementById('chartCross');
   const hdot  = document.getElementById('chartHoverDot');
   const tip   = document.getElementById('chartTooltip');
   if(cross) cross.setAttribute('display','none');
-  if(hdot)  hdot.setAttribute('display','none');
+  if(hdot){  hdot.setAttribute('display','none'); hdot.setAttribute('r','4'); }
   if(tip)   tip.style.display = 'none';
 }
 
+function chartTouchStart(e){
+  if(!e.touches.length) return;
+  const t = e.touches[0];
+  // 長按計時器（400ms）
+  _chartLongPressTimer = setTimeout(()=>{
+    _chartIsLongPress = true;
+    // 觸覺回饋（支援的裝置）
+    if(navigator.vibrate) navigator.vibrate(30);
+    _showChartTip(t.clientX, t.clientY);
+    // 隱藏提示文字
+    if(!_chartHintShown){
+      _chartHintShown = true;
+      localStorage.setItem('stockai_chart_hint','1');
+      const hint = document.getElementById('chartLongPressHint');
+      if(hint){ hint.style.opacity='0'; hint.style.transition='opacity .5s'; }
+    }
+  }, 400);
+}
+
 function chartTouch(e){
-  if(e.touches.length) chartHover(e.touches[0]);
+  if(!e.touches.length) return;
+  if(_chartLongPressTimer){ clearTimeout(_chartLongPressTimer); _chartLongPressTimer=null; }
+  _showChartTip(e.touches[0].clientX, e.touches[0].clientY);
+}
+
+function chartTouchEnd(e){
+  if(_chartLongPressTimer){ clearTimeout(_chartLongPressTimer); _chartLongPressTimer=null; }
+  // 長按結束後保留 tooltip 1.5 秒再收起
+  if(_chartIsLongPress){
+    setTimeout(()=>{ if(!_chartIsLongPress) chartLeave(); }, 0);
+    _chartIsLongPress = false;
+    setTimeout(()=>chartLeave(), 1500);
+  } else {
+    chartLeave();
+  }
 }
 
 function drawFallbackChart(isUp){
@@ -7459,6 +7550,115 @@ async function runStratAnalysis(){
 }
 
 // ════════════════════════════════════════════════════
+// 全域錯誤狀態管理
+// ════════════════════════════════════════════════════
+const ERROR_TYPES = {
+  quota402: {
+    icon:'🔴', color:'rgba(255,76,106,.95)',
+    text:'今日 FinMind API 額度已用完，數據無法更新。明日 00:00 自動重置。',
+    action:'可在「我的」更新 Token 延長額度',
+  },
+  token400: {
+    icon:'🔑', color:'rgba(245,200,66,.95)',
+    text:'FinMind Token 可能需要更新（IP 已變更）。',
+    action:'前往「我的」→「FinMind Token」更新',
+  },
+  timeout: {
+    icon:'⏱️', color:'rgba(124,92,252,.9)',
+    text:'資料請求逾時，可能是網路不穩定。',
+    action:'請稍後重試',
+  },
+  offline: {
+    icon:'📵', color:'rgba(128,128,168,.9)',
+    text:'目前無網路連線，顯示快取資料。',
+    action:'',
+  },
+};
+
+let _errorBannerTimer = null;
+
+function showErrorBanner(type, custom={}){
+  const info = ERROR_TYPES[type] || {icon:'⚠️', color:'rgba(30,30,50,.95)', text: custom.text||'資料載入失敗'};
+  const banner = document.getElementById('globalErrorBanner');
+  const icon   = document.getElementById('globalErrorIcon');
+  const text   = document.getElementById('globalErrorText');
+  if(!banner) return;
+
+  if(icon) icon.textContent = custom.icon || info.icon;
+  if(text) text.textContent = (custom.text || info.text) + (info.action ? ' · ' + info.action : '');
+
+  banner.style.background = info.color;
+  banner.style.display    = 'flex';
+  // 頁面下移避免被橫幅遮住
+  document.querySelectorAll('.page.active').forEach(p=>{
+    p.style.paddingTop = '48px';
+    p.style.transition = 'padding-top .3s';
+  });
+
+  // 非嚴重錯誤 8 秒後自動收起
+  if(_errorBannerTimer) clearTimeout(_errorBannerTimer);
+  if(type !== 'quota402'){
+    _errorBannerTimer = setTimeout(()=>dismissErrorBanner(), 8000);
+  }
+}
+
+function dismissErrorBanner(){
+  const banner = document.getElementById('globalErrorBanner');
+  if(banner){ banner.style.opacity='0'; banner.style.transition='opacity .3s';
+    setTimeout(()=>{ banner.style.display='none'; banner.style.opacity='1'; }, 300);
+  }
+  // 恢復頁面位置
+  document.querySelectorAll('.page').forEach(p=>{ p.style.paddingTop=''; });
+  if(_errorBannerTimer){ clearTimeout(_errorBannerTimer); _errorBannerTimer=null; }
+}
+
+// 監聽網路狀態
+window.addEventListener('offline', ()=>showErrorBanner('offline'));
+window.addEventListener('online',  ()=>dismissErrorBanner());
+
+// ── 手機鍵盤彈起偵測 ─────────────────────────────────
+// 當鍵盤彈起，visualViewport 高度縮小
+let _kbOpen = false;
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>{
+    const vh  = window.visualViewport.height;
+    const wh  = window.innerHeight;
+    const isKb= wh - vh > 150; // 差距 > 150px 視為鍵盤開啟
+    if(isKb !== _kbOpen){
+      _kbOpen = isKb;
+      document.body.classList.toggle('keyboard-open', isKb);
+      // 確保聚焦的輸入框滾入視野
+      if(isKb){
+        const active = document.activeElement;
+        if(active && (active.tagName==='INPUT'||active.tagName==='TEXTAREA')){
+          setTimeout(()=>{
+            active.scrollIntoView({behavior:'smooth', block:'center'});
+          }, 100);
+        }
+      }
+    }
+  });
+}
+
+// 針對搜尋框：focus 時捲動到頂部（避免被遮住）
+function onSearchFocus(){
+  setTimeout(()=>{
+    const el = document.getElementById('searchInput');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 300);
+}
+
+// 加入到 402 handler
+function _handle402(){
+  if(!window._fm402shown){
+    window._fm402shown = true;
+    showErrorBanner('quota402');
+    // 「我的」頁面 quota dashboard 也更新
+    renderQuotaDashboard();
+  }
+}
+
+// ════════════════════════════════════════════════════
 // 自訂策略回測系統
 // ════════════════════════════════════════════════════
 
@@ -9832,6 +10032,7 @@ function initOnboarding(){
         <div style="position:relative;margin-bottom:8px">
           <input id="historySearch" type="text" placeholder="搜尋股票代號或名稱…"
             oninput="onHistorySearch(this.value)"
+            autocomplete="off" autocorrect="off" autocapitalize="off"
             style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px 8px 32px;color:var(--text);font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
           <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
         </div>
