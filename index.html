@@ -845,13 +845,16 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
     <!-- ═══ 基本面摘要 ═══ -->
     <div id="fundamentalCard" style="margin-top:0;border-top:1px solid var(--border);padding-top:16px;display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <h2 style="margin:0;font-size:14px;font-weight:700">📋 基本面摘要</h2>
         <div style="display:flex;align-items:center;gap:6px">
           <span id="fundDataDate" style="font-size:10px;color:var(--text3)">—</span>
-          <span id="fundLoadSpinner" style="font-size:12px;display:none">⏳</span>
+          <span id="fundLoadSpinner" style="font-size:11px;display:none;color:var(--text3)">載入中⋯</span>
         </div>
       </div>
+
+      <!-- AI 基本面評語（頂部，有資料才顯示）-->
+      <div id="fund-ai-note" style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px 10px;background:rgba(124,92,252,.08);border-radius:8px;border-left:3px solid var(--purple);margin-bottom:10px;display:none"></div>
 
       <!-- EPS + 毛利率 + 營益率 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
@@ -918,8 +921,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
         </div>
       </div>
 
-      <!-- AI 基本面評語 -->
-      <div id="fund-ai-note" style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px 10px;background:rgba(124,92,252,.06);border-radius:8px;border-left:3px solid var(--purple);display:none"></div>
+      <!-- AI 評語已移至頂部 -->
     </div>
 
     <!-- ═══ 四大深度分析模組 ═══ -->
@@ -7689,35 +7691,56 @@ async function loadFundamentals(stockId){
   // ── 解析損益表 ────────────────────────────────────────
   if(fsData?.length){
     // 依季度分組
+    // FinMind 損益表：type 欄位為英文代碼，需自行計算比率
+    // 已確認欄位名稱：Revenue(營收) GrossProfit(毛利) OperatingIncome(營益)
+    //               NetIncome(淨利) EPS(每股盈餘)
     const byQ = {};
     fsData.forEach(r=>{
       const key = r.date;
       if(!byQ[key]) byQ[key] = {};
-      byQ[key][r.type] = parseFloat(r.value||0);
+      const v = parseFloat(r.value||0);
+      byQ[key][r.type] = v;
+      // 中英文對照（容錯）
+      const alias = {
+        'Revenue':'營業收入', '營業收入淨額':'Revenue',
+        'GrossProfit':'毛利', 'CostOfGoodsSold':'營業成本',
+        'OperatingIncome':'營業利益', 'OperatingExpense':'營業費用',
+        'NetIncome':'本期淨利', 'EPS':'每股盈餘',
+      };
+      if(alias[r.type]) byQ[key][alias[r.type]] = v;
     });
-    const quarters = Object.keys(byQ).sort();
-    const last  = byQ[quarters[quarters.length-1]] || {};
-    const prev  = byQ[quarters[quarters.length-5]] || {}; // 去年同期
 
-    // EPS
-    const eps     = last['EPS'] ?? last['每股盈餘'] ?? null;
-    const epsYr   = prev['EPS'] ?? prev['每股盈餘'] ?? null;
-    const epsYoY  = (eps!=null && epsYr!=null && epsYr!==0)
+    // console.log('[Fund debug] quarter keys:', Object.keys(byQ).slice(-4));
+    // console.log('[Fund debug] last Q fields:', Object.keys(byQ[Object.keys(byQ).sort().slice(-1)[0]]||{}));
+
+    const quarters = Object.keys(byQ).sort();
+    const last   = byQ[quarters[quarters.length-1]] || {};
+    const lastQ2 = byQ[quarters[quarters.length-2]] || {}; // 上季
+    const prevY  = byQ[quarters[quarters.length-5]] || {}; // 去年同期
+
+    // ── EPS ──────────────────────────────────────────────
+    const eps   = last['EPS'] ?? last['每股盈餘'] ?? null;
+    const epsYr = prevY['EPS'] ?? prevY['每股盈餘'] ?? null;
+    const epsYoY= (eps!=null && epsYr!=null && epsYr!==0)
       ? +((eps-epsYr)/Math.abs(epsYr)*100).toFixed(1) : null;
 
-    // 毛利率
-    const gpm = last['毛利率'] ?? (
-      last['營業毛利'] && last['營業收入'] ?
-      +(last['營業毛利']/last['營業收入']*100).toFixed(1) : null
-    );
-    const gpmPrev = byQ[quarters[quarters.length-2]]?.['毛利率'] ?? null;
+    // ── 毛利率：GrossProfit/Revenue（英文），毛利/營業收入（中文）
+    const rev    = last['Revenue'] ?? last['營業收入'] ?? last['營業收入淨額'] ?? 0;
+    const gp     = last['GrossProfit'] ?? last['毛利'] ?? last['營業毛利'] ??
+                   (rev && last['CostOfGoodsSold'] ? rev - last['CostOfGoodsSold'] : null);
+    const gpm    = (gp!=null && rev>0) ? +(gp/rev*100).toFixed(1) : null;
 
-    // 淨利率
-    const npm  = last['淨利率'] ?? (
-      last['本期淨利'] && last['營業收入'] ?
-      +(last['本期淨利']/last['營業收入']*100).toFixed(1) : null
-    );
-    const npmPrev = byQ[quarters[quarters.length-2]]?.['淨利率'] ?? null;
+    const revQ2  = lastQ2['Revenue'] ?? lastQ2['營業收入'] ?? 0;
+    const gpQ2   = lastQ2['GrossProfit'] ?? lastQ2['毛利'] ??
+                   (revQ2 && lastQ2['CostOfGoodsSold'] ? revQ2-lastQ2['CostOfGoodsSold'] : null);
+    const gpmPrev= (gpQ2!=null && revQ2>0) ? +(gpQ2/revQ2*100).toFixed(1) : null;
+
+    // ── 淨利率：NetIncome/Revenue ──────────────────────────
+    const ni     = last['NetIncome'] ?? last['本期淨利'] ?? last['歸屬於母公司業主之本期淨利'] ?? null;
+    const npm    = (ni!=null && rev>0) ? +(ni/rev*100).toFixed(1) : null;
+
+    const niQ2   = lastQ2['NetIncome'] ?? lastQ2['本期淨利'] ?? null;
+    const npmPrev= (niQ2!=null && revQ2>0) ? +(niQ2/revQ2*100).toFixed(1) : null;
 
     // 渲染 EPS
     const epsEl = document.getElementById('fund-eps');
@@ -7867,8 +7890,9 @@ async function loadFundamentals(stockId){
     }
   }
 
-  // ── AI 基本面評語（整合資料後生成）──────────────────────
-  _genFundAINote(stockId);
+  // ── AI 基本面評語（等 DOM 更新後再讀取數值）─────────────
+  // 用 setTimeout 確保所有 DOM 更新完成後才讀取
+  setTimeout(()=>_genFundAINote(stockId), 200);
 }
 
 // 月營收迷你折線圖
@@ -7907,7 +7931,9 @@ async function _genFundAINote(stockId){
   const revYoY = revEl?.textContent||'—';
   const pe     = document.getElementById('fund-pe')?.textContent||'—';
   const yield_ = document.getElementById('fund-div-yield')?.textContent||'—';
-  if(eps==='—' && revYoY==='—') return; // 無資料不呼叫
+  // 任一欄位有資料就呼叫（不需全部都有）
+  const hasData = [eps, revYoY, pe, yield_].some(v => v && v!=='—' && v!=='虧損');
+  if(!hasData) return;
 
   const name = currentName || stockId;
   const prompt = `台股${name}(${stockId})基本面：EPS=${eps}，月營收年增=${revYoY}，PE=${pe}，殖利率=${yield_}。
