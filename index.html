@@ -2732,41 +2732,77 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 加權指數即時報價 ─────────────────────────────────
 // 來源1：TWSE mis（盤中即時，每5秒）via allorigins proxy
 // 來源2：FinMind TaiwanStockPrice TAIEX（日K收盤，盤後）
-// ── 台指期盤後指數（Yahoo Finance）────────────────────
-// symbol: TXF=F（台指近月期貨）或 ^TWII（加權指數夜盤參考）
+// ── 台指期盤後指數 ─────────────────────────────────────
+// 多重備援：
+//   來源1：Yahoo Finance IX0126.TW（台指期指數）
+//   來源2：FinMind TaiwanFuturesDaily TX（收盤後日線）
 async function fetchTxfAfterHours(){
+  // 來源1：Yahoo Finance IX0126.TW（台指期指數，有盤後報價）
   try{
-    // 台指期近月 Yahoo symbol = TXF=F
+    const symbol = 'IX0126.TW'; // TIP TAIFEX TAIEX Futures Index
     const url = (typeof API!=='undefined'&&API)
-      ? `${API.replace(/\/$/,'')}/intraday?symbol=TXF%3DF&src=yahoo`
-      : `https://query1.finance.yahoo.com/v8/finance/chart/TXF=F?interval=1m&range=1d`;
+      ? `${API.replace(/\/$/,'')}/intraday?symbol=${encodeURIComponent(symbol)}&src=yahoo`
+      : `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
 
     const resp = await fetchWithTimeout(url, 10000);
-    if(!resp.ok) return null;
+    if(!resp.ok) throw new Error('yahoo '+resp.status);
     const raw = await resp.json();
 
-    // Yahoo v8 格式
     const result = raw?.chart?.result?.[0];
-    if(!result) return null;
+    if(!result) throw new Error('no result');
 
-    const meta     = result.meta;
-    const price    = meta?.regularMarketPrice ?? meta?.postMarketPrice ?? null;
-    const prevClose= meta?.previousClose ?? meta?.chartPreviousClose ?? null;
-    if(!price) return null;
+    const meta = result.meta;
+    // 優先取盤後價，其次取即時價，最後取收盤
+    const price = meta?.postMarketPrice ??
+                  meta?.regularMarketPrice ??
+                  meta?.previousClose ?? null;
+    if(!price || price < 10000) throw new Error('invalid price: '+price);
 
-    const change   = prevClose ? +(price - prevClose).toFixed(0) : 0;
-    const changePct= prevClose ? +((price-prevClose)/prevClose*100).toFixed(2) : 0;
+    const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+    const change    = prevClose ? +(price - prevClose).toFixed(0) : 0;
+    const changePct = prevClose ? +((price-prevClose)/prevClose*100).toFixed(2) : 0;
 
-    // 判斷是盤中還是盤後
-    const marketState = meta?.marketState || '';
-    const session = marketState === 'POST' ? '盤後' :
-                    marketState === 'PRE'  ? '盤前' :
-                    marketState === 'REGULAR' ? '盤中' : '參考';
+    const marketState = meta?.marketState||'';
+    const session = marketState==='POST'?'盤後':
+                    marketState==='PRE' ?'盤前':
+                    marketState==='REGULAR'?'盤中':'收盤';
 
+    console.log('[TXF] Yahoo IX0126.TW:', price, session);
     return { price, change, changePct, session,
-             time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
-  }catch(e){
-    console.warn('[TXF]', e.message);
+      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
+  }catch(e1){
+    console.warn('[TXF] Yahoo failed:', e1.message, '→ fallback FinMind');
+  }
+
+  // 來源2：FinMind TaiwanFuturesDaily TX（備援，日線收盤）
+  try{
+    const today   = todayStr();
+    const weekAgo = nDaysAgo(5);
+    const data = await fmFetch({
+      dataset: 'TaiwanFuturesDaily',
+      data_id:  'TX',
+      start_date: weekAgo,
+      end_date:   today,
+      _ttl: 60*60*1000, // 1小時快取
+    }, 12000);
+
+    if(!data?.length) throw new Error('no FM data');
+    // 取最近一筆（近月合約：contract_date 最早的）
+    const latest = data
+      .filter(r=>r.trading_session==='一般' || !r.trading_session)
+      .sort((a,b)=>b.date>a.date?1:-1)[0];
+    if(!latest) throw new Error('no latest');
+
+    const price   = parseFloat(latest.close||0);
+    const prevClose = parseFloat(latest.open||price);
+    const change  = +(price - prevClose).toFixed(0);
+
+    console.log('[TXF] FinMind fallback:', price, latest.date);
+    return { price, change, changePct: parseFloat(latest.spread_per||0),
+      session: '收盤（'+latest.date.slice(5)+'）',
+      time: latest.date };
+  }catch(e2){
+    console.warn('[TXF] FinMind fallback failed:', e2.message);
     return null;
   }
 }
