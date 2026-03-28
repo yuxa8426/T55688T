@@ -372,8 +372,9 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
         <div style="font-size:13px;font-weight:700" id="pmTwse">—</div>
       </div>
       <div style="flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.07)">
-        <div style="font-size:9px;color:rgba(0,212,170,.6);margin-bottom:2px">法人合計</div>
-        <div style="font-size:13px;font-weight:700" id="pmInst">—</div>
+        <div style="font-size:9px;color:rgba(245,200,66,.7);margin-bottom:2px">台指期盤後</div>
+        <div style="font-size:13px;font-weight:700" id="pmTxf">—</div>
+        <div style="font-size:9px;color:var(--text3)" id="pmTxfNote" style="margin-top:1px"></div>
       </div>
       <div style="flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.07)">
         <div style="font-size:9px;color:rgba(0,212,170,.6);margin-bottom:2px">外資</div>
@@ -2731,6 +2732,45 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 加權指數即時報價 ─────────────────────────────────
 // 來源1：TWSE mis（盤中即時，每5秒）via allorigins proxy
 // 來源2：FinMind TaiwanStockPrice TAIEX（日K收盤，盤後）
+// ── 台指期盤後指數（Yahoo Finance）────────────────────
+// symbol: TXF=F（台指近月期貨）或 ^TWII（加權指數夜盤參考）
+async function fetchTxfAfterHours(){
+  try{
+    // 台指期近月 Yahoo symbol = TXF=F
+    const url = (typeof API!=='undefined'&&API)
+      ? `${API.replace(/\/$/,'')}/intraday?symbol=TXF%3DF&src=yahoo`
+      : `https://query1.finance.yahoo.com/v8/finance/chart/TXF=F?interval=1m&range=1d`;
+
+    const resp = await fetchWithTimeout(url, 10000);
+    if(!resp.ok) return null;
+    const raw = await resp.json();
+
+    // Yahoo v8 格式
+    const result = raw?.chart?.result?.[0];
+    if(!result) return null;
+
+    const meta     = result.meta;
+    const price    = meta?.regularMarketPrice ?? meta?.postMarketPrice ?? null;
+    const prevClose= meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+    if(!price) return null;
+
+    const change   = prevClose ? +(price - prevClose).toFixed(0) : 0;
+    const changePct= prevClose ? +((price-prevClose)/prevClose*100).toFixed(2) : 0;
+
+    // 判斷是盤中還是盤後
+    const marketState = meta?.marketState || '';
+    const session = marketState === 'POST' ? '盤後' :
+                    marketState === 'PRE'  ? '盤前' :
+                    marketState === 'REGULAR' ? '盤中' : '參考';
+
+    return { price, change, changePct, session,
+             time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
+  }catch(e){
+    console.warn('[TXF]', e.message);
+    return null;
+  }
+}
+
 async function fmTWSEIndex(){
   const misSrc = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0';
 
@@ -6676,11 +6716,12 @@ function relTime(dateStr){
 let _pulseTimer = null;
 
 async function refreshPulse(){
-  const [instData, indexData] = await Promise.all([
+  const [instData, indexData, txfData] = await Promise.all([
     loadInstitutional(),
     fmTWSEIndex(),
+    fetchTxfAfterHours().catch(()=>null),
   ]);
-  updatePulse(instData, indexData);
+  updatePulse(instData, indexData, txfData);
 
   // 自動排程：盤中 60 秒，盤外 5 分鐘
   clearTimeout(_pulseTimer);
@@ -6692,7 +6733,7 @@ async function refreshPulse(){
   _pulseTimer  = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
 }
 
-function updatePulse(instData, indexData){
+function updatePulse(instData, indexData, txfData){
   const total     = instData?.totalShares ?? instData?.total ?? 0;
   const foreign   = instData?.foreignShares ?? 0;
   const trust     = instData?.trustShares ?? 0;
@@ -6759,6 +6800,25 @@ function updatePulse(instData, indexData){
   pm('pmInst',    total,   total!==0 ? fmtM(total)+instDate : '—');
   pm('pmForeign', foreign, foreign!==0 ? fmtM(foreign) : '—');
   pm('pmTrust',   trust,   trust!==0  ? fmtM(trust)   : '—');
+
+  // 台指期盤後
+  const txfEl    = document.getElementById('pmTxf');
+  const txfNoteEl= document.getElementById('pmTxfNote');
+  if(txfEl){
+    if(txfData?.price && txfData?.change!=null){
+      const txfChg  = txfData.change;
+      const txfPct  = txfData.changePct;
+      txfEl.textContent = `${txfChg>=0?'▲':'▼'}${Math.abs(txfPct).toFixed(0)}pt`;
+      txfEl.style.color = txfChg>=0?'var(--red)':'var(--green)';
+      if(txfNoteEl){
+        txfNoteEl.textContent = `${Number(txfData.price).toLocaleString()} · ${txfData.session||'盤後'}`;
+      }
+    } else {
+      txfEl.textContent   = '—';
+      txfEl.style.color   = 'var(--text3)';
+      if(txfNoteEl) txfNoteEl.textContent = '盤後資料更新中';
+    }
+  }
 
   // Chips 行（用快取族群資料若有）
   const chips = document.getElementById('pulseChips');
@@ -7736,11 +7796,26 @@ async function loadFundamentals(stockId){
     const gpmPrev= (gpQ2!=null && revQ2>0) ? +(gpQ2/revQ2*100).toFixed(1) : null;
 
     // ── 淨利率：NetIncome/Revenue ──────────────────────────
-    const ni     = last['NetIncome'] ?? last['本期淨利'] ?? last['歸屬於母公司業主之本期淨利'] ?? null;
-    const npm    = (ni!=null && rev>0) ? +(ni/rev*100).toFixed(1) : null;
+    // NetIncome 可能欄位名稱（FinMind 各版本不同）
+    const _findNI = (q) =>
+      q['NetIncome'] ??
+      q['本期淨利'] ??
+      q['歸屬於母公司業主之本期淨利'] ??
+      q['綜合損益總額'] ??
+      q['ContinuingOperationsAfterTax'] ??
+      q['AfterTaxProfit'] ?? null;
 
-    const niQ2   = lastQ2['NetIncome'] ?? lastQ2['本期淨利'] ?? null;
-    const npmPrev= (niQ2!=null && revQ2>0) ? +(niQ2/revQ2*100).toFixed(1) : null;
+    const ni     = _findNI(last);
+    // 若找不到淨利，用毛利-費用估算（有毛利和營業利益則用營業利益）
+    const oi     = last['OperatingIncome'] ?? last['營業利益'] ?? null;
+    const niEst  = ni ?? oi;  // 退而求其次用營業利益
+    const npm    = (niEst!=null && rev>0) ? +(niEst/rev*100).toFixed(1) : null;
+    const isNpmEst = (ni==null && oi!=null); // 標記是否為估算值
+
+    const niQ2    = _findNI(lastQ2);
+    const oiQ2    = lastQ2['OperatingIncome'] ?? lastQ2['營業利益'] ?? null;
+    const niEstQ2 = niQ2 ?? oiQ2;
+    const npmPrev = (niEstQ2!=null && revQ2>0) ? +(niEstQ2/revQ2*100).toFixed(1) : null;
 
     // 渲染 EPS
     const epsEl = document.getElementById('fund-eps');
@@ -7770,14 +7845,20 @@ async function loadFundamentals(stockId){
     // 渲染淨利率
     const npmEl = document.getElementById('fund-npm');
     if(npmEl && npm!=null){
-      npmEl.textContent = npm.toFixed(1)+'%';
+      npmEl.textContent = npm.toFixed(1)+'%' + (isNpmEst?' *':'');
       npmEl.style.color = npm>=20?'var(--red)':npm>=10?'var(--gold)':'var(--text)';
+      npmEl.title       = isNpmEst ? '以營業利益率估算（淨利資料尚未取得）' : '本期淨利率';
     }
     const npmTrEl = document.getElementById('fund-npm-trend');
-    if(npmTrEl && npm!=null && npmPrev!=null){
-      const diff = +(npm-npmPrev).toFixed(1);
-      npmTrEl.textContent = `${diff>=0?'▲':'▼'} ${Math.abs(diff)}pp`;
-      npmTrEl.style.color = diff>=0?'var(--red)':'var(--green)';
+    if(npmTrEl){
+      if(npm!=null && npmPrev!=null){
+        const diff = +(npm-npmPrev).toFixed(1);
+        npmTrEl.textContent = `${diff>=0?'▲':'▼'} ${Math.abs(diff)}pp`;
+        npmTrEl.style.color = diff>=0?'var(--red)':'var(--green)';
+      } else if(npm!=null){
+        npmTrEl.textContent = isNpmEst?'營業利益率':'淨利率';
+        npmTrEl.style.color = 'var(--text3)';
+      }
     }
 
     if(fundDateEl && quarters.length)
