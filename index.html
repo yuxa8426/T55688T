@@ -843,6 +843,85 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <!-- 操作參考建議框（動態注入）-->
     <div id="aiActionBox" style="margin-top:14px"></div>
 
+    <!-- ═══ 基本面摘要 ═══ -->
+    <div id="fundamentalCard" style="margin-top:0;border-top:1px solid var(--border);padding-top:16px;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0;font-size:14px;font-weight:700">📋 基本面摘要</h2>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span id="fundDataDate" style="font-size:10px;color:var(--text3)">—</span>
+          <span id="fundLoadSpinner" style="font-size:12px;display:none">⏳</span>
+        </div>
+      </div>
+
+      <!-- EPS + 毛利率 + 營益率 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+        <div style="background:var(--surface);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">最新 EPS</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-eps">—</div>
+          <div style="font-size:9px;margin-top:3px" id="fund-eps-yoy">年增 —</div>
+        </div>
+        <div style="background:var(--surface);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">毛利率</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-gpm">—</div>
+          <div style="font-size:9px;margin-top:3px" id="fund-gpm-trend">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">淨利率</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-npm">—</div>
+          <div style="font-size:9px;margin-top:3px" id="fund-npm-trend">—</div>
+        </div>
+      </div>
+
+      <!-- 月營收 -->
+      <div style="background:var(--surface);border-radius:10px;padding:10px 12px;border:1px solid var(--border);margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--text2)">📊 月營收趨勢</div>
+          <div style="font-size:10px;color:var(--text3)" id="fund-rev-month">—</div>
+        </div>
+        <!-- 月營收迷你圖 -->
+        <svg id="fundRevChart" viewBox="0 0 280 40" style="width:100%;height:40px;overflow:visible" preserveAspectRatio="none">
+          <path id="fundRevLine" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linejoin="round"/>
+          <path id="fundRevFill" fill="rgba(155,127,254,.12)"/>
+        </svg>
+        <div style="display:flex;justify-content:space-between;margin-top:6px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3)">月增率</div>
+            <div style="font-size:12px;font-weight:700" id="fund-rev-mom">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3)">年增率</div>
+            <div style="font-size:12px;font-weight:700" id="fund-rev-yoy">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3)">連續成長</div>
+            <div style="font-size:12px;font-weight:700;color:var(--gold)" id="fund-rev-streak">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PE / PB / 殖利率 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+        <div style="background:var(--surface);border-radius:10px;padding:9px 10px;border:1px solid var(--border);text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">本益比 PE</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)" id="fund-pe">—</div>
+          <div style="font-size:9px;color:var(--text3)" id="fund-pe-judge">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:10px;padding:9px 10px;border:1px solid var(--border);text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">股價淨值 PB</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)" id="fund-pb">—</div>
+          <div style="font-size:9px;color:var(--text3)" id="fund-pb-judge">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:10px;padding:9px 10px;border:1px solid var(--border);text-align:center">
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">殖利率</div>
+          <div style="font-size:16px;font-weight:800;color:var(--gold)" id="fund-div-yield">—</div>
+          <div style="font-size:9px;color:var(--text3)" id="fund-div-years">—</div>
+        </div>
+      </div>
+
+      <!-- AI 基本面評語 -->
+      <div id="fund-ai-note" style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px 10px;background:rgba(124,92,252,.06);border-radius:8px;border-left:3px solid var(--purple);display:none"></div>
+    </div>
+
     <!-- ═══ 四大深度分析模組 ═══ -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -3334,6 +3413,7 @@ function buildDeepPrompt(module){
 RSI(14)：${ctx.rsi||'—'}
 5日動能：${ctx.mom5Pct != null ? (ctx.mom5Pct>=0?'+':'')+ctx.mom5Pct.toFixed(2)+'%' : '—'}
 法人近5日累積：${ctx.instScore != null ? (ctx.instScore>=5?'買超':'賣超') : '—'}
+基本面（季報）：EPS ${document.getElementById('fund-eps')?.textContent||'—'}，毛利率 ${document.getElementById('fund-gpm')?.textContent||'—'}，月營收年增 ${document.getElementById('fund-rev-yoy')?.textContent||'—'}，PE ${document.getElementById('fund-pe')?.textContent||'—'}，殖利率 ${document.getElementById('fund-div-yield')?.textContent||'—'}
 綜合技術評分：${ctx.finalScore ? ctx.finalScore.toFixed(1)+'/10' : '—'}
 外資連買/賣天數：${ctx.foreignStreak != null ? (ctx.foreignStreak>0?'連買'+ctx.foreignStreak+'日':'連賣'+Math.abs(ctx.foreignStreak)+'日') : '—'}`;
 
@@ -6375,6 +6455,7 @@ async function selectStock(el, name, ticker){
     const sid = currentTicker.replace('.TW','');
     loadShareholder(sid);
     loadNews(sid);
+    loadFundamentals(sid); // 基本面：季報+月營收+PE+配息
   } else {
     drawFallbackChart(true);
     updateInstCard(null, name);
@@ -7547,6 +7628,307 @@ async function runStratAnalysis(){
     runBtn.textContent = '🤖 AI 策略分析 → 選出10支股票';
     if(runningEl) runningEl.style.display = 'none';
   }
+}
+
+// ════════════════════════════════════════════════════
+// 基本面資料系統
+// Dataset：TaiwanStockFinancialStatements / TaiwanStockMonthRevenue
+//          TaiwanStockPER / TaiwanStockDividend
+// 快取策略：季報90天 / 月營收30天 / PER隔日 / 配息180天
+// ════════════════════════════════════════════════════
+
+// 重置基本面卡片到載入中狀態
+function fundReset(){
+  ['fund-eps','fund-eps-yoy','fund-gpm','fund-gpm-trend',
+   'fund-npm','fund-npm-trend','fund-rev-month','fund-rev-mom',
+   'fund-rev-yoy','fund-rev-streak','fund-pe','fund-pe-judge',
+   'fund-pb','fund-pb-judge','fund-div-yield','fund-div-years',
+  ].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){ el.textContent='—'; el.style.color=''; }
+  });
+  const aiNote = document.getElementById('fund-ai-note');
+  if(aiNote) aiNote.style.display='none';
+  const spinner = document.getElementById('fundLoadSpinner');
+  if(spinner) spinner.style.display='inline';
+}
+
+// 主函式：載入並渲染基本面
+async function loadFundamentals(stockId){
+  const card = document.getElementById('fundamentalCard');
+  if(!card) return;
+  card.style.display='block';
+  fundReset();
+
+  const today   = todayStr();
+  const yr2ago  = nDaysAgo(730);   // 財報取2年
+  const yr1ago  = nDaysAgo(400);   // 月營收取14個月
+  const yr5ago  = nDaysAgo(1825);  // 配息取5年
+
+  // 四個資料集並行取得
+  const [fsData, revData, perData, divData] = await Promise.all([
+    fmFetch({ dataset:'TaiwanStockFinancialStatements',
+      data_id: stockId, start_date: yr2ago, end_date: today,
+      _ttl: 90*24*60*60*1000 }, 15000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockMonthRevenue',
+      data_id: stockId, start_date: yr1ago, end_date: today,
+      _ttl: 30*24*60*60*1000 }, 15000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockPER',
+      data_id: stockId, start_date: nDaysAgo(5), end_date: today,
+      _ttl: _msTillMidnight() }, 12000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockDividend',
+      data_id: stockId, start_date: yr5ago, end_date: today,
+      _optional: true, _ttl: 180*24*60*60*1000 }, 12000).catch(()=>null),
+  ]);
+
+  const spinner = document.getElementById('fundLoadSpinner');
+  if(spinner) spinner.style.display='none';
+
+  const fundDateEl = document.getElementById('fundDataDate');
+
+  // ── 解析損益表 ────────────────────────────────────────
+  if(fsData?.length){
+    // 依季度分組
+    const byQ = {};
+    fsData.forEach(r=>{
+      const key = r.date;
+      if(!byQ[key]) byQ[key] = {};
+      byQ[key][r.type] = parseFloat(r.value||0);
+    });
+    const quarters = Object.keys(byQ).sort();
+    const last  = byQ[quarters[quarters.length-1]] || {};
+    const prev  = byQ[quarters[quarters.length-5]] || {}; // 去年同期
+
+    // EPS
+    const eps     = last['EPS'] ?? last['每股盈餘'] ?? null;
+    const epsYr   = prev['EPS'] ?? prev['每股盈餘'] ?? null;
+    const epsYoY  = (eps!=null && epsYr!=null && epsYr!==0)
+      ? +((eps-epsYr)/Math.abs(epsYr)*100).toFixed(1) : null;
+
+    // 毛利率
+    const gpm = last['毛利率'] ?? (
+      last['營業毛利'] && last['營業收入'] ?
+      +(last['營業毛利']/last['營業收入']*100).toFixed(1) : null
+    );
+    const gpmPrev = byQ[quarters[quarters.length-2]]?.['毛利率'] ?? null;
+
+    // 淨利率
+    const npm  = last['淨利率'] ?? (
+      last['本期淨利'] && last['營業收入'] ?
+      +(last['本期淨利']/last['營業收入']*100).toFixed(1) : null
+    );
+    const npmPrev = byQ[quarters[quarters.length-2]]?.['淨利率'] ?? null;
+
+    // 渲染 EPS
+    const epsEl = document.getElementById('fund-eps');
+    if(epsEl && eps!=null){
+      epsEl.textContent = eps.toFixed(2);
+      epsEl.style.color = eps>=0?'var(--red)':'var(--green)';
+    }
+    const epsYoYEl = document.getElementById('fund-eps-yoy');
+    if(epsYoYEl && epsYoY!=null){
+      epsYoYEl.textContent = `年增 ${epsYoY>=0?'+':''}${epsYoY}%`;
+      epsYoYEl.style.color = epsYoY>=0?'var(--red)':'var(--green)';
+    }
+
+    // 渲染毛利率
+    const gpmEl = document.getElementById('fund-gpm');
+    if(gpmEl && gpm!=null){
+      gpmEl.textContent = gpm.toFixed(1)+'%';
+      gpmEl.style.color = gpm>=30?'var(--red)':gpm>=15?'var(--gold)':'var(--text)';
+    }
+    const gpmTrEl = document.getElementById('fund-gpm-trend');
+    if(gpmTrEl && gpm!=null && gpmPrev!=null){
+      const diff = +(gpm-gpmPrev).toFixed(1);
+      gpmTrEl.textContent = `${diff>=0?'▲':'▼'} ${Math.abs(diff)}pp`;
+      gpmTrEl.style.color = diff>=0?'var(--red)':'var(--green)';
+    }
+
+    // 渲染淨利率
+    const npmEl = document.getElementById('fund-npm');
+    if(npmEl && npm!=null){
+      npmEl.textContent = npm.toFixed(1)+'%';
+      npmEl.style.color = npm>=20?'var(--red)':npm>=10?'var(--gold)':'var(--text)';
+    }
+    const npmTrEl = document.getElementById('fund-npm-trend');
+    if(npmTrEl && npm!=null && npmPrev!=null){
+      const diff = +(npm-npmPrev).toFixed(1);
+      npmTrEl.textContent = `${diff>=0?'▲':'▼'} ${Math.abs(diff)}pp`;
+      npmTrEl.style.color = diff>=0?'var(--red)':'var(--green)';
+    }
+
+    if(fundDateEl && quarters.length)
+      fundDateEl.textContent = quarters[quarters.length-1];
+  }
+
+  // ── 解析月營收 ────────────────────────────────────────
+  if(revData?.length){
+    const revs = revData.sort((a,b)=>a.date>b.date?1:-1);
+    const last12 = revs.slice(-13); // 最近13個月（算年增需要前年同月）
+
+    const revMonthEl    = document.getElementById('fund-rev-month');
+    const revMoMEl      = document.getElementById('fund-rev-mom');
+    const revYoYEl      = document.getElementById('fund-rev-yoy');
+    const revStreakEl   = document.getElementById('fund-rev-streak');
+
+    const latest = last12[last12.length-1];
+    const prevM  = last12[last12.length-2];
+    const prevY  = last12.length >= 13 ? last12[0] : null;
+
+    if(revMonthEl && latest)
+      revMonthEl.textContent = latest.date.slice(0,7);
+
+    const rev  = parseFloat(latest?.revenue||0);
+    const revPM= parseFloat(prevM?.revenue||0);
+    const revPY= parseFloat(prevY?.revenue||0);
+
+    if(revMoMEl && rev && revPM){
+      const mom = +((rev-revPM)/revPM*100).toFixed(1);
+      revMoMEl.textContent  = `${mom>=0?'+':''}${mom}%`;
+      revMoMEl.style.color  = mom>=0?'var(--red)':'var(--green)';
+    }
+    if(revYoYEl && rev && revPY){
+      const yoy = +((rev-revPY)/revPY*100).toFixed(1);
+      revYoYEl.textContent  = `${yoy>=0?'+':''}${yoy}%`;
+      revYoYEl.style.color  = yoy>=0?'var(--red)':'var(--green)';
+    }
+
+    // 連續年增月數
+    if(revStreakEl && last12.length >= 2){
+      let streak = 0;
+      for(let i=last12.length-1; i>=1; i--){
+        const cur = parseFloat(last12[i]?.revenue||0);
+        const pre = parseFloat(last12[i-1]?.revenue||0);
+        if(cur > pre * 0.95) streak++; else break;
+      }
+      revStreakEl.textContent = streak>0?`連${streak}月增`:'趨勢下滑';
+      revStreakEl.style.color = streak>=3?'var(--red)':streak>0?'var(--gold)':'var(--green)';
+    }
+
+    // 月營收迷你折線圖
+    const revPts  = last12.slice(-12).map(r=>parseFloat(r.revenue||0)).filter(v=>v>0);
+    if(revPts.length >= 3) _drawFundRevChart(revPts);
+  }
+
+  // ── 解析 PER/PBR ──────────────────────────────────────
+  if(perData?.length){
+    const latest = perData[perData.length-1];
+    const pe  = parseFloat(latest?.PER||latest?.per||0)||null;
+    const pb  = parseFloat(latest?.PBR||latest?.pbr||0)||null;
+
+    const peEl = document.getElementById('fund-pe');
+    if(peEl && pe!=null){
+      peEl.textContent = pe>0 ? pe.toFixed(1)+'x' : '虧損';
+      peEl.style.color = pe>0&&pe<15?'var(--red)':pe<25?'var(--text)':'var(--green)';
+    }
+    const peJEl = document.getElementById('fund-pe-judge');
+    if(peJEl && pe!=null){
+      peJEl.textContent = pe<=0?'虧損中':pe<12?'低估值':pe<20?'合理':pe<30?'偏高':'高估';
+      peJEl.style.color = pe<=0?'var(--green)':pe<12?'var(--red)':pe<20?'var(--gold)':'var(--green)';
+    }
+
+    const pbEl = document.getElementById('fund-pb');
+    if(pbEl && pb!=null){
+      pbEl.textContent = pb.toFixed(1)+'x';
+      pbEl.style.color = pb<1?'var(--red)':pb<2?'var(--text)':'var(--green)';
+    }
+    const pbJEl = document.getElementById('fund-pb-judge');
+    if(pbJEl && pb!=null){
+      pbJEl.textContent = pb<1?'淨值以下':pb<1.5?'低':pb<3?'合理':'偏高';
+      pbJEl.style.color = pb<1?'var(--red)':pb<1.5?'var(--gold)':'var(--text3)';
+    }
+  }
+
+  // ── 解析配息 ──────────────────────────────────────────
+  if(divData?.length){
+    const divs = divData.sort((a,b)=>a.date>b.date?1:-1);
+    // 最近一年現金股利
+    const recent = divs.slice(-3);
+    const cashDiv = recent.reduce((sum,r)=>sum+(parseFloat(r.CashDividend||r.cash_dividend||0)),0);
+
+    // 從 PER 資料拿目前股價計算殖利率
+    const perLatest = (perData||[]).slice(-1)[0];
+    const price     = parseFloat(perLatest?.closing_price||perLatest?.close||0)||null;
+
+    const divYieldEl = document.getElementById('fund-div-yield');
+    if(divYieldEl && cashDiv > 0 && price && price > 0){
+      const yield_ = +(cashDiv/price*100).toFixed(1);
+      divYieldEl.textContent = yield_+'%';
+      divYieldEl.style.color = yield_>=5?'var(--red)':yield_>=3?'var(--gold)':'var(--text)';
+    } else if(divYieldEl && cashDiv > 0){
+      divYieldEl.textContent = '$'+cashDiv.toFixed(1);
+    }
+
+    const divYrEl = document.getElementById('fund-div-years');
+    if(divYrEl){
+      const yrs = new Set(divs.map(d=>(d.date||'').slice(0,4))).size;
+      const hasDiv = divs.filter(d=>parseFloat(d.CashDividend||d.cash_dividend||0)>0).length;
+      divYrEl.textContent = hasDiv>0?`近${yrs}年配息`:'未配息';
+    }
+  }
+
+  // ── AI 基本面評語（整合資料後生成）──────────────────────
+  _genFundAINote(stockId);
+}
+
+// 月營收迷你折線圖
+function _drawFundRevChart(pts){
+  const lineEl = document.getElementById('fundRevLine');
+  const fillEl = document.getElementById('fundRevFill');
+  if(!lineEl || !pts.length) return;
+
+  const W=280, H=40, pad=4;
+  const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.1||1;
+  const toX = i=>(i/(pts.length-1))*(W-pad*2)+pad;
+  const toY = v=>H-pad-((v-mn)/rng)*(H-pad*2);
+
+  const d = pts.map((v,i)=>`${i===0?'M':'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+  lineEl.setAttribute('d', d);
+
+  const last = pts[pts.length-1];
+  const isUp = pts.length>1 && last >= pts[0];
+  lineEl.setAttribute('stroke', isUp?'var(--red)':'var(--green)');
+
+  // 填充區域
+  const fillD = d + ` L${toX(pts.length-1).toFixed(1)},${H} L${pad},${H} Z`;
+  fillEl.setAttribute('d', fillD);
+  fillEl.setAttribute('fill', isUp?'rgba(255,76,106,.12)':'rgba(0,212,170,.12)');
+}
+
+// AI 基本面簡短評語
+async function _genFundAINote(stockId){
+  // 只在資料充分時才呼叫 AI（節省配額）
+  const epsEl  = document.getElementById('fund-eps');
+  const revEl  = document.getElementById('fund-rev-yoy');
+  const noteEl = document.getElementById('fund-ai-note');
+  if(!noteEl) return;
+
+  const eps    = epsEl?.textContent||'—';
+  const revYoY = revEl?.textContent||'—';
+  const pe     = document.getElementById('fund-pe')?.textContent||'—';
+  const yield_ = document.getElementById('fund-div-yield')?.textContent||'—';
+  if(eps==='—' && revYoY==='—') return; // 無資料不呼叫
+
+  const name = currentName || stockId;
+  const prompt = `台股${name}(${stockId})基本面：EPS=${eps}，月營收年增=${revYoY}，PE=${pe}，殖利率=${yield_}。
+用25字以內繁體中文點出最關鍵的基本面特徵（優勢或風險），不要說廢話。`;
+
+  try{
+    const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
+    if(!WORKER) return;
+    const resp = await fetchWithTimeout(WORKER, 15000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:80,
+        messages:[{role:'user', content:prompt}] })
+    });
+    if(!resp.ok) return;
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+    if(text && noteEl){
+      noteEl.style.display='block';
+      noteEl.innerHTML = `<strong class="purple">🤖 AI：</strong>${colorSentiment(text)}`;
+    }
+  }catch(e){}
 }
 
 // ════════════════════════════════════════════════════
