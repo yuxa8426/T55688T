@@ -2735,54 +2735,54 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 台指期盤後指數（FinMind TaiwanFuturesDaily TX）────
 // 直接用台灣期交所官方資料，準確可靠
 async function fetchTxfAfterHours(){
+  // FinMind TaiwanFuturesDaily：data_id='TX00'（台指期所有合約）
+  // 欄位：date, contract_date, open, max, min, close, spread, spread_per, volume
   try{
     const today   = todayStr();
-    const weekAgo = nDaysAgo(7); // 多抓幾天防假日空資料
+    const weekAgo = nDaysAgo(7);
 
     const data = await fmFetch({
       dataset:    'TaiwanFuturesDaily',
-      data_id:    'TX',   // TX = 台指期近月
+      data_id:    'TX00',   // TX00 = 台指期（所有合約加總）
       start_date: weekAgo,
       end_date:   today,
-      _ttl:       _msTillMidnight(), // 盤後資料快取到午夜
+      _ttl:       _msTillMidnight(),
     }, 15000);
 
     if(!data?.length) throw new Error('no data');
 
-    // 取最新交易日、一般盤（非盤後）的收盤價
-    const sorted = [...data].sort((a,b)=> b.date>a.date?1:-1);
+    // 印出第一筆偵錯（只在 console）
+    console.log('[TXF] raw sample:', JSON.stringify(data[data.length-1]).slice(0,200));
 
-    // 先找「盤後交易」資料（夜盤）
-    const afterHours = sorted.find(r=>
-      (r.trading_session||'').includes('盤後') ||
-      (r.trading_session||'').includes('after')
+    // 依日期降序，取最新一筆
+    const sorted = [...data].sort((a,b)=> b.date > a.date ? 1 : -1);
+    const latest = sorted[0];
+    if(!latest) throw new Error('no latest');
+
+    // FinMind 欄位名稱：close / 收盤價
+    const price = parseFloat(
+      latest.close ??
+      latest['收盤價'] ??
+      latest.settlement_price ?? 0
     );
+    if(!price || price < 15000) throw new Error('price invalid: ' + price);
 
-    // 再找最新一般盤收盤
-    const regular = sorted.find(r=>
-      r.trading_session==='一般' || !r.trading_session || r.trading_session===''
-    );
+    // 漲跌：close - open 或 spread 欄位
+    const open_  = parseFloat(latest.open ?? latest['開盤價'] ?? price);
+    const spread = parseFloat(latest.spread ?? 0);
+    const change = spread !== 0 ? spread : +(price - open_).toFixed(0);
 
-    // 選擇資料源：盤後有值就用盤後，否則用一般盤
-    const src = afterHours || regular;
-    if(!src) throw new Error('no valid record');
+    // spread_per 是漲跌百分比
+    const changePct = parseFloat(latest.spread_per ?? 0) ||
+                      (open_ > 0 ? +((price - open_)/open_*100).toFixed(2) : 0);
 
-    const price  = parseFloat(src.close||src.settlement_price||0);
-    if(!price || price < 15000) throw new Error('invalid price: '+price);
+    const dateStr = (latest.date||'').slice(5);
+    console.log('[TXF] price:', price, 'change:', change, 'date:', dateStr);
 
-    // 計算漲跌：與最新一般盤收盤比
-    const basePrice = regular ? parseFloat(regular.close||0) : price;
-    const compare   = afterHours && regular ? basePrice : parseFloat(src.open||price);
-    const change    = +(price - compare).toFixed(0);
-    const changePct = compare > 0 ? +((price-compare)/compare*100).toFixed(2) : 0;
-
-    const session = afterHours ? '夜盤' : '收盤';
-    const dateStr = (src.date||'').slice(5); // MM-DD
-
-    console.log('[TXF] FinMind:', price, session, dateStr);
-    return { price, change, changePct, session,
-      date: dateStr,
-      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
+    return { price, change, changePct,
+      session: '收盤', date: dateStr,
+      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'})
+    };
   }catch(e){
     console.warn('[TXF] failed:', e.message);
     return null;
