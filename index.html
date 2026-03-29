@@ -2732,77 +2732,59 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 加權指數即時報價 ─────────────────────────────────
 // 來源1：TWSE mis（盤中即時，每5秒）via allorigins proxy
 // 來源2：FinMind TaiwanStockPrice TAIEX（日K收盤，盤後）
-// ── 台指期盤後指數 ─────────────────────────────────────
-// 多重備援：
-//   來源1：Yahoo Finance IX0126.TW（台指期指數）
-//   來源2：FinMind TaiwanFuturesDaily TX（收盤後日線）
+// ── 台指期盤後指數（FinMind TaiwanFuturesDaily TX）────
+// 直接用台灣期交所官方資料，準確可靠
 async function fetchTxfAfterHours(){
-  // 來源1：Yahoo Finance IX0126.TW（台指期指數，有盤後報價）
-  try{
-    const symbol = 'IX0126.TW'; // TIP TAIFEX TAIEX Futures Index
-    const url = (typeof API!=='undefined'&&API)
-      ? `${API.replace(/\/$/,'')}/intraday?symbol=${encodeURIComponent(symbol)}&src=yahoo`
-      : `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d`;
-
-    const resp = await fetchWithTimeout(url, 10000);
-    if(!resp.ok) throw new Error('yahoo '+resp.status);
-    const raw = await resp.json();
-
-    const result = raw?.chart?.result?.[0];
-    if(!result) throw new Error('no result');
-
-    const meta = result.meta;
-    // 優先取盤後價，其次取即時價，最後取收盤
-    const price = meta?.postMarketPrice ??
-                  meta?.regularMarketPrice ??
-                  meta?.previousClose ?? null;
-    if(!price || price < 10000) throw new Error('invalid price: '+price);
-
-    const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
-    const change    = prevClose ? +(price - prevClose).toFixed(0) : 0;
-    const changePct = prevClose ? +((price-prevClose)/prevClose*100).toFixed(2) : 0;
-
-    const marketState = meta?.marketState||'';
-    const session = marketState==='POST'?'盤後':
-                    marketState==='PRE' ?'盤前':
-                    marketState==='REGULAR'?'盤中':'收盤';
-
-    console.log('[TXF] Yahoo IX0126.TW:', price, session);
-    return { price, change, changePct, session,
-      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
-  }catch(e1){
-    console.warn('[TXF] Yahoo failed:', e1.message, '→ fallback FinMind');
-  }
-
-  // 來源2：FinMind TaiwanFuturesDaily TX（備援，日線收盤）
   try{
     const today   = todayStr();
-    const weekAgo = nDaysAgo(5);
+    const weekAgo = nDaysAgo(7); // 多抓幾天防假日空資料
+
     const data = await fmFetch({
-      dataset: 'TaiwanFuturesDaily',
-      data_id:  'TX',
+      dataset:    'TaiwanFuturesDaily',
+      data_id:    'TX',   // TX = 台指期近月
       start_date: weekAgo,
       end_date:   today,
-      _ttl: 60*60*1000, // 1小時快取
-    }, 12000);
+      _ttl:       _msTillMidnight(), // 盤後資料快取到午夜
+    }, 15000);
 
-    if(!data?.length) throw new Error('no FM data');
-    // 取最近一筆（近月合約：contract_date 最早的）
-    const latest = data
-      .filter(r=>r.trading_session==='一般' || !r.trading_session)
-      .sort((a,b)=>b.date>a.date?1:-1)[0];
-    if(!latest) throw new Error('no latest');
+    if(!data?.length) throw new Error('no data');
 
-    const price   = parseFloat(latest.close||0);
-    const prevClose = parseFloat(latest.open||price);
-    const change  = +(price - prevClose).toFixed(0);
+    // 取最新交易日、一般盤（非盤後）的收盤價
+    const sorted = [...data].sort((a,b)=> b.date>a.date?1:-1);
 
-    console.log('[TXF] FinMind fallback:', price, latest.date);
-    return { price, change, changePct: parseFloat(latest.spread_per||0),
-      session: '收盤（'+latest.date.slice(5)+'）',
-      time: latest.date };
-  }catch(e2){
-    console.warn('[TXF] FinMind fallback failed:', e2.message);
+    // 先找「盤後交易」資料（夜盤）
+    const afterHours = sorted.find(r=>
+      (r.trading_session||'').includes('盤後') ||
+      (r.trading_session||'').includes('after')
+    );
+
+    // 再找最新一般盤收盤
+    const regular = sorted.find(r=>
+      r.trading_session==='一般' || !r.trading_session || r.trading_session===''
+    );
+
+    // 選擇資料源：盤後有值就用盤後，否則用一般盤
+    const src = afterHours || regular;
+    if(!src) throw new Error('no valid record');
+
+    const price  = parseFloat(src.close||src.settlement_price||0);
+    if(!price || price < 15000) throw new Error('invalid price: '+price);
+
+    // 計算漲跌：與最新一般盤收盤比
+    const basePrice = regular ? parseFloat(regular.close||0) : price;
+    const compare   = afterHours && regular ? basePrice : parseFloat(src.open||price);
+    const change    = +(price - compare).toFixed(0);
+    const changePct = compare > 0 ? +((price-compare)/compare*100).toFixed(2) : 0;
+
+    const session = afterHours ? '夜盤' : '收盤';
+    const dateStr = (src.date||'').slice(5); // MM-DD
+
+    console.log('[TXF] FinMind:', price, session, dateStr);
+    return { price, change, changePct, session,
+      date: dateStr,
+      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}) };
+  }catch(e){
+    console.warn('[TXF] failed:', e.message);
     return null;
   }
 }
@@ -6842,17 +6824,20 @@ function updatePulse(instData, indexData, txfData){
   const txfNoteEl= document.getElementById('pmTxfNote');
   if(txfEl){
     if(txfData?.price && txfData?.change!=null){
-      const txfChg  = txfData.change;
-      const txfPct  = txfData.changePct;
-      txfEl.textContent = `${txfChg>=0?'▲':'▼'}${Math.abs(txfPct).toFixed(0)}pt`;
+      const txfChg = txfData.change;
+      // 主數字顯示漲跌點數
+      txfEl.textContent = `${txfChg>=0?'▲':'▼'}${Math.abs(txfChg).toLocaleString()}pt`;
       txfEl.style.color = txfChg>=0?'var(--red)':'var(--green)';
       if(txfNoteEl){
-        txfNoteEl.textContent = `${Number(txfData.price).toLocaleString()} · ${txfData.session||'盤後'}`;
+        const priceStr = Number(txfData.price).toLocaleString();
+        const pctStr   = `${txfData.changePct>=0?'+':''}${txfData.changePct}%`;
+        // 顯示：點位 漲跌% · 夜盤/收盤
+        txfNoteEl.textContent = `${priceStr} ${pctStr} · ${txfData.session||'收盤'}`;
       }
     } else {
       txfEl.textContent   = '—';
       txfEl.style.color   = 'var(--text3)';
-      if(txfNoteEl) txfNoteEl.textContent = '盤後資料更新中';
+      if(txfNoteEl) txfNoteEl.textContent = '資料載入中';
     }
   }
 
