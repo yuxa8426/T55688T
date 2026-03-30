@@ -8215,60 +8215,65 @@ async function loadIntlNews(force=false){
   if(refreshBtn) refreshBtn.textContent = '⏳';
   if(listEl) listEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">🌐 AI 正在分析國際市場…</div>';
 
-  const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
-  if(!WORKER){ if(listEl) listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">API 未設定</div>'; return; }
-
-  const today = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
-  const prompt = `你是台股市場的國際財經分析師。今天是 ${today}。
-
-請根據你對當前國際市場的了解，列出 6~8 則對台股有重大影響的國際財經新聞或事件（包含美股、Fed利率、科技業、貿易政策、地緣政治、能源原物料等）。
-
-每則新聞請分析：
-1. 事件內容摘要（2~3句）
-2. 對台股的具體影響（聚焦半導體、科技、金融、航運等台股主要類股）
-3. 影響程度：high（重大）/ mid（中度）/ low（輕微）
-4. 方向：bull（利多台股）/ bear（利空台股）/ neutral（中性）
-5. 相關台股族群（最多3個，如：半導體、AI伺服器、金融）
-
-同時提供一個整體市場簡報（3~4句話），說明當前國際市場對台股整體的影響方向，以及投資人應關注的重點。
-
-列出 3~5 個關鍵主題標籤，格式：{label: "主題名", type: "利多/利空/觀察/中性"}
-
-請只輸出 JSON，格式如下：
-{
-  "summary": "整體市場簡報（繁體中文，3~4句話）",
-  "tags": [{"label": "Fed降息預期", "type": "利多"}],
-  "items": [
-    {
-      "title": "新聞標題（繁體中文，15字以內）",
-      "category": "macro|tech|trade|market|energy",
-      "impact": "high|mid|low",
-      "direction": "bull|bear|neutral",
-      "summary": "事件摘要（2~3句，繁體中文）",
-      "impact_tw": "對台股影響（1~2句，繁體中文，具體說明影響哪些類股）",
-      "related_sectors": ["半導體", "AI伺服器"]
-    }
-  ]
-}`;
+  const NEWS_URL = (typeof API!=='undefined'&&API)
+    ? API.replace(/\/$/,'')+'/news'
+    : null;
+  if(!NEWS_URL){
+    if(listEl) listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">API 未設定</div>';
+    return;
+  }
 
   try{
-    const resp = await fetchWithTimeout(WORKER, 45000, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:3000,
-        messages:[{role:'user', content:prompt}] })
-    });
+    // 第一步：從 Worker /news 取得真實 RSS 新聞
+    const resp = await fetchWithTimeout(NEWS_URL, 30000);
     if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const raw  = await resp.json();
-    const text = (raw.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-    const clean= text.replace(/```json|```/g,'').trim();
-    const json = JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
+    const raw = await resp.json();
+    if(!raw.items?.length) throw new Error('no items');
 
-    if(!json.items?.length) throw new Error('no items');
+    // 第二步：用 AI 補充「對台股影響」（針對每則）
+    const WORKER = API.replace(/\/$/,'')+'/v1/messages';
+    const topItems = raw.items.slice(0,6);
+    const headlines = topItems.map((n,i)=>(i+1)+'. '+n.title+' ('+n.source+')').join('\n');
+    const today     = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
 
-    const data = { ...json, ts: Date.now() };
+    let aiAnalysis = { impacts:[], summary: raw.summary||'', tags: raw.tags||[] };
+    try{
+      const aiResp = await fetchWithTimeout(WORKER, 25000, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1200,
+          messages:[{role:'user', content:
+`今天 ${today}，以下是真實的國際財經新聞：
+${headlines}
+
+請為每則新聞用15字以內繁體中文說明「對台股的具體影響」（要精準指出影響哪些台股類股）。
+${raw.summary ? '' : '並提供3句話整體市場簡報（台股投資人視角）。'}
+
+只輸出JSON：{"impacts":["第1則影響","第2則影響"...],"summary":"整體簡報（若已有則留空）","tags":[{"label":"主題","type":"利多/利空/觀察"}]}`
+          }]
+        })
+      });
+      if(aiResp.ok){
+        const aiRaw = await aiResp.json();
+        const aiText = (aiRaw.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+        const aiClean = aiText.replace(/\`\`\`json|\`\`\`/g,'').trim();
+        const m = aiClean.match(/\{[\s\S]*\}/);
+        if(m) aiAnalysis = {...aiAnalysis, ...JSON.parse(m[0])};
+      }
+    }catch(e){ console.warn('[IntlNews AI]', e.message); }
+
+    // 合併：把 AI 分析填入每則新聞
+    const enriched = raw.items.map((n,i)=>({
+      ...n,
+      impact_tw: aiAnalysis.impacts?.[i] || '對台股科技股有潛在影響',
+    }));
+
+    const data = {
+      items:   enriched,
+      summary: aiAnalysis.summary || raw.summary || '',
+      tags:    aiAnalysis.tags?.length ? aiAnalysis.tags : raw.tags || [],
+      ts:      Date.now(),
+    };
     _intlNewsData = data;
-
-    // 存快取
     try{ localStorage.setItem(INTL_NEWS_KEY, JSON.stringify(data)); }catch(e){}
 
     _renderIntlNews(data);
@@ -8277,7 +8282,8 @@ async function loadIntlNews(force=false){
   }catch(e){
     console.error('[IntlNews]', e);
     if(listEl) listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
-      ❌ 載入失敗：${e.message}<br><button onclick="loadIntlNews(true)" style="margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button>
+      ❌ 載入失敗：${e.message}<br>
+      <button onclick="loadIntlNews(true)" style="margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button>
     </div>`;
   }finally{
     if(refreshBtn) refreshBtn.textContent='↻';
