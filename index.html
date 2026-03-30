@@ -1201,6 +1201,48 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 <div class="page" id="page-explore">
   <div class="header"><div><h1>探索</h1><p>市場全覽與族群分析</p></div></div>
   <div style="padding:0 16px">
+
+    <!-- ═══ 國際財經 & 市場新聞 ═══ -->
+    <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <h2>🌐 國際財經</h2>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span id="intlNewsTime" style="font-size:10px;color:var(--text3)">—</span>
+        <button onclick="loadIntlNews(true)" id="intlNewsRefreshBtn"
+          style="background:none;border:1px solid var(--border);border-radius:6px;
+                 color:var(--text3);font-size:12px;cursor:pointer;padding:2px 7px;font-family:inherit">↻</button>
+      </div>
+    </div>
+
+    <!-- AI 市場簡報（每日一則）-->
+    <div id="intlNewsAI" style="margin-bottom:10px;padding:12px 14px;background:linear-gradient(135deg,rgba(124,92,252,.1),rgba(0,212,170,.06));border:1px solid rgba(124,92,252,.25);border-radius:12px;display:none">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:14px">🤖</span>
+        <span style="font-size:11px;font-weight:700;color:var(--purple)">AI 市場簡報</span>
+        <span id="intlNewsAIDate" style="font-size:10px;color:var(--text3);margin-left:auto">—</span>
+      </div>
+      <div id="intlNewsAIText" style="font-size:13px;color:var(--text2);line-height:1.7"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap" id="intlNewsAITags"></div>
+    </div>
+
+    <!-- 新聞分類 Tab -->
+    <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
+      <button onclick="filterIntlNews('all',this)" class="intl-news-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
+      <button onclick="filterIntlNews('macro',this)" class="intl-news-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🏦 總經</button>
+      <button onclick="filterIntlNews('tech',this)" class="intl-news-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💻 科技</button>
+      <button onclick="filterIntlNews('trade',this)" class="intl-news-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🌏 貿易</button>
+      <button onclick="filterIntlNews('market',this)" class="intl-news-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📊 市場</button>
+    </div>
+
+    <!-- 新聞列表 -->
+    <div id="intlNewsList" style="margin-bottom:16px">
+      <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">載入中…</div>
+    </div>
+
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <h2>產業族群</h2>
       <div style="display:flex;align-items:center;gap:6px">
@@ -2037,6 +2079,8 @@ function switchPage(n){
         scheduleSectorAutoRefresh();
       });
     }
+    // 載入國際財經新聞（快取4小時，不重複請求）
+    loadIntlNews(false);
   }
 }
 
@@ -8057,6 +8101,187 @@ async function _genFundAINote(stockId){
       noteEl.innerHTML = `<strong class="purple">🤖 AI：</strong>${colorSentiment(text)}`;
     }
   }catch(e){}
+}
+
+// ════════════════════════════════════════════════════
+// 國際財經新聞系統
+// 來源：Gemini AI 網路搜尋 + 結構化輸出
+// 快取：localStorage 4小時，節省 API 請求
+// ════════════════════════════════════════════════════
+
+const INTL_NEWS_KEY = 'stockai_intl_news';
+const INTL_NEWS_TTL = 4 * 60 * 60 * 1000; // 4小時
+
+let _intlNewsFilter = 'all';
+let _intlNewsData   = null; // {items, summary, tags, ts}
+
+// 切換 Tab 篩選
+function filterIntlNews(key, btn){
+  _intlNewsFilter = key;
+  document.querySelectorAll('.intl-news-tab').forEach(b=>{
+    b.style.background='none'; b.style.color='var(--text3)'; b.style.borderColor='var(--border)'; b.style.fontWeight='normal';
+  });
+  if(btn){ btn.style.background='rgba(124,92,252,.15)'; btn.style.color='var(--purple)'; btn.style.borderColor='var(--purple)'; btn.style.fontWeight='700'; }
+  if(_intlNewsData) _renderIntlNews(_intlNewsData);
+}
+
+// 渲染新聞列表
+function _renderIntlNews(data){
+  const listEl = document.getElementById('intlNewsList');
+  if(!listEl) return;
+
+  const CATEGORY_MAP = {macro:'🏦 總經',tech:'💻 科技',trade:'🌏 貿易',market:'📊 市場',crypto:'₿ 加密',energy:'⚡ 能源'};
+  const items = (data.items||[]).filter(n=>
+    _intlNewsFilter==='all' || n.category===_intlNewsFilter
+  );
+
+  if(!items.length){
+    listEl.innerHTML='<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">此分類暫無新聞</div>';
+    return;
+  }
+
+  listEl.innerHTML = items.map(n=>{
+    const impactColor = n.impact==='high'?'var(--red)':n.impact==='mid'?'var(--gold)':'var(--text3)';
+    const impactLabel = n.impact==='high'?'重大影響':n.impact==='mid'?'中度影響':'輕微';
+    const catLabel    = CATEGORY_MAP[n.category]||n.category||'';
+    const dirIcon     = n.direction==='bull'?'🟥':n.direction==='bear'?'🟩':'⬜';
+    const dirLabel    = n.direction==='bull'?'利多台股':n.direction==='bear'?'利空台股':'中性';
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);color:var(--text3)">${catLabel}</span>
+        <span style="font-size:10px;color:${impactColor};font-weight:600">${impactLabel}</span>
+        <span style="margin-left:auto;font-size:11px">${dirIcon} ${dirLabel}</span>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.4">${n.title}</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${colorSentiment(n.summary)}</div>
+      <div style="font-size:11px;padding:6px 8px;background:rgba(124,92,252,.06);border-left:2px solid var(--purple);border-radius:4px;color:var(--text2);line-height:1.5">
+        <strong style="color:var(--purple)">📌 對台股影響：</strong>${colorSentiment(n.impact_tw)}
+      </div>
+      ${n.related_sectors?.length ? `
+      <div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">
+        ${n.related_sectors.map(s=>`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(255,76,106,.08);color:var(--red);border:1px solid rgba(255,76,106,.2)">${s}</span>`).join('')}
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  // 時間戳
+  const timeEl = document.getElementById('intlNewsTime');
+  if(timeEl && data.ts){
+    const age = Math.round((Date.now()-data.ts)/60000);
+    timeEl.textContent = age<60 ? `${age}分鐘前` : `${Math.floor(age/60)}小時前`;
+  }
+}
+
+// 渲染 AI 市場簡報
+function _renderIntlNewsAI(data){
+  const aiEl   = document.getElementById('intlNewsAI');
+  const textEl = document.getElementById('intlNewsAIText');
+  const tagsEl = document.getElementById('intlNewsAITags');
+  const dateEl = document.getElementById('intlNewsAIDate');
+  if(!aiEl || !data.summary) return;
+
+  aiEl.style.display = 'block';
+  if(textEl) textEl.innerHTML = colorSentiment(data.summary);
+  if(dateEl) dateEl.textContent = new Date(data.ts||Date.now()).toLocaleDateString('zh-TW',{month:'numeric',day:'numeric',timeZone:'Asia/Taipei'}) + ' 簡報';
+  if(tagsEl && data.tags?.length){
+    const TAG_COLORS = {
+      利多:'rgba(255,76,106,.15)|var(--red)',利空:'rgba(0,212,170,.15)|var(--green)',
+      觀察:'rgba(245,200,66,.15)|var(--gold)',中性:'rgba(255,255,255,.06)|var(--text3)'
+    };
+    tagsEl.innerHTML = data.tags.map(t=>{
+      const [bg,col] = (TAG_COLORS[t.type]||'rgba(124,92,252,.12)|var(--purple)').split('|');
+      return `<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${bg};color:${col};font-weight:600">${t.label}</span>`;
+    }).join('');
+  }
+}
+
+// 主函式：載入國際財經新聞
+async function loadIntlNews(force=false){
+  // 快取檢查
+  if(!force){
+    try{
+      const cached = JSON.parse(localStorage.getItem(INTL_NEWS_KEY)||'null');
+      if(cached?.ts && Date.now()-cached.ts < INTL_NEWS_TTL && cached.items?.length){
+        _intlNewsData = cached;
+        _renderIntlNews(cached);
+        _renderIntlNewsAI(cached);
+        return;
+      }
+    }catch(e){}
+  }
+
+  const refreshBtn = document.getElementById('intlNewsRefreshBtn');
+  const listEl     = document.getElementById('intlNewsList');
+  if(refreshBtn) refreshBtn.textContent = '⏳';
+  if(listEl) listEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">🌐 AI 正在分析國際市場…</div>';
+
+  const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
+  if(!WORKER){ if(listEl) listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">API 未設定</div>'; return; }
+
+  const today = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
+  const prompt = `你是台股市場的國際財經分析師。今天是 ${today}。
+
+請根據你對當前國際市場的了解，列出 6~8 則對台股有重大影響的國際財經新聞或事件（包含美股、Fed利率、科技業、貿易政策、地緣政治、能源原物料等）。
+
+每則新聞請分析：
+1. 事件內容摘要（2~3句）
+2. 對台股的具體影響（聚焦半導體、科技、金融、航運等台股主要類股）
+3. 影響程度：high（重大）/ mid（中度）/ low（輕微）
+4. 方向：bull（利多台股）/ bear（利空台股）/ neutral（中性）
+5. 相關台股族群（最多3個，如：半導體、AI伺服器、金融）
+
+同時提供一個整體市場簡報（3~4句話），說明當前國際市場對台股整體的影響方向，以及投資人應關注的重點。
+
+列出 3~5 個關鍵主題標籤，格式：{label: "主題名", type: "利多/利空/觀察/中性"}
+
+請只輸出 JSON，格式如下：
+{
+  "summary": "整體市場簡報（繁體中文，3~4句話）",
+  "tags": [{"label": "Fed降息預期", "type": "利多"}],
+  "items": [
+    {
+      "title": "新聞標題（繁體中文，15字以內）",
+      "category": "macro|tech|trade|market|energy",
+      "impact": "high|mid|low",
+      "direction": "bull|bear|neutral",
+      "summary": "事件摘要（2~3句，繁體中文）",
+      "impact_tw": "對台股影響（1~2句，繁體中文，具體說明影響哪些類股）",
+      "related_sectors": ["半導體", "AI伺服器"]
+    }
+  ]
+}`;
+
+  try{
+    const resp = await fetchWithTimeout(WORKER, 45000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:3000,
+        messages:[{role:'user', content:prompt}] })
+    });
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const raw  = await resp.json();
+    const text = (raw.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+    const clean= text.replace(/```json|```/g,'').trim();
+    const json = JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
+
+    if(!json.items?.length) throw new Error('no items');
+
+    const data = { ...json, ts: Date.now() };
+    _intlNewsData = data;
+
+    // 存快取
+    try{ localStorage.setItem(INTL_NEWS_KEY, JSON.stringify(data)); }catch(e){}
+
+    _renderIntlNews(data);
+    _renderIntlNewsAI(data);
+
+  }catch(e){
+    console.error('[IntlNews]', e);
+    if(listEl) listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
+      ❌ 載入失敗：${e.message}<br><button onclick="loadIntlNews(true)" style="margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button>
+    </div>`;
+  }finally{
+    if(refreshBtn) refreshBtn.textContent='↻';
+  }
 }
 
 // ════════════════════════════════════════════════════
