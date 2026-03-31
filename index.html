@@ -8105,66 +8105,56 @@ function _renderIntlNews(data){
   const el = document.getElementById('intlNewsList');
   if(!el||!data) return;
 
-  const items = data.items||[];
+  // 最多顯示 3 則，優先取影響程度高的
+  const impRank = {high:0,mid:1,low:2};
+  const items = (data.items||[])
+    .sort((a,b)=>(impRank[a.impact]??2)-(impRank[b.impact]??2))
+    .slice(0,3);
   const summary = data.summary||'';
   const tags    = data.tags||[];
 
-  // ── AI 簡報區（折疊，預設展開）──────────────────────────
+  // ── AI 簡報（折疊，預設展開）────────────────────────────
   const aiBlock = summary ? `
-    <div style="margin-bottom:10px;border-radius:12px;overflow:hidden;border:1px solid rgba(124,92,252,.3)">
-      <div onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('.ai-arrow').style.transform=this.nextElementSibling.style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
-        style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(124,92,252,.1);cursor:pointer">
-        <span style="font-size:13px">🤖</span>
-        <span style="font-size:12px;font-weight:700;color:var(--purple);flex:1">AI 市場簡報</span>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${tags.map(t=>{
-            const col=t.type==='利多'?'var(--red)':t.type==='利空'?'var(--green)':t.type==='觀察'?'var(--gold)':'var(--text3)';
-            return '<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:rgba(255,255,255,.06);color:'+col+';font-weight:700">'+t.label+'</span>';
-          }).join('')}
-        </div>
-        <span class="ai-arrow" style="color:var(--text3);font-size:12px;transition:transform .2s;transform:rotate(180deg)">▾</span>
+    <div style="margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid rgba(124,92,252,.25)">
+      <div onclick="var b=this.nextElementSibling,a=this.querySelector('.ai-arrow');b.style.display=b.style.display==='none'?'block':'none';a.style.transform=b.style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
+        style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(124,92,252,.08);cursor:pointer">
+        <span style="font-size:11px;font-weight:700;color:var(--purple);flex:1">🤖 AI 市場簡報</span>
+        <div style="display:flex;gap:3px">${tags.slice(0,3).map(t=>{
+          const col=t.type==='利多'?'var(--red)':t.type==='利空'?'var(--green)':t.type==='觀察'?'var(--gold)':'var(--text3)';
+          return '<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:rgba(255,255,255,.06);color:'+col+';font-weight:700">'+t.label+'</span>';
+        }).join('')}</div>
+        <span class="ai-arrow" style="color:var(--text3);font-size:11px;transition:transform .2s;transform:rotate(180deg)">▾</span>
       </div>
-      <div style="padding:10px 12px;background:rgba(124,92,252,.05)">
-        <div style="font-size:12px;color:var(--text2);line-height:1.7">${colorSentiment(summary)}</div>
-      </div>
+      <div style="padding:8px 12px;font-size:12px;color:var(--text2);line-height:1.65">${colorSentiment(summary)}</div>
     </div>` : '';
 
-  // ── 新聞折疊卡片 ─────────────────────────────────────────
+  // ── 3 則新聞折疊卡片 ─────────────────────────────────────
   const newsHtml = items.map((n,i)=>{
-    const id    = 'news_'+i;
-    const isExp = _newsExpanded.has(id);
+    const id  = 'news_'+i;
+    const exp = _newsExpanded.has(id);
     const [dIcon,dLabel,dColor] = DIR_INFO[n.direction]||DIR_INFO.neutral;
-    const [iDot, iLabel, iColor]= IMP_INFO[n.impact]   ||IMP_INFO.low;
-    const cat   = CAT_MAP[n.category]||n.category||'';
-    const src   = n.source ? ' · '+n.source : '';
+    const [,,iColor] = IMP_INFO[n.impact]||IMP_INFO.low;
+    const meta = [CAT_MAP[n.category], n.source].filter(Boolean).join(' · ');
 
-    // 標題列（常駐，點擊展開）
-    const header = `
-      <div onclick="toggleNews('${id}')" style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;cursor:pointer">
-        <div style="flex-shrink:0;margin-top:2px">
-          <span style="font-size:14px;color:${dColor}">${dIcon}</span>
-        </div>
+    const body = exp ? `<div style="padding:0 12px 10px;border-top:1px solid var(--border)">
+      ${n.impact_tw?'<div style="font-size:11px;margin-top:8px;padding:5px 8px;background:rgba(124,92,252,.06);border-left:2px solid var(--purple);border-radius:4px;color:var(--text2);line-height:1.5">📌 '+colorSentiment(n.impact_tw)+'</div>':''}
+      ${n.related_sectors?.length?'<div style="display:flex;gap:4px;margin-top:7px;flex-wrap:wrap">'+n.related_sectors.map(s=>'<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(255,76,106,.08);color:var(--red)">'+s+'</span>').join('')+'</div>':''}
+    </div>` : '';
+
+    return `<div style="background:var(--card);border:1px solid ${exp?dColor+'55':'var(--border)'};border-radius:10px;margin-bottom:6px;overflow:hidden">
+      <div onclick="toggleNews('${id}')" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer">
+        <span style="font-size:13px;flex-shrink:0;color:${dColor}">${dIcon}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.4">${n.title}</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
-            <span style="font-size:9px;color:${iColor};font-weight:700">${iDot} ${iLabel}</span>
-            <span style="font-size:9px;color:var(--text3)">${cat}${src}</span>
-            <span style="font-size:9px;color:${dColor};margin-left:auto">${dLabel}</span>
-          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">${n.title}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px">${meta}</div>
         </div>
-        <span style="color:var(--text3);font-size:13px;flex-shrink:0;transform:rotate(${isExp?'180':'0'}deg);transition:transform .2s;margin-top:2px">▾</span>
-      </div>`;
-
-    // 展開內容
-    const body = isExp ? `
-      <div style="padding:0 12px 10px;border-top:1px solid var(--border)">
-        ${n.summary ? '<div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:8px;margin-bottom:6px">'+colorSentiment(n.summary)+'</div>' : ''}
-        ${n.impact_tw ? '<div style="font-size:11px;padding:6px 8px;background:rgba(124,92,252,.06);border-left:2px solid var(--purple);border-radius:4px;color:var(--text2);line-height:1.5"><strong style="color:var(--purple)">📌 台股影響：</strong>'+colorSentiment(n.impact_tw)+'</div>' : ''}
-        ${n.related_sectors?.length ? '<div style="display:flex;gap:4px;margin-top:8px;flex-wrap:wrap">'+n.related_sectors.map(s=>'<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(255,76,106,.08);color:var(--red);border:1px solid rgba(255,76,106,.2)">'+s+'</span>').join('')+'</div>' : ''}
-      </div>` : '';
-
-    const borderColor = isExp?dColor+'44':'var(--border)';
-    return `<div style="background:var(--card);border:1px solid ${borderColor};border-radius:10px;margin-bottom:6px;overflow:hidden">${header}${body}</div>`;
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:9px;color:${dColor};font-weight:600">${dLabel}</div>
+          <div style="font-size:9px;color:${iColor};margin-top:1px">${n.impact==='high'?'重大':n.impact==='mid'?'中度':'輕微'}</div>
+        </div>
+        <span style="color:var(--text3);font-size:12px;margin-left:4px;transform:rotate(${exp?180:0}deg);transition:transform .2s">▾</span>
+      </div>${body}
+    </div>`;
   }).join('');
 
   // 時間戳
