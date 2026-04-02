@@ -1163,17 +1163,18 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       <!-- 外資長條圖 -->
       <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">
         <span style="font-size:10px;color:#a080ff;font-weight:700;width:22px;flex-shrink:0">外資</span>
-        <div style="flex:1;position:relative;height:48px;background:rgba(0,0,0,.2);border-radius:8px;overflow:hidden">
-          <div id="chipForeignBars" style="position:relative;width:100%;height:100%"></div>
-          <div id="chipForeignZero" style="position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.2)"></div>
+        <div style="flex:1;position:relative;height:52px;background:rgba(0,0,0,.15);border-radius:8px">
+          <!-- 零軸線：覆蓋在 bars 上方，不受 overflow 影響 -->
+          <div id="chipForeignZero" style="position:absolute;top:50%;left:4px;right:4px;height:1px;background:rgba(255,255,255,.35);z-index:2;pointer-events:none"></div>
+          <div id="chipForeignBars" style="position:absolute;inset:0;border-radius:8px;overflow:hidden"></div>
         </div>
       </div>
       <!-- 投信長條圖 -->
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:10px;color:#00d4aa;font-weight:700;width:22px;flex-shrink:0">投信</span>
-        <div style="flex:1;position:relative;height:48px;background:rgba(0,0,0,.2);border-radius:8px;overflow:hidden">
-          <div id="chipTrustBars" style="position:relative;width:100%;height:100%"></div>
-          <div id="chipTrustZero" style="position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.2)"></div>
+        <div style="flex:1;position:relative;height:52px;background:rgba(0,0,0,.15);border-radius:8px">
+          <div id="chipTrustZero" style="position:absolute;top:50%;left:4px;right:4px;height:1px;background:rgba(255,255,255,.35);z-index:2;pointer-events:none"></div>
+          <div id="chipTrustBars" style="position:absolute;inset:0;border-radius:8px;overflow:hidden"></div>
         </div>
       </div>
       <!-- 日期標籤 -->
@@ -1858,7 +1859,7 @@ const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 
 // 帳號系統：Google One Tap + 裝置 ID 備援
 // ════════════════════════════════════════════════════
 const ACCOUNT_KEY = 'stockai_account'; // {sub, name, email, picture, ts}
-const GCLIENT_ID  = '486060787397-r4kfc6k9s3f1qmvq7ngk1pmofta6lmlu.apps.googleusercontent.com'; // 填入 Google Cloud Console 的 OAuth Client ID
+const GCLIENT_ID  = ''; // 填入 Google Cloud Console 的 OAuth Client ID
 
 let _account = null; // 當前登入帳號資訊
 
@@ -5341,50 +5342,63 @@ function renderChipTrendChart(foreignArr, trustArr, dates){
   const unit = maxRaw >= 500 ? '千張' : '張';
   if(titleEl) titleEl.textContent = `法人籌碼趨勢（近20日 · 單位:${unit}）`;
 
-  // 繪製單欄長條圖（position:absolute 精確對齊零軸）
-  // 容器高度 48px，零軸在 50%（24px），長條從零軸往上/往下延伸
-  const H = 48;
+  // 容器高度 52px，零軸在 50%（26px），長條從零軸往上/往下延伸
+  const H = 52;
   const ZERO = H / 2; // 24px = 零軸位置（px from top）
 
-  function renderBars(el, arr, maxV){
-    // 改用 position:relative 容器 + position:absolute 長條
-    el.style.position = 'relative';
-    el.style.display  = 'block';  // 取消 flex，改用絕對定位
+  function renderBars(el, arr, maxV, labelColor){
     el.innerHTML = '';
-
     const total = arr.length;
-    const barW  = Math.max(1, (100 / total) - 0.5); // 每根長條寬度 %
+    const barW  = Math.max(1, (100 / total) - 0.8);
 
     arr.forEach((v, i)=>{
-      const isUp   = v >= 0;
-      const barPx  = maxV > 0 ? Math.max(Math.round(Math.abs(v) / maxV * (ZERO - 2)), 1) : 1;
-      // isUp: top = ZERO - barPx，height = barPx（從零軸往上）
-      // isDown: top = ZERO，height = barPx（從零軸往下）
-      const topPx  = isUp ? (ZERO - barPx) : ZERO;
+      const isUp  = v >= 0;
+      const barPx = maxV > 0 ? Math.max(Math.round(Math.abs(v) / maxV * (ZERO - 3)), 2) : 2;
+      const topPx = isUp ? (ZERO - barPx) : ZERO;
       const leftPct = i / total * 100;
+      const isLast  = i === arr.length - 1;
 
       const bar = document.createElement('div');
       bar.style.cssText = [
         'position:absolute',
         `left:calc(${leftPct}% + 1px)`,
-        `width:calc(${barW}% - 2px)`,
+        `width:calc(${barW}% - 1px)`,
         `top:${topPx}px`,
         `height:${barPx}px`,
+        // 最後一根（最新日）加深顯示
         `background:${isUp ? 'var(--red)' : 'var(--green)'}`,
+        `opacity:${isLast ? '1' : '0.65'}`,
         `border-radius:${isUp ? '2px 2px 0 0' : '0 0 2px 2px'}`,
         'cursor:pointer',
-        'transition:opacity .15s',
       ].join(';');
 
-      // Tooltip：顯示在長條正上方，用百分比 left 定位（相對於外層 position:relative 容器）
-      const barCenterPct = (i + 0.5) / total * 100; // 長條中心的百分比位置
+      // 最新一日在 bar 上方/下方顯示數字
+      if(isLast){
+        const numEl = document.createElement('div');
+        const aboveBar = isUp;
+        numEl.style.cssText = [
+          'position:absolute',
+          `left:calc(${leftPct}% - 10px)`,
+          `${aboveBar ? `bottom:${H - topPx + 2}px` : `top:${topPx + barPx + 2}px`}`,
+          'font-size:8px','font-weight:700',
+          `color:${isUp?'var(--red)':'var(--green)'}`,
+          'white-space:nowrap','pointer-events:none','z-index:3',
+        ].join(';');
+        numEl.textContent = fmtV(v);
+        el.appendChild(numEl);
+      }
+
+      // Tooltip
+      const barCenterPct = (i + 0.5) / total * 100;
       const showTip = (e)=>{
         if(!tipEl) return;
         tipEl.style.display = 'block';
-        tipEl.style.left    = `calc(${barCenterPct}% + 22px)`; // +22px 為左側欄位標籤寬度
+        // 靠近右側時左移
+        const pct = barCenterPct;
+        tipEl.style.left    = `calc(${pct > 75 ? pct-25 : pct+5}% + 22px)`;
         tipEl.innerHTML =
-          `<span style="color:var(--text3);font-size:10px">${(dates[i]||'').slice(5)}</span>` +
-          ` <strong style="color:${isUp?'var(--red)':'var(--green)'}">${fmtV(v)}</strong>`;
+          `<span style="font-size:10px;color:var(--text3)">${(dates[i]||'').slice(5)}</span>` +
+          `&nbsp;<strong style="color:${isUp?'var(--red)':'var(--green)'}">${fmtV(v)}</strong>`;
         e.stopPropagation();
       };
       bar.addEventListener('mouseenter', showTip);
