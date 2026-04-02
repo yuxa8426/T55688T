@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="股析">
 <meta name="theme-color" content="#0a0a0f">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1632,47 +1633,71 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <div class="prof-av" id="profAvatar">股</div>
     <div style="font-size:20px;font-weight:700" id="profName">股析用戶</div>
     <div style="font-size:13px;color:var(--text2);margin-top:4px" id="profBio">點擊編輯個人資料</div>
-    <!-- 設定標籤 -->
     <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap" id="profTags">
       <span id="profRiskTag" style="display:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(124,92,252,.4);background:rgba(124,92,252,.1);color:#a080ff"></span>
       <span id="profCapitalTag" style="display:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(0,212,170,.35);background:rgba(0,212,170,.08);color:var(--green)"></span>
     </div>
-    <!-- 連動提示 -->
     <div id="profLinkedHint" style="display:none;margin-top:8px;font-size:11px;color:var(--text3)">
       ⚡ 此設定已連動 AI 深度分析模組
     </div>
-    <!-- Cloudflare KV 雲端同步狀態 -->
-    <div style="margin-top:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:12px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:16px">☁️</span>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)">雲端同步</div>
-          <div style="font-size:11px;color:var(--text3)" id="kvSyncStatus">設定 Cloudflare KV 後自動同步</div>
+
+    <!-- ══ 帳號卡片（登入前/登入後兩種狀態）══ -->
+    <div style="margin-top:16px" id="accountCard">
+
+      <!-- 未登入 -->
+      <div id="loginCard" style="padding:16px;background:var(--card);border:1px solid var(--border);border-radius:14px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">🔒 綁定帳號</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+          登入後自動跨裝置同步，不需要手動複製 ID
         </div>
-      </div>
-      <!-- 裝置 ID -->
-      <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:10px">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">裝置 ID（每台裝置唯一）</div>
-        <div style="font-size:12px;font-weight:700;color:var(--green);word-break:break-all;font-family:monospace" id="kvUidDisplay">載入中…</div>
-      </div>
-      <!-- 操作按鈕 -->
-      <div style="display:flex;gap:8px">
-        <button onclick="kvSyncNow()" style="flex:1;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">↻ 立即同步</button>
-        <button onclick="copyUID()" style="flex:1;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px;color:#a080ff;font-size:12px;padding:8px;cursor:pointer;font-family:inherit;font-weight:600">📋 複製 ID</button>
-      </div>
-      <!-- 換裝置：輸入 ID 還原（手機友善）-->
-      <div style="margin-top:10px">
-        <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:6px">📱 換裝置同步</div>
+        <!-- Google 登入按鈕（GSI 渲染）-->
+        <div id="g_id_signin" style="display:flex;justify-content:center"></div>
+        <!-- 分隔 -->
+        <div style="display:flex;align-items:center;gap:8px;margin:12px 0">
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+          <span style="font-size:10px;color:var(--text3)">或使用裝置 ID</span>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+        <!-- 裝置 ID（備援）-->
+        <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">裝置 ID（備援同步）</div>
+          <div style="font-size:11px;color:var(--text2);word-break:break-all;font-family:monospace" id="kvUidDisplay">載入中…</div>
+        </div>
         <div style="display:flex;gap:6px">
-          <input id="importUidInput" type="text" placeholder="貼上舊裝置的 ID"
-            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px;font-family:monospace;outline:none;min-width:0">
-          <button onclick="importUID()"
-            style="background:var(--purple);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">匯入</button>
+          <button onclick="copyUID()" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📋 複製 ID</button>
+          <button onclick="document.getElementById('importUidArea').style.display=document.getElementById('importUidArea').style.display==='none'?'block':'none'"
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📱 換裝置</button>
         </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.5">
-          在舊裝置點「📋 複製 ID」，將 ID 貼到上方輸入框，點匯入即可還原所有資料。
+        <div id="importUidArea" style="display:none;margin-top:8px">
+          <div style="display:flex;gap:6px">
+            <input id="importUidInput" type="text" placeholder="貼上舊裝置的 ID"
+              style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-size:12px;font-family:monospace;outline:none;min-width:0">
+            <button onclick="importUID()"
+              style="background:var(--purple);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">匯入</button>
+          </div>
+        </div>
+        <div id="kvSyncStatus" style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center"></div>
+      </div>
+
+      <!-- 已登入 -->
+      <div id="loggedCard" style="display:none;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.25);border-radius:14px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <img id="accountAvatar" src="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--green);display:none">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--text)" id="accountName">—</div>
+            <div style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="accountEmail">—</div>
+          </div>
+          <div style="text-align:center;flex-shrink:0">
+            <div style="font-size:10px;font-weight:700;color:var(--green)">✅ 已綁定</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:1px">自動同步</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <button onclick="kvSyncNow()" style="flex:1;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);font-size:11px;padding:7px;cursor:pointer;font-family:inherit;font-weight:600">↻ 立即同步</button>
+          <button onclick="accountSignOut()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-size:11px;padding:7px 12px;cursor:pointer;font-family:inherit">登出</button>
         </div>
       </div>
+
     </div>
   </div>
   <div class="pref-item" onclick="editProfile()">
@@ -1829,14 +1854,135 @@ const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 
 // ════════════════════════════════════════════════════
 
 // 取得或生成裝置 UID（每個裝置唯一，儲存在 localStorage）
+// ════════════════════════════════════════════════════
+// 帳號系統：Google One Tap + 裝置 ID 備援
+// ════════════════════════════════════════════════════
+const ACCOUNT_KEY = 'stockai_account'; // {sub, name, email, picture, ts}
+const GCLIENT_ID  = ''; // 填入 Google Cloud Console 的 OAuth Client ID
+
+let _account = null; // 當前登入帳號資訊
+
+// 讀取儲存的帳號
+function getAccount(){
+  if(_account) return _account;
+  try{ _account = JSON.parse(localStorage.getItem(ACCOUNT_KEY)||'null'); }catch(e){}
+  return _account;
+}
+
+// UID：登入時用 Google sub，未登入用裝置隨機 ID
 function getUID(){
+  const acc = getAccount();
+  if(acc?.sub) return 'g_'+acc.sub; // Google 帳號 UID（跨裝置一致）
+  // 裝置 UID（備援）
   let uid = localStorage.getItem('stockai_uid');
   if(!uid){
-    // 生成 16 位隨機 ID
     uid = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,9);
     localStorage.setItem('stockai_uid', uid);
   }
   return uid;
+}
+
+// Google JWT 解析（不驗簽名，僅讀 payload — 伺服器端已驗證）
+function _parseJwt(token){
+  try{
+    const b64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(atob(b64));
+  }catch(e){ return null; }
+}
+
+// Google One Tap callback（GSI 呼叫此函式）
+function handleGoogleCredential(resp){
+  const payload = _parseJwt(resp.credential);
+  if(!payload?.sub){ showToast('❌ Google 登入失敗'); return; }
+
+  const acc = {
+    sub:     payload.sub,
+    name:    payload.name    || '用戶',
+    email:   payload.email   || '',
+    picture: payload.picture || '',
+    ts:      Date.now(),
+  };
+  _account = acc;
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(acc));
+
+  // 立即同步雲端資料（用新 UID g_sub 存取）
+  kvSyncDown().then(()=>{
+    showToast('✅ Google 帳號已綁定，資料自動同步');
+    renderAccountUI();
+    loadProfile();
+  });
+}
+
+// 登出
+function accountSignOut(){
+  if(!confirm('確定登出？登出後將使用裝置 ID 同步。')) return;
+  _account = null;
+  localStorage.removeItem(ACCOUNT_KEY);
+  // google.accounts.id.disableAutoSelect();  // 關閉 One Tap 自動提示
+  renderAccountUI();
+  showToast('已登出 Google 帳號');
+}
+
+// 渲染帳號 UI（登入前/後兩種狀態）
+function renderAccountUI(){
+  const acc       = getAccount();
+  const loginCard = document.getElementById('loginCard');
+  const loggedCard= document.getElementById('loggedCard');
+  if(!loginCard || !loggedCard) return;
+
+  if(acc?.sub){
+    // 已登入
+    loginCard.style.display  = 'none';
+    loggedCard.style.display = 'block';
+    const nameEl  = document.getElementById('accountName');
+    const emailEl = document.getElementById('accountEmail');
+    const avaEl   = document.getElementById('accountAvatar');
+    if(nameEl)  nameEl.textContent  = acc.name;
+    if(emailEl) emailEl.textContent = acc.email;
+    if(avaEl && acc.picture){ avaEl.src=acc.picture; avaEl.style.display='block'; }
+    // 更新主頁顯示名稱
+    const profNameEl = document.getElementById('profName');
+    if(profNameEl && profNameEl.textContent==='股析用戶') profNameEl.textContent = acc.name;
+    const profAvEl = document.getElementById('profAvatar');
+    if(profAvEl && acc.picture){
+      profAvEl.style.backgroundImage = 'url('+acc.picture+')';
+      profAvEl.style.backgroundSize  = 'cover';
+      profAvEl.textContent = '';
+    }
+  } else {
+    // 未登入：顯示裝置 ID
+    loginCard.style.display  = 'block';
+    loggedCard.style.display = 'none';
+    const uidEl = document.getElementById('kvUidDisplay');
+    if(uidEl) uidEl.textContent = getUID();
+  }
+}
+
+// 初始化 Google One Tap
+function initGoogleOneTap(){
+  if(!GCLIENT_ID || !window.google?.accounts?.id) return;
+  google.accounts.id.initialize({
+    client_id:             GCLIENT_ID,
+    callback:              handleGoogleCredential,
+    auto_select:           true,   // 已登入過自動靜默登入
+    cancel_on_tap_outside: true,
+    use_fedcm_for_prompt:  true,   // Chrome 新標準
+  });
+  // 渲染自訂按鈕
+  const btnEl = document.getElementById('g_id_signin');
+  if(btnEl){
+    google.accounts.id.renderButton(btnEl, {
+      type:  'standard',
+      shape: 'pill',
+      theme: 'filled_black',
+      text:  'signin_with',
+      size:  'large',
+      locale:'zh-TW',
+      width: 260,
+    });
+  }
+  // 若已有帳號則不彈 One Tap，否則顯示
+  if(!getAccount()) google.accounts.id.prompt();
 }
 
 // KV API 基礎函式
@@ -1872,7 +2018,7 @@ function kvPutDebounced(key, data, delay=2000){
 
 // 複製 UID 到剪貼簿
 function copyUID(){
-  const uid = getUID();
+  const uid = localStorage.getItem('stockai_uid') || getUID();
   if(navigator.clipboard?.writeText){
     navigator.clipboard.writeText(uid)
       .then(()=>showToast('✅ 裝置 ID 已複製'))
@@ -10704,6 +10850,8 @@ window.addEventListener('load', async ()=>{
   initOnboarding();
   // 恢復主題按鈕狀態
   setTheme(localStorage.getItem('stockai_theme')||'dark');
+  // 帳號 UI 初始化（先渲染已有的帳號狀態）
+  renderAccountUI();
 
   // ── 即時時鐘 + 新鮮度計時器（第一優先）
   startClock();
@@ -10749,6 +10897,15 @@ window.addEventListener('load', async ()=>{
 });
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+// 等 Google GSI SDK 載入後初始化 One Tap
+window.addEventListener('load', ()=>{
+  // GSI 可能還未載入，稍等後重試
+  const tryInit = (n=0)=>{
+    if(window.google?.accounts?.id) initGoogleOneTap();
+    else if(n<20) setTimeout(()=>tryInit(n+1), 300);
+  };
+  setTimeout(()=>tryInit(), 500);
+}, {once:true});
 
 // ════════════════════════════════════════════════════
 // Onboarding 首次使用引導系統
