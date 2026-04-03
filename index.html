@@ -2954,56 +2954,71 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 台指期盤後指數（FinMind TaiwanFuturesDaily TX）────
 // 直接用台灣期交所官方資料，準確可靠
 async function fetchTxfAfterHours(){
-  // FinMind TaiwanFuturesDaily：data_id='TX00'（台指期所有合約）
-  // 欄位：date, contract_date, open, max, min, close, spread, spread_per, volume
+  // FinMind TaiwanFuturesDaily
+  // data_id: 'TX' = 台指期近月合約（不加數字）
+  // 欄位: date, futures_id, contract_date, open, max, min, close,
+  //       spread, spread_per, volume, settlement_price, trading_session
   try{
     const today   = todayStr();
     const weekAgo = nDaysAgo(7);
 
-    const data = await fmFetch({
-      dataset:    'TaiwanFuturesDaily',
-      data_id:    'TX00',   // TX00 = 台指期（所有合約加總）
-      start_date: weekAgo,
-      end_date:   today,
-      _ttl:       _msTillMidnight(),
-    }, 15000);
+    // 嘗試 data_id='TX'（近月），若空再試 'TX00'
+    let data = null;
+    for(const did of ['TX','TX00','TXF']){
+      const raw = await fmFetch({
+        dataset:    'TaiwanFuturesDaily',
+        data_id:    did,
+        start_date: weekAgo,
+        end_date:   today,
+        _ttl:       _msTillMidnight(),
+      }, 15000);
+      if(raw?.length){
+        console.log('[TXF] data_id', did, 'returned', raw.length, 'rows');
+        data = raw;
+        break;
+      }
+      console.log('[TXF] data_id', did, 'no data, trying next');
+    }
 
-    if(!data?.length) throw new Error('no data');
+    if(!data?.length) throw new Error('all data_ids returned empty');
 
-    // 印出第一筆偵錯（只在 console）
-    console.log('[TXF] raw sample:', JSON.stringify(data[data.length-1]).slice(0,200));
+    console.log('[TXF] sample row:', JSON.stringify(data[data.length-1]).slice(0,200));
 
-    // 依日期降序，取最新一筆
-    const sorted = [...data].sort((a,b)=> b.date > a.date ? 1 : -1);
-    const latest = sorted[0];
-    if(!latest) throw new Error('no latest');
+    // 排序：日期降序（最新在前），取最新一般盤
+    const sorted = [...data].sort((a,b)=> a.date > b.date ? -1 : 1);
 
-    // FinMind 欄位名稱：close / 收盤價
-    const price = parseFloat(
-      latest.close ??
-      latest['收盤價'] ??
-      latest.settlement_price ?? 0
-    );
-    if(!price || price < 15000) throw new Error('price invalid: ' + price);
+    // 優先找最新的一般盤資料（非夜盤）
+    const regular = sorted.find(r=>{
+      const ts = (r.trading_session||'').toLowerCase();
+      return !ts || ts==='' || ts==='一般' || ts==='regular';
+    }) || sorted[0];
 
-    // 漲跌：close - open 或 spread 欄位
-    const open_  = parseFloat(latest.open ?? latest['開盤價'] ?? price);
-    const spread = parseFloat(latest.spread ?? 0);
-    const change = spread !== 0 ? spread : +(price - open_).toFixed(0);
+    if(!regular) throw new Error('no valid row');
 
-    // spread_per 是漲跌百分比
-    const changePct = parseFloat(latest.spread_per ?? 0) ||
+    // 欄位容錯（FinMind 各版本欄位名不同）
+    const price = parseFloat(regular.close ?? regular.Close ?? regular.settlement_price ?? 0);
+    if(!price || price < 15000) throw new Error('price invalid: ' + price + ' row:' + JSON.stringify(regular).slice(0,100));
+
+    const prevClose = parseFloat(regular.settlement_price ?? regular.close ?? price);
+    const open_     = parseFloat(regular.open ?? regular.Open ?? price);
+
+    // spread = 收盤 - 昨結 或 收盤 - 開盤
+    const spread    = parseFloat(regular.spread ?? 0);
+    const change    = spread !== 0 ? +spread.toFixed(0)
+                    : +(price - open_).toFixed(0);
+
+    const changePct = parseFloat(regular.spread_per ?? 0) ||
                       (open_ > 0 ? +((price - open_)/open_*100).toFixed(2) : 0);
 
-    const dateStr = (latest.date||'').slice(5);
-    console.log('[TXF] price:', price, 'change:', change, 'date:', dateStr);
+    const dateStr = (regular.date||'').slice(5);
+    console.log('[TXF] ✅ price:', price, 'change:', change, 'pct:', changePct, 'date:', dateStr);
 
     return { price, change, changePct,
       session: '收盤', date: dateStr,
       time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'})
     };
   }catch(e){
-    console.warn('[TXF] failed:', e.message);
+    console.warn('[TXF] ❌ failed:', e.message);
     return null;
   }
 }
