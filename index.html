@@ -2642,15 +2642,18 @@ function _parseQuote(data, stockId){
 }
 function _parseHistory(data){
   if(!data||!data.length) return null;
+  // 過濾掉沒有收盤價的資料列（假日或停牌）
+  const valid = data.filter(r=>r.close && parseFloat(r.close)>0);
+  if(!valid.length) return null;
   return {
-    close:  data.map(r=>parseFloat(r.close)),
-    open:   data.map(r=>parseFloat(r.open)),
-    high:   data.map(r=>parseFloat(r.max)),
-    low:    data.map(r=>parseFloat(r.min)),
-    volume: data.map(r=>parseInt(r.Trading_Volume)),
-    spread: data.map(r=>parseFloat(r.spread||0)),
-    dates:  data.map(r=>r.date),
-    raw:    data,
+    close:  valid.map(r=>parseFloat(r.close)),
+    open:   valid.map(r=>parseFloat(r.open||r.close)),
+    high:   valid.map(r=>parseFloat(r.max||r.close)),
+    low:    valid.map(r=>parseFloat(r.min||r.close)),
+    volume: valid.map(r=>parseInt(r.Trading_Volume||0)),
+    spread: valid.map(r=>parseFloat(r.spread||0)),
+    dates:  valid.map(r=>r.date),
+    raw:    valid,
   };
 }
 
@@ -3958,7 +3961,7 @@ function updateLongTerm(price, closes, dates){
 // AI 主函式：短 / 中 / 長期三期分析 + 週期規律
 // ════════════════════════════════════════════════════
 function updateAI(name, q){
-  const closes = q.closes  || [];
+  const closes = (q.closes||[]).filter(v=>v && !isNaN(v) && v>0);
   const dates  = q.dates   || [];   // fmHistory 需回傳日期陣列
   const inst   = q.inst    || null;
   const price  = q.price;
@@ -4184,7 +4187,7 @@ function updateAI(name, q){
   const actionBox = document.getElementById('aiActionBox');
   if(actionBox && price){
     // 支撐/壓力估算（±ATR 概念，用近20日振幅簡化）
-    const closes = q.closes || [];
+    const closes = (q.closes||[]).filter(v=>v && !isNaN(v) && v>0);
     let support='—', resist='—';
     if(closes.length>=20){
       const slice = closes.slice(-20);
