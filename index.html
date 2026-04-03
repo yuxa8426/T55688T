@@ -8730,35 +8730,40 @@ ${quantContext}
     const customKey = 'CUS';
     await recordCustomBacktest(stratName, stocks, period);
 
-    // 渲染結果
-    resultEl.style.display = 'block';
-    resultEl.style.opacity='0'; resultEl.innerHTML=`
-      <div style="padding:10px 12px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:10px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:var(--gold)">🛠️ ${stratName}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">已記錄回測 · ${period}日後驗證 · 共${stocks.length}支</div>
-      </div>
-      ${stocks.map((s,i)=>{
-        const risk=Math.min(10,Math.max(1,Math.round(s.risk||5)));
-        const riskColor=risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
-        const win=Math.min(99,Math.max(1,Math.round(s.winRate||60)));
-        const safe=(s.name||'').replace(/'/g,"\'");
-        const safeId=(s.id||'').replace(/'/g,"\'");
-        return `<div class="sstock-card" onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
-          <div class="sstock-rank">${i+1}</div>
-          <div class="sstock-info">
-            <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3)">${s.sector||''}</span></div>
-            <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
-          </div>
-          <div class="sstock-metrics" style="min-width:64px;text-align:right">
-            <div style="font-size:15px;font-weight:800;color:var(--text3)">${win}%</div>
-            <div style="font-size:9px;color:var(--text3)">AI估算</div>
-            <div style="font-size:9px;color:${riskColor};margin-top:3px;font-weight:600">${risk>=8?'高':risk>=5?'中':'低'}風險</div>
-          </div>
-        </div>`;
-    requestAnimationFrame(()=>{ resultEl.style.transition='opacity .5s'; resultEl.style.opacity='1'; });
-      }).join('')}`;
+    // 渲染結果：先組好 HTML 再一次寫入（避免 requestAnimationFrame 混入 map）
+    const stocksHtml = stocks.map((s,i)=>{
+      const risk      = Math.min(10, Math.max(1, Math.round(s.risk||5)));
+      const riskColor = risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
+      const win       = Math.min(99, Math.max(1, Math.round(s.winRate||60)));
+      const safe      = (s.name||'').replace(/'/g,"\'");
+      const safeId    = (s.id||'').replace(/'/g,"\'");
+      const winColor  = win>=65?'var(--red)':win>=50?'var(--gold)':'var(--text3)';
+      return '<div class="sstock-card" onclick="selectStock(null,\''+safe+'\',\''+safeId+'.TW\');switchPage(\'home\')">'
+        +'<div class="sstock-rank">'+(i+1)+'</div>'
+        +'<div class="sstock-info">'
+          +'<div class="sstock-name">'+(s.id||'')+' '+(s.name||'')+' <span style="font-size:10px;color:var(--text3)">'+(s.sector||'')+'</span></div>'
+          +'<div class="sstock-reason">'+colorSentiment(s.reason||'')+'</div>'
+        +'</div>'
+        +'<div class="sstock-metrics" style="min-width:64px;text-align:right">'
+          +'<div style="font-size:15px;font-weight:800;color:'+winColor+'">'+win+'%</div>'
+          +'<div style="font-size:9px;color:var(--text3)">AI估算</div>'
+          +'<div style="font-size:9px;color:'+riskColor+';margin-top:3px;font-weight:600">'+(risk>=8?'高':risk>=5?'中':'低')+'風險</div>'
+        +'</div>'
+      +'</div>';
+    }).join('');
 
-    showToast(`✅ 「${stratName}」選出 ${stocks.length} 支，已記錄回測`);
+    resultEl.innerHTML =
+      '<div style="padding:10px 12px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:10px;margin-bottom:10px">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--gold)">🛠️ '+stratName+'</div>'
+      +'<div style="font-size:10px;color:var(--text3);margin-top:2px">已記錄回測 · '+period+'日後驗證 · 共'+stocks.length+'支</div>'
+      +'</div>'
+      + stocksHtml;
+
+    resultEl.style.display   = 'block';
+    resultEl.style.opacity   = '0';
+    resultEl.style.transition = 'opacity .5s';
+    requestAnimationFrame(()=>{ resultEl.style.opacity = '1'; });
+    showToast('✅ 「'+stratName+'」選出 '+stocks.length+' 支，已記錄回測');
 
   }catch(e){
     const is429 = e.message.includes('429');
