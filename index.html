@@ -11085,21 +11085,21 @@ function initOnboarding(){
         </div>
 
         <!-- 策略篩選 -->
-        <div style="display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none" id="historyFilterBtns">
+        <div style="display:flex;flex-wrap:wrap;gap:5px;padding-bottom:2px" id="historyFilterBtns">
           <button onclick="filterHistory('all',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
           <button onclick="filterHistory('A',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🚀 極致動能</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🚀 動能</button>
           <button onclick="filterHistory('B',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📈 穩健成長</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📈 成長</button>
           <button onclick="filterHistory('C',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💎 價值發現</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💎 價值</button>
           <button onclick="filterHistory('D',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🔄 情緒反轉</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🔄 反轉</button>
           <button onclick="filterHistory('E',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⚖️ 風險平權</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⚖️ 平權</button>
           <button onclick="filterHistory('WL',this)" class="hist-filter"
-            style="flex-shrink:0;font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⭐ 自選清單</button>
+            style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⭐ 自選</button>
         </div>
 
         <!-- 策略刪除按鈕（篩選特定策略後才出現）-->
