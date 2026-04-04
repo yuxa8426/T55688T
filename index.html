@@ -3990,8 +3990,12 @@ function updateAI(name, q){
   // ════════════════════════════════
   // ① 短期評分（5日：RSI + 動能 + 法人）
   // ════════════════════════════════
+  if(closes.length < 15){
+    console.warn('[updateAI] closes 不足15筆無法計算RSI, length=', closes.length,
+      '需要搜尋更長歷史資料');
+  }
   const rsi = closes.length>=15 ? calcRSI(closes) : null;
-  const rsiVal = rsi ? rsi.toFixed(1) : '—';
+  const rsiVal = rsi != null ? rsi.toFixed(1) : '—';
 
   let rsiScore = 5;
   if(rsi!=null){
@@ -6764,7 +6768,7 @@ async function selectStock(el, name, ticker){
   // 三路並行：報價60天 + 法人 + 分鐘K 同時發出，不互等
   // 60天足夠：AI分析只用20根，圖表月/季均可，年tab則 lazy load
   const [rawPrice, instData, intra] = await Promise.all([
-    fmStockData(stockId, 60),
+    fmStockData(stockId, 120),  // 120曆日確保含假日也有60+交易日
     fmInstitutional(stockId),
     fetchIntraday(stockId),   // 與日K並行，不再串行等待
   ]);
