@@ -3962,11 +3962,15 @@ function updateLongTerm(price, closes, dates){
 // ════════════════════════════════════════════════════
 function updateAI(name, q){
   const closes = (q.closes||[]).filter(v=>v && !isNaN(v) && v>0);
-  const dates  = q.dates   || [];   // fmHistory 需回傳日期陣列
+  const dates  = q.dates   || [];
   const inst   = q.inst    || null;
   const price  = q.price;
   const changePct = q.changePct ?? 0;
   const isUp   = changePct >= 0;
+  // 診斷 log（確認資料是否正確傳入）
+  console.log('[updateAI] closes.length=', closes.length, 'price=', price,
+    'raw closes sample=', (q.closes||[]).slice(-3),
+    'filtered=', closes.slice(-3));
 
   const scoreColor = v => v>=7?'var(--red)':v>=4?'var(--gold)':'var(--green)';
 
@@ -6786,6 +6790,8 @@ async function selectStock(el, name, ticker){
       else drawFallbackChart(isUp);
     }
     updateInstCard(instData, name);
+    console.log('[selectStock] histData.close length=', histData?.close?.length,
+      'sample=', histData?.close?.slice(-3));
     updateAI(name, {...quoteData, closes: histData?.close||[], dates: histData?.dates||[], inst: instData});
     updateStockTrendBar(stockId, histData, instData);
     showToast('✅ '+name+' 資料：'+quoteData.date);
