@@ -9504,8 +9504,28 @@ function renderBacktestPanel(){
   }
 
   if(pendEl && pending.length){
-    pendEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:8px">` +
-      `<div style="font-size:10px;color:var(--text3);margin-bottom:4px">📋 驗證進度</div>` +
+    // 是否顯示引導教學（首次看到驗證進度）
+    const hasSeenVerifyGuide = localStorage.getItem('stockai_verify_guide_seen');
+    const guideHtml = hasSeenVerifyGuide ? '' :
+      `<div id="verifyGuide" style="margin-bottom:8px;padding:8px 10px;background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:4px">💡 如何使用驗證進度？</div>
+          <button onclick="document.getElementById('verifyGuide').style.display='none';localStorage.setItem('stockai_verify_guide_seen','1')"
+            style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0;line-height:1;flex-shrink:0">✕</button>
+        </div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.7">
+          <div style="margin-bottom:3px">① 執行 AI 策略選股後，系統自動記錄並開始計時</div>
+          <div style="margin-bottom:3px">② 到期後「7日 可驗 ›」標籤會亮起 <span style="color:var(--gold)">● 金色</span></div>
+          <div style="margin-bottom:3px">③ <strong style="color:var(--gold)">點擊「可驗 ›」</strong>直接跳轉到歷史記錄，按「⚡ 驗證」確認結果</div>
+          <div>④ 驗證後累積勝率，AI 自動依績效調整下次選股方向</div>
+        </div>
+      </div>`;
+
+    pendEl.innerHTML = guideHtml + `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,.06);border-radius:8px">` +
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:10px;color:var(--text3)">📋 驗證進度</span>
+        <button onclick="showHistoryModal()" style="font-size:9px;color:var(--purple);background:none;border:none;cursor:pointer;font-family:inherit;padding:0">查看全部 ›</button>
+      </div>` +
       pending.map(r=>{
         const d7  = daysLeft(r.checkDate);
         const d14 = daysLeft(r.checkDate14);
@@ -9524,23 +9544,26 @@ function renderBacktestPanel(){
         const icon = stratIcons[r.stratKey]||'';
 
         // 剩餘天數轉換成可讀文字
-        function fmtDays(days, done, label){
-          if(done)        return `<span style="color:var(--green)">✅${label}</span>`;
-          if(days===null) return `<span style="color:rgba(255,255,255,.2)">${label}—</span>`;
-          if(days<=0)     return `<span style="color:var(--gold);font-weight:600">${label}可驗</span>`;
-          if(days<7)      return `<span style="color:var(--text2)">${label}${days}天</span>`;
-          return `<span style="color:var(--text3)">${label}${days}天</span>`;
+        function fmtDays(days, done, label, period){
+          if(done)        return '<span style="color:var(--green)">✅'+label+'</span>';
+          if(days===null) return '<span style="color:rgba(255,255,255,.2)">'+label+'—</span>';
+          if(days<=0)     return '<span onclick="jumpToVerify(\''+r.id+'\',\''+period+'\')" '
+            +'style="color:var(--gold);font-weight:700;cursor:pointer;'
+            +'background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.4);'
+            +'border-radius:4px;padding:1px 5px;white-space:nowrap">'+label+' 可驗 ›</span>';
+          if(days<7)      return '<span style="color:var(--text2)">'+label+' '+days+'天</span>';
+          return '<span style="color:var(--text3)">'+label+' '+days+'天</span>';
         }
 
-        return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08)">
-          <span style="color:var(--text2);font-weight:600">${icon} 策略${r.stratKey} · ${r.date}</span>
-          <span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
-            ${fmtDays(d7,  r.verified,   '7日')}
-            ${fmtDays(d14, r.verified14, '14日')}
-            ${fmtDays(d30, r.verifiedM,  '月')}
-            ${fmtDays(d90, r.verifiedQ,  '季')}
-          </span>
-        </div>`;
+        return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.08)">'
+          +'<span style="color:var(--text2);font-weight:600">'+icon+' 策略'+r.stratKey+' · '+r.date+'</span>'
+          +'<span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">'
+            +fmtDays(d7,  r.verified,   '7日',  '7')
+            +fmtDays(d14, r.verified14, '14日', '14')
+            +fmtDays(d30, r.verifiedM,  '月',   '30')
+            +fmtDays(d90, r.verifiedQ,  '季',   '90')
+          +'</span>'
+        +'</div>';
       }).join('') + `</div>`;
   } else if(pendEl){
     pendEl.innerHTML = '';
@@ -9584,6 +9607,42 @@ function closeHistoryModal(){
   document.body.style.overflow = '';
 }
 function showHistoryPanel(){ showHistoryModal(); }
+
+// ── 驗證進度：點擊「可驗」直接跳轉 ─────────────────────
+// 開啟歷史記錄 Modal → 切換週期 → 排序待驗 → 滾到目標記錄
+function jumpToVerify(recordId, period){
+  // 1. 切換週期選擇器
+  _historyPeriod = period;
+  const periodSel = document.getElementById('historyPeriodSel');
+  if(periodSel) periodSel.value = period;
+
+  // 2. 重置篩選（確保目標記錄可見）
+  _historyFilter = 'all';
+  _historySearch = '';
+  _historySort   = 'pending'; // 待驗優先排序
+  const sortSel = document.getElementById('historySortSel');
+  if(sortSel) sortSel.value = 'pending';
+
+  // 3. 展開目標記錄
+  _expandedRecords.add(recordId);
+
+  // 4. 開啟 Modal 並重新渲染
+  showHistoryModal();
+
+  // 5. 渲染後滾到目標 DOM 元素
+  setTimeout(()=>{
+    const target = document.getElementById('bt-row-'+recordId);
+    if(target){
+      target.scrollIntoView({behavior:'smooth', block:'center'});
+      // 高亮閃爍效果
+      target.style.transition = 'box-shadow .3s';
+      target.style.boxShadow  = '0 0 0 2px var(--gold)';
+      setTimeout(()=>{ target.style.boxShadow = ''; }, 1800);
+    }
+  }, 120);
+
+  showToast('📋 已跳轉到可驗記錄，點「⚡ 驗證」執行驗證');
+}
 
 // 篩選
 function filterHistory(key, btn){
@@ -9893,7 +9952,7 @@ function renderHistoryList(){
         ${r.stocks.length>8?`<div style="font-size:10px;color:var(--text3);padding:2px 4px">+${r.stocks.length-8}</div>`:''}
       </div>` : '';
 
-    return `<div style="background:var(--card);border:1px solid ${st.isVerified?si.color+'44':'var(--border)'};border-radius:14px;margin-bottom:10px;overflow:hidden${isExp?';border-color:'+si.color+'66':''}">
+    return `<div id="bt-row-${r.id}" style="background:var(--card);border:1px solid ${st.isVerified?si.color+'44':'var(--border)'};border-radius:14px;margin-bottom:10px;overflow:hidden${isExp?';border-color:'+si.color+'66':''}">
       <!-- 記錄頭部（點擊展開）-->
       <div onclick="toggleHistoryRecord(${r.id})" style="padding:12px 14px;cursor:pointer;user-select:none">
         <div style="display:flex;justify-content:space-between;align-items:center">
