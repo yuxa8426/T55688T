@@ -1472,19 +1472,41 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 - 市值500億以下中小型股優先"
           style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-size:12px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;line-height:1.6;margin-bottom:10px"></textarea>
 
-        <!-- 快速範本 -->
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">快速套用範本：</div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+        <!-- 快速套用範本（12個）-->
+        <div style="font-size:11px;color:var(--text2);margin-bottom:6px;font-weight:600">快速套用範本：</div>
+
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px">📈 技術趨勢</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
           <button onclick="applyCustomTemplate('momentum')"
-            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,76,106,.4);background:rgba(255,76,106,.08);color:var(--red);cursor:pointer;font-family:inherit">🚀 動能強選</button>
-          <button onclick="applyCustomTemplate('value')"
-            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(245,200,66,.4);background:rgba(245,200,66,.08);color:var(--gold);cursor:pointer;font-family:inherit">💎 低估值</button>
-          <button onclick="applyCustomTemplate('income')"
-            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(0,212,170,.4);background:rgba(0,212,170,.08);color:var(--green);cursor:pointer;font-family:inherit">💰 高殖利率</button>
-          <button onclick="applyCustomTemplate('smallcap')"
-            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(124,92,252,.4);background:rgba(124,92,252,.08);color:var(--purple);cursor:pointer;font-family:inherit">🔬 中小型成長</button>
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(255,76,106,.4);background:rgba(255,76,106,.08);color:var(--red);cursor:pointer;font-family:inherit">🚀 動能強選</button>
+          <button onclick="applyCustomTemplate('breakout')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(255,76,106,.3);background:rgba(255,76,106,.06);color:var(--red);cursor:pointer;font-family:inherit">📈 突破起漲</button>
+          <button onclick="applyCustomTemplate('reversal')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(0,212,170,.4);background:rgba(0,212,170,.08);color:var(--green);cursor:pointer;font-family:inherit">🔄 超跌反彈</button>
+        </div>
+
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px">🏦 法人籌碼</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
+          <button onclick="applyCustomTemplate('institutional')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(155,127,254,.4);background:rgba(155,127,254,.08);color:var(--purple);cursor:pointer;font-family:inherit">🏦 法人連買</button>
           <button onclick="applyCustomTemplate('ai_chain')"
-            style="font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(79,195,247,.4);background:rgba(79,195,247,.08);color:#4fc3f7;cursor:pointer;font-family:inherit">🧠 AI供應鏈</button>
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(79,195,247,.4);background:rgba(79,195,247,.08);color:#4fc3f7;cursor:pointer;font-family:inherit">🧠 AI供應鏈</button>
+          <button onclick="applyCustomTemplate('semiconductor')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(79,195,247,.3);background:rgba(79,195,247,.06);color:#4fc3f7;cursor:pointer;font-family:inherit">🔬 半導體週期</button>
+        </div>
+
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px">💰 基本面 / 防禦</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px">
+          <button onclick="applyCustomTemplate('value')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(245,200,66,.4);background:rgba(245,200,66,.08);color:var(--gold);cursor:pointer;font-family:inherit">💎 低估值</button>
+          <button onclick="applyCustomTemplate('income')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(245,200,66,.3);background:rgba(245,200,66,.06);color:var(--gold);cursor:pointer;font-family:inherit">💰 高殖利率</button>
+          <button onclick="applyCustomTemplate('high_growth')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(245,200,66,.3);background:rgba(245,200,66,.06);color:var(--gold);cursor:pointer;font-family:inherit">📊 高成長</button>
+          <button onclick="applyCustomTemplate('smallcap')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(124,92,252,.4);background:rgba(124,92,252,.08);color:var(--purple);cursor:pointer;font-family:inherit">🔭 中小型成長</button>
+          <button onclick="applyCustomTemplate('macro_hedge')"
+            style="font-size:10px;padding:3px 9px;border-radius:6px;border:1px solid rgba(128,128,168,.4);background:rgba(128,128,168,.08);color:var(--text2);cursor:pointer;font-family:inherit">🛡️ 總經避險</button>
         </div>
 
         <!-- 回測設定 -->
@@ -8616,45 +8638,107 @@ function toggleCustomStrat(){
 
 // 快速範本
 const CUSTOM_TEMPLATES = {
+  // ── 原有5個 ──────────────────────────────────────────
   momentum:{
     name:'動能強選',
-    prompt:`- 近5日外資持續買超，投信同向
-- 近5日漲幅>5%，成交量放大超過1.5倍
-- 股價站上20日均線且均線向上
-- 優先選擇半導體、AI、伺服器相關類股
-- 排除近期有重大利空消息的股票`
+    prompt:`【動能突破策略】
+- 技術面：股價站上20MA且60MA，均線多頭排列（5MA>20MA>60MA）
+- 量能：近5日成交量 > 20日均量 × 1.5倍（放量突破）
+- 法人：外資近5日累積買超 > 500張，投信方向相同
+- 動能：近5日漲幅 3%~15%（排除暴漲過熱）
+- 排除：近30日曾被處置/警示、成交量過小（日均量<100張）`
   },
   value:{
     name:'低估值布局',
-    prompt:`- 本益比(PE)低於同業平均，最好在15以下
-- 股價跌破年線或接近年線下方（超跌）
-- 近期外資由賣轉買或減少賣超
-- 基本面穩健：無虧損、負債比合理
-- 優先選擇傳產、金融、民生消費類股`
+    prompt:`【價值低估策略】
+- 估值：本益比(PE) < 12倍，或股價淨值比(PB) < 1倍
+- 基本面：近四季累計EPS > 0（獲利穩定），負債比 < 50%
+- 技術：股價在年線（240MA）附近±10%（非過熱階段）
+- 籌碼：外資近20日賣超減緩或轉為小幅買超
+- 優先：傳產、金融、公用事業，有持續配息記錄`
   },
   income:{
     name:'高殖利率防禦',
-    prompt:`- 預估殖利率>5%（高股息）
-- 近3年穩定配息，無減配紀錄
-- 股價波動度低（Beta < 0.8）
-- 法人持股穩定，無大量賣超
-- 優先選擇金融、電信、公用事業、傳產`
+    prompt:`【高股息防禦策略】
+- 殖利率：預估現金殖利率 > 5%，近3年均有配息
+- 穩定性：EPS近3年無虧損，配息率 40%~80%
+- 波動：Beta係數 < 0.8，股價在年線上方（趨勢不破壞）
+- 籌碼：外資或投信持股比例穩定，無連續大量賣超
+- 優先：電信、金融、傳產、REITs，排除高負債企業`
   },
   smallcap:{
-    name:'中小型成長股',
-    prompt:`- 市值500億元以下中小型股
-- 近四季EPS年增率>20%
-- 外資或投信最近開始建倉（籌碼集中）
-- 產業處於成長趨勢（AI、電動車、低軌衛星等新興題材）
-- 排除ETF、金融股、公用事業`
+    name:'中小型成長',
+    prompt:`【中小型成長策略】
+- 規模：市值 100億~500億之間（非大型股）
+- 成長：近四季EPS年增率 > 20%，營收年增率 > 15%
+- 籌碼：投信近20日持續買超（建倉跡象），外資方向相同
+- 題材：屬於AI邊緣運算、低軌衛星、電動車、軍工等成長產業
+- 排除：ETF、金融股、公用事業、市值<100億（流動性不足）`
   },
   ai_chain:{
     name:'AI供應鏈',
-    prompt:`- 主要受惠AI伺服器、HBM、CoWoS、散熱、電源等供應鏈
-- 近期有法人買超或外資增持
-- 股價未過度追高（5日漲幅<15%）
-- 包含：IC設計、封裝測試、PCB、散熱、機殼等相關族群
-- 優先選擇有實際出貨給Nvidia、AMD、AWS客戶的公司`
+    prompt:`【AI供應鏈策略】
+- 產業：直接受惠AI伺服器擴張（CoWoS封裝、HBM、GB200散熱、電源模組）
+- 客戶：有出貨Nvidia、AMD、Microsoft、Meta、AWS的台廠供應商
+- 法人：外資近10日累積買超，投信加碼（機構認可的基本面）
+- 估值：本益比相對同族群合理（非本益比>50的過度追高）
+- 技術：股價在20MA之上，未出現死亡交叉`
+  },
+
+  // ── 新增7個 ──────────────────────────────────────────
+  breakout:{
+    name:'突破起漲點',
+    prompt:`【突破起漲點策略】
+- 技術：股價突破近60日最高點（創新高），且突破當日成交量 > 均量2倍
+- 均線：5MA剛穿越20MA（黃金交叉後3日內）
+- 型態：突破前有5~20日橫盤整理（箱型整理後突破）
+- 法人：突破當週外資或投信開始買超（非散戶拉抬）
+- 排除：PE > 50、近月營收年減超過10%、有財務疑慮`
+  },
+  reversal:{
+    name:'超跌反彈',
+    prompt:`【超跌反彈策略】
+- 跌幅：近20日跌幅 > 15%，或距52週高點跌幅 > 30%
+- RSI：RSI(14) < 30（超賣區間），MACD出現底部背離
+- 基本面：最近一季EPS為正，非虧損個股
+- 籌碼：近5日外資賣超開始縮手或轉買，散戶籌碼偏低
+- 風險控制：股價在200元以上（流動性充足），日均量>500張`
+  },
+  institutional:{
+    name:'法人連續買超',
+    prompt:`【法人主導策略】
+- 外資：連續5個交易日以上買超，且累計買超 > 1,000張
+- 投信：同期間投信同向買超（外資投信雙買）
+- 自營商：不特別要求，但非連續大幅賣超
+- 籌碼集中：近20日大戶（400張以上）持股比例增加
+- 技術面：股價維持在20MA之上，不要求已突破但不破支撐`
+  },
+  high_growth:{
+    name:'高成長潛力',
+    prompt:`【高成長策略】
+- 營收：近三個月營收年增率 > 30%（加速成長）
+- EPS：最近兩季EPS均年增 > 25%，且無連續虧損
+- 毛利率：毛利率 > 30%，且較去年同期提升（競爭力增強）
+- 籌碼：外資持股比例上升，投信近3個月持續加碼
+- 產業：AI相關、半導體、生技創新、電動車關鍵零組件`
+  },
+  macro_hedge:{
+    name:'總經避險配置',
+    prompt:`【總經避險策略】
+- 當市場VIX偏高（>20）或全球不確定性升高時，選擇防禦性配置
+- 選股：高現金部位企業（現金/市值 > 15%）、低負債（D/E < 0.3）
+- 殖利率：現金殖利率 > 4%，具備配息緩衝
+- 產業：內需型（電信、民生消費、醫療）、出口匯率敏感性低
+- 法人：外資近30日持股穩定或小幅增加，非大量逃離`
+  },
+  semiconductor:{
+    name:'半導體週期',
+    prompt:`【半導體週期策略】
+- 產業定位：晶圓代工、IC設計、封測、設備、材料全供應鏈
+- 週期訊號：台積電法說樂觀、美系半導體ETF（SOXX）走強
+- 技術：股價突破前高或站上季線，外資連買5日以上
+- 基本面：最新季報毛利率>30%，庫存天數低於業界均值
+- 排除：純記憶體（DRAM/NAND，受制於韓廠競爭）、過度依賴中國市場`
   },
 };
 
