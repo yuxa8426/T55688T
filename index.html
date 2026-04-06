@@ -58,9 +58,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .chip.up{background:rgba(255,76,106,.1);color:var(--red);border-color:rgba(255,76,106,.3)}
 .chip.dn{background:rgba(0,212,170,.1);color:var(--green);border-color:rgba(0,212,170,.3)}
 .chip.nt{background:rgba(245,200,66,.1);color:var(--gold);border-color:rgba(245,200,66,.3)}
-.index-row{display:flex;gap:10px;padding:0 16px 14px;overflow-x:auto;scrollbar-width:none}
+.index-row{display:flex;gap:8px;padding:0 16px 14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}
 .index-row::-webkit-scrollbar{display:none}
-.idx{background:var(--surface);border-radius:12px;padding:12px 14px;min-width:100px;flex-shrink:0;border:1px solid var(--border)}
+.idx{background:var(--surface);border-radius:12px;padding:11px 13px;min-width:88px;flex-shrink:0;border:1px solid var(--border);text-align:center}
 .idx .n{font-size:11px;color:var(--text2);font-weight:600}
 .idx .v{font-size:16px;font-weight:700;margin:3px 0 2px}
 .idx .c{font-size:12px;font-weight:600}
@@ -396,64 +396,6 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       </div>
     </div>
   </div>
-
-  <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
-  <div class="index-row">
-    <div class="idx"><div class="n">加權指數</div><div class="v">20,847</div><div class="c up">+0.74%</div></div>
-    <div class="idx"><div class="n">S&amp;P 500</div><div class="v">5,693</div><div class="c dn">-0.21%</div></div>
-    <div class="idx"><div class="n">那斯達克</div><div class="v">18,124</div><div class="c dn">-0.35%</div></div>
-    <div class="idx"><div class="n">費城半導</div><div class="v">4,451</div><div class="c up">+1.12%</div></div>
-    <div class="idx"><div class="n">VIX</div><div class="v">18.42</div><div class="c dn">+7.2%</div></div>
-  </div>
-
-
-  <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
-  <div class="chart-card">
-    <div class="chart-top">
-      <div>
-        <h3 id="chartPrice">— <span class="up" style="font-size:14px">—</span></h3>
-        <p id="chartSub" style="font-size:12px;color:var(--text2)">台積電 · 2330.TW</p>
-        <div class="stock-trend-bar" id="stockTrendBar"></div>
-        <p id="fresh-quote" style="font-size:10px;color:var(--text3);margin-top:2px">—</p>
-        <div id="trendTip" style="display:none;font-size:10px;color:var(--text3);background:rgba(0,0,0,.6);border-radius:6px;padding:6px 8px;margin-top:4px;line-height:1.7;white-space:pre-wrap"></div>
-      </div>
-      <div class="tabs">
-        <button class="tab active" onclick="setTab(this,'1D')">1日</button>
-        <button class="tab" onclick="setTab(this,'1W')">1週</button>
-        <button class="tab" onclick="setTab(this,'1M')">月</button>
-        <button class="tab" onclick="setTab(this,'3M')">季</button>
-        <button class="tab" onclick="setTab(this,'6M')">半年</button>
-        <button class="tab" onclick="setTab(this,'1Y')">年</button>
-      </div>
-    </div>
-    <svg class="chart-area" id="chartSvg" viewBox="0 0 320 130" preserveAspectRatio="none"
-         onmousemove="chartHover(event)" onmouseleave="chartLeave()"
-         ontouchstart="chartTouchStart(event)" ontouchmove="chartTouch(event)" ontouchend="chartTouchEnd(event)"
-         style="touch-action:pan-y">
-      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4aa" stop-opacity=".3" id="cgStop"/><stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/></linearGradient></defs>
-      <path id="chartFill" fill="url(#cg)"/>
-      <path id="chartLine" fill="none" stroke="#00d4aa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-      <!-- crosshair -->
-      <line id="chartCross" x1="0" y1="0" x2="0" y2="130" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3" display="none"/>
-      <circle id="chartHoverDot" r="4" fill="white" stroke="#00d4aa" stroke-width="2" display="none"/>
-      <circle id="chartDot" r="5" fill="#00d4aa"/>
-    </svg>
-    <!-- 懸浮 tooltip（長按查價）-->
-    <div id="chartTooltip" style="display:none;position:absolute;background:rgba(14,14,22,.95);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5)">
-      <div style="font-size:14px;font-weight:800;color:var(--text);letter-spacing:.3px" id="ttPrice">—</div>
-      <div style="color:var(--text2);margin-top:2px" id="ttDate">—</div>
-      <div style="color:var(--text3);font-size:10px;margin-top:1px" id="ttChange">—</div>
-    </div>
-    <!-- 長按提示（首次使用）-->
-    <div id="chartLongPressHint" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text2);pointer-events:none;background:rgba(20,20,35,.8);padding:3px 8px;border-radius:10px;white-space:nowrap;animation:hintPulse 2s ease-in-out infinite">👆 長按查看價格</div>
-    <div class="chart-time" id="chartTime"><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span></div>
-    <div class="vol-sec">
-      <div class="vol-head"><span>📊 成交量</span><span id="stockVolText" class="up">38,472 張 · 均量 ×1.4</span></div>
-      <div class="vol-bars" id="volBars"></div>
-      <div class="vol-signal" id="volSignal">📊 <strong class="up">技術面參考</strong> — 投資決策請自行判斷，風險自負</div>
-    </div>
-  </div>
-
   <!-- ═══ 先行指標模組 ═══ -->
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <h2>🔭 先行指標</h2>
@@ -627,6 +569,64 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       <div class="li-analysis" id="marginAnalysis">
         <span class="purple">🤖 AI 解讀：</span>資料載入中…
       </div>
+    </div>
+  </div>
+
+
+  <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
+  <div class="index-row">
+    <div class="idx"><div class="n">加權指數</div><div class="v">20,847</div><div class="c up">+0.74%</div></div>
+    <div class="idx"><div class="n">S&amp;P 500</div><div class="v">5,693</div><div class="c dn">-0.21%</div></div>
+    <div class="idx"><div class="n">那斯達克</div><div class="v">18,124</div><div class="c dn">-0.35%</div></div>
+    <div class="idx"><div class="n">費城半導</div><div class="v">4,451</div><div class="c up">+1.12%</div></div>
+    <div class="idx"><div class="n">VIX</div><div class="v">18.42</div><div class="c dn">+7.2%</div></div>
+  </div>
+
+
+  <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
+  <div class="chart-card">
+    <div class="chart-top">
+      <div>
+        <h3 id="chartPrice">— <span class="up" style="font-size:14px">—</span></h3>
+        <p id="chartSub" style="font-size:12px;color:var(--text2)">台積電 · 2330.TW</p>
+        <div class="stock-trend-bar" id="stockTrendBar"></div>
+        <p id="fresh-quote" style="font-size:10px;color:var(--text3);margin-top:2px">—</p>
+        <div id="trendTip" style="display:none;font-size:10px;color:var(--text3);background:rgba(0,0,0,.6);border-radius:6px;padding:6px 8px;margin-top:4px;line-height:1.7;white-space:pre-wrap"></div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" onclick="setTab(this,'1D')">1日</button>
+        <button class="tab" onclick="setTab(this,'1W')">1週</button>
+        <button class="tab" onclick="setTab(this,'1M')">月</button>
+        <button class="tab" onclick="setTab(this,'3M')">季</button>
+        <button class="tab" onclick="setTab(this,'6M')">半年</button>
+        <button class="tab" onclick="setTab(this,'1Y')">年</button>
+      </div>
+    </div>
+    <svg class="chart-area" id="chartSvg" viewBox="0 0 320 130" preserveAspectRatio="none"
+         onmousemove="chartHover(event)" onmouseleave="chartLeave()"
+         ontouchstart="chartTouchStart(event)" ontouchmove="chartTouch(event)" ontouchend="chartTouchEnd(event)"
+         style="touch-action:pan-y">
+      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4aa" stop-opacity=".3" id="cgStop"/><stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/></linearGradient></defs>
+      <path id="chartFill" fill="url(#cg)"/>
+      <path id="chartLine" fill="none" stroke="#00d4aa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <!-- crosshair -->
+      <line id="chartCross" x1="0" y1="0" x2="0" y2="130" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3,3" display="none"/>
+      <circle id="chartHoverDot" r="4" fill="white" stroke="#00d4aa" stroke-width="2" display="none"/>
+      <circle id="chartDot" r="5" fill="#00d4aa"/>
+    </svg>
+    <!-- 懸浮 tooltip（長按查價）-->
+    <div id="chartTooltip" style="display:none;position:absolute;background:rgba(14,14,22,.95);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+      <div style="font-size:14px;font-weight:800;color:var(--text);letter-spacing:.3px" id="ttPrice">—</div>
+      <div style="color:var(--text2);margin-top:2px" id="ttDate">—</div>
+      <div style="color:var(--text3);font-size:10px;margin-top:1px" id="ttChange">—</div>
+    </div>
+    <!-- 長按提示（首次使用）-->
+    <div id="chartLongPressHint" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text2);pointer-events:none;background:rgba(20,20,35,.8);padding:3px 8px;border-radius:10px;white-space:nowrap;animation:hintPulse 2s ease-in-out infinite">👆 長按查看價格</div>
+    <div class="chart-time" id="chartTime"><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span></div>
+    <div class="vol-sec">
+      <div class="vol-head"><span>📊 成交量</span><span id="stockVolText" class="up">38,472 張 · 均量 ×1.4</span></div>
+      <div class="vol-bars" id="volBars"></div>
+      <div class="vol-signal" id="volSignal">📊 <strong class="up">技術面參考</strong> — 投資決策請自行判斷，風險自負</div>
     </div>
   </div>
 
@@ -6700,7 +6700,7 @@ async function refreshTrendStocks(manual=false){
 
   // 排序取前8名
   results.sort((a,b)=>b.score-a.score);
-  const top8 = results.slice(0,8);
+  const top8 = results.slice(0,5); // 只顯示前5支
 
   _trendCache = top8;
   _trendCacheTime = Date.now();
