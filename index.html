@@ -3,7 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>股析 · StockAI</title>
+<title>股析 StockAI · 台股 AI 智能分析</title>
+<meta name="description" content="結合 AI 與真實市場數據的台股分析平台。智能選股、法人籌碼、策略回測、趨勢股排行，讓你的投資決策更有依據。">
+
+<!-- Open Graph（LINE / Facebook / 通訊軟體預覽）-->
+<meta property="og:type"        content="website">
+<meta property="og:url"         content="https://t55688t.pages.dev/">
+<meta property="og:title"       content="股析 StockAI · 台股 AI 智能分析">
+<meta property="og:description" content="結合 AI 與真實市場數據的台股分析平台。智能選股、法人籌碼、策略回測、趨勢股排行，讓你的投資決策更有依據。">
+<meta property="og:image"       content="https://t55688t.pages.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale"      content="zh_TW">
+<meta property="og:site_name"   content="股析 StockAI">
+
+<!-- Twitter Card -->
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:title"       content="股析 StockAI · 台股 AI 智能分析">
+<meta name="twitter:description" content="結合 AI 與真實市場數據的台股分析平台。智能選股、法人籌碼、策略回測、趨勢股排行。">
+<meta name="twitter:image"       content="https://t55688t.pages.dev/og-image.png">
+
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -352,7 +371,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <div style="margin-top:6px;display:flex;gap:4px" id="battleBannerBars"></div>
   </div>
   <div class="header">
-    <div><h1>股析</h1><p id="hdr-sub">2025年3月5日 · 台灣大盤 ▲0.74%</p></div>
+    <div><h1>股析</h1><p id="hdr-sub">載入中…</p></div>
     <div class="avatar" id="headerAvatar">股</div>
   </div>
   <!-- 常駐免責聲明 -->
@@ -2229,11 +2248,63 @@ const NAME_MAP = {
   '00878':'國泰永續高股息','00929':'復華台灣科技優息',
   '00713':'元大台灣高息低波','006208':'富邦台灣50',
   '00631L':'元大台灣50正2','00632R':'元大台灣50反1',
+  // 補充：POOL 中常出現但原本缺少的股票
+  '2301':'光寶科','9910':'豐泰','2344':'華邦電','2616':'山隆','2707':'晶華',
+  '2351':'順德工業','3406':'玉晶光','3295':'同欣電','4977':'天鈺',
+  '3047':'訊舟','3260':'威剛','2353':'宏碁','2313':'華通',
+  '2354':'鴻準','5347':'世界先進','4915':'致伸','3406':'玉晶光',
+  '3533':'嘉澤','4904':'遠傳','2006':'東和鋼鐵','2015':'豐興',
+  '2027':'大成鋼','1308':'亞聚','1305':'華夏','6257':'松翰',
+  '3706':'神達','5210':'大中','2606':'裕民','1402':'遠東新',
+  '2915':'潤泰全','6547':'高端疫苗','4763':'材料-KY',
+  '2723':'美食-KY','2801':'彰銀','2637':'慧洋-KY',
+  '3017':'奇鋐','5364':'力致','3033':'威健','2399':'映泰',
+  '2332':'友訊','2458':'義隆','2404':'漢唐','4967':'十銓',
+  '3673':'TPK宸鴻','2492':'華新科','2474':'可成','2059':'川湖',
+  '4955':'佰研','3443':'創意','6285':'界霖',
 };
 const SECTOR_MAP = {
-  '2330':'半導體','2454':'IC設計','2317':'電子製造','2412':'電信',
-  '2308':'電子零組件','2382':'電子製造','2303':'半導體','2002':'鋼鐵',
-  '2886':'金融','2891':'金融','0050':'ETF','0056':'ETF',
+  // 半導體
+  '2330':'半導體','2303':'半導體','6770':'半導體','2344':'半導體',
+  '5347':'半導體','3711':'半導體','3034':'IC設計','2351':'電子零組件',
+  // IC設計
+  '2454':'IC設計','2379':'IC設計','3661':'IC設計','2449':'IC設計',
+  '4915':'IC設計','3406':'IC設計','3295':'IC設計','4977':'IC設計',
+  '2404':'IC設計','2458':'IC設計','6415':'IC設計','4966':'IC設計',
+  // AI伺服器/雲端
+  '2382':'AI伺服器','3231':'AI伺服器','6669':'AI伺服器','2376':'AI伺服器',
+  '3017':'散熱','5364':'電源',
+  // 電子製造/零組件
+  '2317':'電子製造','2308':'電子零組件','2357':'電子製造','2301':'電子製造',
+  '2353':'電子製造','2313':'PCB','2354':'電子製造','4938':'電子製造',
+  '3037':'PCB','3533':'連接器','2399':'主機板','2474':'機殼',
+  // 網通/電信
+  '2345':'網通','2412':'電信','4904':'電信','3706':'網通',
+  '3260':'記憶體模組','6257':'IC','2332':'網通','3047':'網通',
+  // 金融
+  '2881':'金融','2882':'金融','2884':'金融','2886':'金融',
+  '2880':'金融','2891':'金融','2892':'金融','2883':'金融',
+  '2887':'金融','5880':'金融','2885':'金融','2890':'金融',
+  '2888':'金融','2801':'金融',
+  // 航運
+  '2609':'航運','2603':'航運','2618':'航空','2615':'航運',
+  '5608':'航運','2637':'航運','2606':'航運','2601':'航運',
+  // 石化/鋼鐵/傳產
+  '1301':'石化','1303':'石化','2002':'鋼鐵','1326':'石化',
+  '2006':'鋼鐵','1305':'石化','1308':'石化','2015':'鋼鐵',
+  '2027':'鋼鐵','1402':'紡織',
+  // 消費/零售/生技
+  '9910':'消費','2723':'消費','1216':'食品','2912':'零售',
+  '4763':'生技','2915':'零售','6547':'生技','4174':'生技',
+  // 光學/工控/其他
+  '3008':'光學','2395':'工業電腦','3673':'觸控','2492':'被動元件',
+  '2059':'伺服器機構','4955':'醫療','3443':'IC設計','6285':'PCB',
+  '2049':'機械','1590':'工業自動化',
+  // 消費/其他
+  '2616':'航運','2207':'汽車','5210':'航運','2707':'觀光飯店','6505':'石化',
+  // ETF
+  '0050':'ETF','0056':'ETF','00631L':'ETF','00632R':'ETF',
+  '00878':'ETF','00929':'ETF',
 };
 
 // ── 靜態備援數據（API 失敗時使用）────────────────────
@@ -6629,14 +6700,21 @@ async function refreshTrendStocks(manual=false){
       const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/trend', 8000);
       if(r.ok){
         const kv = await r.json();
-        if(kv.items && kv.items.length >= 5){
+        if(kv.items && kv.items.length >= 3){
           const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
-          const mapped = kv.items.map(item=>({
-            id: item.id, name: DB[item.id]?.name||item.id, sector: DB[item.id]?.sector||'—',
-            score: item.score, changePct: item.ret1||0, price: item.close||null,
-            signals: [item.instNet>0?'foreign':null, (item.ret1||0)>2?'breakout':null].filter(Boolean),
+          const mapped = kv.items.slice(0,5).map(item=>({
+            id:        item.id,
+            name:      DB[item.id]?.name || NAME_MAP[item.id] || item.id,
+            sector:    DB[item.id]?.sector || SECTOR_MAP[item.id] || '—',
+            score:     item.score,
+            changePct: item.ret1||0,
+            price:     item.close||null,
+            signals:   [item.instNet>0?'foreign':null,(item.ret1||0)>2?'breakout':null].filter(Boolean),
+            inst5:     item.instNet||0, gain5:'0', volRatio:'1',
+            isBreakout:false, ma5:null, ma20:null,
           }));
           _trendCache = mapped; _trendCacheTime = Date.now();
+          console.log('[Trend] KV:', mapped.length, 'stocks, top:', mapped[0]?.id);
           renderTrendList(mapped); return;
         }
       }
@@ -6748,8 +6826,8 @@ function renderTrendList(stocks){
       <div style="width:20px;font-size:12px;font-weight:800;color:${i<3?'var(--gold)':'var(--text3)'};text-align:center">${i<3?['🥇','🥈','🥉'][i]:i+1}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span class="rank-nm">${s.name}</span>
-          <span style="font-size:10px;color:var(--text3)">${s.id} · ${s.sector}</span>
+          <span class="rank-nm">${NAME_MAP[s.id]||s.name||s.id}</span>
+          <span style="font-size:10px;color:var(--text3)">${s.id}${(SECTOR_MAP[s.id]||s.sector)&&(SECTOR_MAP[s.id]||s.sector)!=='—'?' · '+(SECTOR_MAP[s.id]||s.sector):''}</span>
         </div>
         <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${tags}</div>
         <div style="font-size:9px;color:var(--text3);margin-top:3px">${basisStr}</div>
