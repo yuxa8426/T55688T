@@ -1272,6 +1272,28 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       </div>
     </div>
 
+    <!-- 分類 Tab -->
+    <div id="intlNewsTabs" style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
+      <button onclick="setIntlFilter('all',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--purple);background:rgba(124,92,252,.15);color:var(--purple);cursor:pointer;font-family:inherit;font-weight:700;white-space:nowrap">全部</button>
+      <button onclick="setIntlFilter('macro',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🏦 總經</button>
+      <button onclick="setIntlFilter('rates',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📉 利率</button>
+      <button onclick="setIntlFilter('tech',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">💻 科技</button>
+      <button onclick="setIntlFilter('semi',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🔬 半導體</button>
+      <button onclick="setIntlFilter('trade',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">🌏 貿易</button>
+      <button onclick="setIntlFilter('energy',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">⚡ 能源</button>
+      <button onclick="setIntlFilter('crypto',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">₿ 加密</button>
+      <button onclick="setIntlFilter('market',this)" class="intl-tab"
+        style="flex-shrink:0;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text3);cursor:pointer;font-family:inherit;white-space:nowrap">📊 市場</button>
+    </div>
+
     <!-- AI 市場簡報 + 新聞列表（合一） -->
     <div id="intlNewsList" style="margin-bottom:16px">
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">載入中…</div>
@@ -8461,10 +8483,27 @@ let _intlNewsData = null;
 
 // 渲染新聞列表
 // 渲染國際財經：AI 簡報摺疊 + 折疊新聞卡片
-const CAT_MAP = {macro:'🏦 總經',tech:'💻 科技',trade:'🌏 貿易',market:'📊 市場',energy:'⚡ 能源'};
+const CAT_MAP = {
+  macro:'🏦 總經', rates:'📉 利率', tech:'💻 科技', semi:'🔬 半導體',
+  trade:'🌏 貿易', energy:'⚡ 能源', crypto:'₿ 加密', market:'📊 市場'
+};
 const DIR_INFO = {bull:['🔴','利多','var(--red)'],bear:['🟢','利空','var(--green)'],neutral:['⬜','中性','var(--text3)']};
 const IMP_INFO = {high:['●','重大','var(--red)'],mid:['●','中度','var(--gold)'],low:['●','輕微','var(--text3)']};
 const _newsExpanded = new Set();
+let _intlFilter = 'all'; // 目前篩選分類
+
+function setIntlFilter(cat, btn){
+  _intlFilter = cat;
+  document.querySelectorAll('.intl-tab').forEach(b=>{
+    b.style.background='none'; b.style.color='var(--text3)';
+    b.style.borderColor='var(--border)'; b.style.fontWeight='normal';
+  });
+  if(btn){
+    btn.style.background='rgba(124,92,252,.15)'; btn.style.color='var(--purple)';
+    btn.style.borderColor='var(--purple)'; btn.style.fontWeight='700';
+  }
+  if(_intlNewsData) _renderIntlNews(_intlNewsData);
+}
 
 function toggleNews(id){
   _newsExpanded.has(id)?_newsExpanded.delete(id):_newsExpanded.add(id);
@@ -8475,16 +8514,17 @@ function _renderIntlNews(data){
   const el = document.getElementById('intlNewsList');
   if(!el||!data) return;
 
-  // 最多顯示 3 則，優先取影響程度高的
   const impRank = {high:0,mid:1,low:2};
-  const items = (data.items||[])
-    .sort((a,b)=>(impRank[a.impact]??2)-(impRank[b.impact]??2))
-    .slice(0,3);
+  // 篩選分類 + 排序 + 最多5則
+  const allItems = (data.items||[]).sort((a,b)=>(impRank[a.impact]??2)-(impRank[b.impact]??2));
+  const items = _intlFilter==='all'
+    ? allItems.slice(0,5)
+    : allItems.filter(n=>n.category===_intlFilter).slice(0,5);
   const summary = data.summary||'';
   const tags    = data.tags||[];
 
-  // ── AI 簡報（折疊，預設展開）────────────────────────────
-  const aiBlock = summary ? `
+  // ── AI 簡報（折疊，預設展開，僅全部分類顯示）──────────
+  const aiBlock = (summary && _intlFilter==='all') ? `
     <div style="margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid rgba(124,92,252,.25)">
       <div onclick="var b=this.nextElementSibling,a=this.querySelector('.ai-arrow');b.style.display=b.style.display==='none'?'block':'none';a.style.transform=b.style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
         style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(124,92,252,.08);cursor:pointer">
@@ -8498,17 +8538,21 @@ function _renderIntlNews(data){
       <div style="padding:8px 12px;font-size:12px;color:var(--text2);line-height:1.65">${colorSentiment(summary)}</div>
     </div>` : '';
 
-  // ── 3 則新聞折疊卡片 ─────────────────────────────────────
-  const newsHtml = items.map((n,i)=>{
+  // ── 新聞折疊卡片（含原文連結）──────────────────────────
+  const newsHtml = items.length ? items.map((n,i)=>{
     const id  = 'news_'+i;
     const exp = _newsExpanded.has(id);
     const [dIcon,dLabel,dColor] = DIR_INFO[n.direction]||DIR_INFO.neutral;
     const [,,iColor] = IMP_INFO[n.impact]||IMP_INFO.low;
-    const meta = [CAT_MAP[n.category], n.source].filter(Boolean).join(' · ');
+    const catLabel = CAT_MAP[n.category]||n.category||'';
+    const src      = n.source||'';
 
     const body = exp ? `<div style="padding:0 12px 10px;border-top:1px solid var(--border)">
       ${n.impact_tw?'<div style="font-size:11px;margin-top:8px;padding:5px 8px;background:rgba(124,92,252,.06);border-left:2px solid var(--purple);border-radius:4px;color:var(--text2);line-height:1.5">📌 '+colorSentiment(n.impact_tw)+'</div>':''}
       ${n.related_sectors?.length?'<div style="display:flex;gap:4px;margin-top:7px;flex-wrap:wrap">'+n.related_sectors.map(s=>'<span style="font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(255,76,106,.08);color:var(--red)">'+s+'</span>').join('')+'</div>':''}
+      ${n.link?`<a href="${n.link}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
+        style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;color:var(--purple);text-decoration:none;border:1px solid rgba(124,92,252,.3);border-radius:6px;padding:4px 10px">
+        🔗 前往原文（${src}）</a>`:''}
     </div>` : '';
 
     return `<div style="background:var(--card);border:1px solid ${exp?dColor+'55':'var(--border)'};border-radius:10px;margin-bottom:6px;overflow:hidden">
@@ -8516,7 +8560,7 @@ function _renderIntlNews(data){
         <span style="font-size:13px;flex-shrink:0;color:${dColor}">${dIcon}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">${n.title}</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:3px">${meta}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px">${catLabel}${src?' · '+src:''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:9px;color:${dColor};font-weight:600">${dLabel}</div>
@@ -8525,7 +8569,8 @@ function _renderIntlNews(data){
         <span style="color:var(--text3);font-size:12px;margin-left:4px;transform:rotate(${exp?180:0}deg);transition:transform .2s">▾</span>
       </div>${body}
     </div>`;
-  }).join('');
+  }).join('')
+  : '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">此分類暫無新聞，請選擇其他類別</div>';
 
   // 時間戳
   const timeEl = document.getElementById('intlNewsTime');
@@ -8534,7 +8579,7 @@ function _renderIntlNews(data){
     timeEl.textContent = age<60?age+'分鐘前':Math.floor(age/60)+'小時前';
   }
 
-  el.innerHTML = (aiBlock||'') + (newsHtml||'<div style="padding:20px;text-align:center;color:var(--text3)">暫無新聞</div>');
+  el.innerHTML = (aiBlock||'') + newsHtml;
 }
 
 // 主函式：載入國際財經新聞（AI 只呼叫一次：在 Worker /news 內）
