@@ -11182,25 +11182,31 @@ function _urlB64ToUint8Array(base64String){
 async function initPushUI(){
   const btn      = document.getElementById('pushToggleBtn');
   const statusEl = document.getElementById('pushStatusText');
-  const listEl   = document.getElementById('pushItemsList');
   if(!btn) return;
 
-  // 檢查瀏覽器支援
+  // 不支援
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    if(statusEl) statusEl.textContent = '此瀏覽器不支援推播通知';
-    btn.textContent = '不支援';
-    btn.disabled = true;
+    if(statusEl) statusEl.textContent = '此瀏覽器不支援推播（請用 Chrome / Safari 17+）';
+    btn.textContent = '不支援'; btn.disabled = true;
     return;
   }
 
-  // 取得目前訂閱狀態
+  // 用 timeout 避免 serviceWorker.ready 永遠 pending
   try{
-    const reg  = await navigator.serviceWorker.ready;
-    const sub  = await reg.pushManager.getSubscription();
+    const reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('SW timeout')),4000)),
+    ]);
+    const sub = await reg.pushManager.getSubscription();
     _updatePushUI(!!sub);
   }catch(e){
-    if(statusEl) statusEl.textContent = '推播狀態載入失敗';
-    btn.textContent = '重試';
+    console.warn('[Push init]', e.message);
+    // SW 未就緒，仍讓按鈕可用（點擊時再等待）
+    if(statusEl) statusEl.textContent = '點擊開啟，接收策略驗證、法人異動等提醒';
+    if(btn){ btn.textContent='開啟通知'; btn.disabled=false;
+      btn.style.background='rgba(0,212,170,.1)';
+      btn.style.color='var(--green)';
+      btn.style.borderColor='rgba(0,212,170,.4)'; }
   }
 }
 
