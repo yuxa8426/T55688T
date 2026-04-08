@@ -1772,7 +1772,58 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     </div>
     <span style="color:var(--text3);font-size:18px">›</span>
   </div>
-  <div class="pref-item" onclick="showToast('通知設定開發中')"><div class="pref-icon" style="background:rgba(0,212,170,.12)">🔔</div><div><div class="pref-t">通知設定</div><div class="pref-s">價格警報、法人動向</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
+  <!-- 推播通知設定 -->
+  <div style="margin:0 16px 10px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:36px;height:36px;border-radius:10px;background:rgba(0,212,170,.12);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔔</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">推播通知</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px" id="pushStatusText">載入中…</div>
+        </div>
+        <div id="pushToggleWrap">
+          <button id="pushToggleBtn" onclick="togglePushSubscription()"
+            style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit;font-weight:600;transition:all .2s">
+            載入中
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- 通知項目清單 -->
+    <div id="pushItemsList" style="display:none">
+      <div style="padding:10px 16px 4px;font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.5px">已啟用項目</div>
+      <div style="padding:0 16px 10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">📋 策略驗證到期</div>
+            <div style="font-size:10px;color:var(--text3)">每日 09:05，有回測到期時通知</div>
+          </div>
+          <span style="font-size:10px;color:var(--green);font-weight:600">✅ 已開啟</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">⚡ 自選股異動 ±5%</div>
+            <div style="font-size:10px;color:var(--text3)">盤中每小時偵測，超過閾值立即推播</div>
+          </div>
+          <span style="font-size:10px;color:var(--green);font-weight:600">✅ 已開啟</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">🚨 VIX 恐慌突破</div>
+            <div style="font-size:10px;color:var(--text3)">VIX 單日漲幅 >15% 立即通知</div>
+          </div>
+          <span style="font-size:10px;color:var(--green);font-weight:600">✅ 已開啟</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">🏦 法人大量買超</div>
+            <div style="font-size:10px;color:var(--text3)">外資單日買超 >5000 張，盤後 16:00</div>
+          </div>
+          <span style="font-size:10px;color:var(--green);font-weight:600">✅ 已開啟</span>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="pref-item" onclick="clearAllData()"><div class="pref-icon" style="background:rgba(255,76,106,.12)">🗑️</div><div><div class="pref-t">清除所有資料</div><div class="pref-s">自選股、投組、設定</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <div class="pref-item" onclick="showToast('股析 StockAI v2.0 · FinMind 真實資料')"><div class="pref-icon" style="background:rgba(245,200,66,.12)">📡</div><div><div class="pref-t">數據來源</div><div class="pref-s">FinMind · TWSE · 每日更新</div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">›</span></div>
   <!-- API 配額儀表板 -->
@@ -2361,6 +2412,7 @@ function switchPage(n){
     autoCheckBacktest();
   },50);
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
+  if(n==='profile') setTimeout(()=>initPushUI(),100);
   if(n==='explore'){
     const unloaded = Object.keys(SECTORS).filter(k=>!_sectorPreviewCache[k]);
     if(unloaded.length > 0){
@@ -2498,8 +2550,13 @@ function startFreshnessTicker(){
 
 // ── 自動重新整理（每5分鐘重抓當前股票，盤中每1分鐘）────
 let _autoRefreshTimer = null;
+let _wlAlertTimer = null;
 function scheduleAutoRefresh(){
   clearTimeout(_autoRefreshTimer);
+  // 盤中時每小時自選股推播監測（只啟動一次）
+  if(!_wlAlertTimer && _isTradingSession()){
+    _wlAlertTimer = setInterval(()=>{ if(_isTradingSession()) checkWatchlistAlerts(); }, 60*60*1000);
+  }
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const totalMin = now.getHours()*60 + now.getMinutes();
   const isWeekend= now.getDay()===0||now.getDay()===6;
@@ -5113,6 +5170,8 @@ async function loadVix(manual=false){
 }
 
 function _applyVix(vix, chg, date, hist, src){
+  // 推播監測（靜默執行）
+  checkVixPushAlert({vix, chg}).catch(()=>{});
   saveVixCache(vix, chg, date, hist, src); // 成功時存快取
   renderVix(vix, chg, date, hist, src);
   markFresh('vix');
@@ -11106,6 +11165,223 @@ function iosBanner(){
 // ════════════════════════════════════════════════════
 // 初始化
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// Web Push 推播通知系統
+// ════════════════════════════════════════════════════
+const VAPID_PUBLIC_KEY = 'BPuAwQ8xvE6qfyvZbXIXetmk4j5bdXcfgpyRtKGLFhY-onOug3MfL9aqLoyEUP4U8ZcS0YzQdNiVx7awK8IgBZg';
+
+// base64url → Uint8Array（VAPID 公鑰轉換）
+function _urlB64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw     = window.atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+// 初始化推播 UI（頁面載入後呼叫）
+async function initPushUI(){
+  const btn      = document.getElementById('pushToggleBtn');
+  const statusEl = document.getElementById('pushStatusText');
+  const listEl   = document.getElementById('pushItemsList');
+  if(!btn) return;
+
+  // 檢查瀏覽器支援
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    if(statusEl) statusEl.textContent = '此瀏覽器不支援推播通知';
+    btn.textContent = '不支援';
+    btn.disabled = true;
+    return;
+  }
+
+  // 取得目前訂閱狀態
+  try{
+    const reg  = await navigator.serviceWorker.ready;
+    const sub  = await reg.pushManager.getSubscription();
+    _updatePushUI(!!sub);
+  }catch(e){
+    if(statusEl) statusEl.textContent = '推播狀態載入失敗';
+    btn.textContent = '重試';
+  }
+}
+
+function _updatePushUI(isSubscribed){
+  const btn      = document.getElementById('pushToggleBtn');
+  const statusEl = document.getElementById('pushStatusText');
+  const listEl   = document.getElementById('pushItemsList');
+
+  if(isSubscribed){
+    if(btn){
+      btn.textContent    = '關閉通知';
+      btn.style.background   = 'rgba(255,76,106,.1)';
+      btn.style.color        = 'var(--red)';
+      btn.style.borderColor  = 'rgba(255,76,106,.4)';
+    }
+    if(statusEl) statusEl.textContent = '✅ 推播已啟用 · 4 項通知進行中';
+    if(listEl)   listEl.style.display = 'block';
+  } else {
+    if(btn){
+      btn.textContent    = '開啟通知';
+      btn.style.background   = 'rgba(0,212,170,.1)';
+      btn.style.color        = 'var(--green)';
+      btn.style.borderColor  = 'rgba(0,212,170,.4)';
+    }
+    if(statusEl) statusEl.textContent = '點擊開啟，接收策略驗證、法人異動等提醒';
+    if(listEl)   listEl.style.display = 'none';
+  }
+}
+
+// 訂閱 / 取消訂閱切換
+async function togglePushSubscription(){
+  const btn = document.getElementById('pushToggleBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '處理中…'; }
+
+  try{
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+      showToast('⚠️ 此瀏覽器不支援推播通知'); return;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+
+    if(existing){
+      // 取消訂閱
+      await existing.unsubscribe();
+      if(API) await fetch(API.replace(/\/$/,'')+'/push/unsubscribe', {
+        method: 'DELETE',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ uid: getUID() }),
+      }).catch(()=>{});
+      _updatePushUI(false);
+      showToast('🔕 推播通知已關閉');
+    } else {
+      // 請求權限
+      const permission = await Notification.requestPermission();
+      if(permission !== 'granted'){
+        showToast('❌ 請在瀏覽器設定中允許通知權限');
+        _updatePushUI(false); return;
+      }
+
+      // 訂閱
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: _urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+
+      // 傳送訂閱到 Worker KV
+      if(API){
+        const res = await fetch(API.replace(/\/$/,'')+'/push/subscribe', {
+          method:  'POST',
+          headers: { 'Content-Type':'application/json' },
+          body:    JSON.stringify({ uid: getUID(), subscription: sub.toJSON() }),
+        });
+        if(!res.ok) throw new Error('儲存訂閱失敗 HTTP '+res.status);
+      }
+
+      _updatePushUI(true);
+      showToast('✅ 推播通知已開啟！策略到期、法人異動將即時通知');
+
+      // 發送歡迎測試通知
+      setTimeout(()=>_sendTestNotification(), 1500);
+    }
+  }catch(e){
+    console.error('[Push]', e);
+    showToast('❌ 推播設定失敗：'+e.message);
+    // 還原 UI
+    const reg = await navigator.serviceWorker.ready.catch(()=>null);
+    if(reg){
+      const sub = await reg.pushManager.getSubscription().catch(()=>null);
+      _updatePushUI(!!sub);
+    }
+  }finally{
+    const btn2 = document.getElementById('pushToggleBtn');
+    if(btn2) btn2.disabled = false;
+  }
+}
+
+// 測試通知（訂閱成功後發送）
+async function _sendTestNotification(){
+  if(!API) return;
+  try{
+    await fetch(API.replace(/\/$/,'')+'/push/send?secret=stockai-push-2026', {
+      method:  'POST',
+      headers: { 'Content-Type':'application/json' },
+      body:    JSON.stringify({
+        uid:     getUID(),
+        title:   '🎉 股析推播已啟用！',
+        message: '策略驗證到期、VIX 突破、法人大量買超等重要事件將即時通知你',
+        type:    'default',
+        pushUrl: '/',
+      }),
+    });
+  }catch(e){ console.warn('[Push test]', e.message); }
+}
+
+// P1：盤中偵測自選股異動 ±5%（每小時呼叫一次）
+async function checkWatchlistAlerts(){
+  const wl = getMyWL();
+  if(!wl.length || !API) return;
+
+  // 檢查是否已訂閱推播
+  const reg = await navigator.serviceWorker.ready.catch(()=>null);
+  if(!reg) return;
+  const sub = await reg.pushManager.getSubscription().catch(()=>null);
+  if(!sub) return;
+
+  for(const stock of wl.slice(0,10)){ // 最多檢查10支
+    try{
+      const data = await fmQuote(stock.id).catch(()=>null);
+      if(!data) continue;
+      const chg = Math.abs(data.changePct||0);
+      if(chg >= 5){
+        const dir = (data.changePct||0) >= 0 ? '大漲' : '大跌';
+        await fetch(API.replace(/\/$/,'')+'/push/send?secret=stockai-push-2026', {
+          method:  'POST',
+          headers: { 'Content-Type':'application/json' },
+          body:    JSON.stringify({
+            uid:     getUID(),
+            title:   `⚡ ${stock.name} ${dir} ${Math.abs(data.changePct).toFixed(1)}%`,
+            message: `現價 ${data.price}，觸發 ±5% 警戒線，點擊查看詳情`,
+            type:    'alert',
+            pushUrl: '/',
+          }),
+        }).catch(()=>{});
+        console.log('[PushAlert]', stock.name, data.changePct);
+        break; // 一次最多推一支，避免洗版
+      }
+    }catch(e){}
+  }
+}
+
+// P1：VIX 突破監測（由 refreshPulse 後呼叫）
+async function checkVixPushAlert(vixData){
+  if(!vixData || !API) return;
+  const reg = await navigator.serviceWorker.ready.catch(()=>null);
+  if(!reg) return;
+  const sub = await reg.pushManager.getSubscription().catch(()=>null);
+  if(!sub) return;
+
+  const pct = parseFloat(vixData.chg||0);
+  if(pct >= 15){
+    // 防重複：同一天只推一次
+    const today = todayStr();
+    const lastKey = 'stockai_vix_push_'+today;
+    if(localStorage.getItem(lastKey)) return;
+    localStorage.setItem(lastKey,'1');
+
+    await fetch(API.replace(/\/$/,'')+'/push/send?secret=stockai-push-2026', {
+      method:  'POST',
+      headers: { 'Content-Type':'application/json' },
+      body:    JSON.stringify({
+        uid:     getUID(),
+        title:   `🚨 VIX 恐慌指數暴衝 +${pct.toFixed(1)}%`,
+        message: `VIX 當前 ${vixData.vix?.toFixed(1)}，市場恐慌升溫，建議降低倉位或加強風控`,
+        type:    'vix',
+        pushUrl: '/',
+      }),
+    }).catch(()=>{});
+  }
+}
+
 // ── AI 假串流（逐字顯示，改善等待體驗）─────────────────
 // 用法：await typewriterEl(el, htmlStr, speedMs)
 function typewriterEl(el, html, speed=12){
@@ -11163,8 +11439,10 @@ window.addEventListener('load', async ()=>{
   initOnboarding();
   // 恢復主題按鈕狀態
   setTheme(localStorage.getItem('stockai_theme')||'dark');
-  // 帳號 UI 初始化（先渲染已有的帳號狀態）
+  // 帳號 UI 初始化
   renderAccountUI();
+  // 推播 UI 初始化
+  initPushUI();
 
   // ── 即時時鐘 + 新鮮度計時器（第一優先）
   startClock();
