@@ -70,6 +70,45 @@
 [data-theme="light"] .rank-row:hover{
   background:rgba(0,0,0,.03);
 }
+/* 亮色模式：把 rgba(0,0,0,.x) 背景改為淺灰 */
+[data-theme="light"] [style*="rgba(0,0,0,.2)"],
+[data-theme="light"] [style*="rgba(0,0,0, .2)"] {
+  background:rgba(0,0,0,.04) !important;
+}
+/* rgba(255,255,255,.x) 在亮色下要反轉 */
+[data-theme="light"] .bar-track{background:rgba(0,0,0,.08) !important}
+[data-theme="light"] .conc-track{background:rgba(0,0,0,.08) !important}
+[data-theme="light"] .sstock-card{border-bottom-color:rgba(0,0,0,.07) !important}
+[data-theme="light"] .sstock-card:active{background:rgba(0,0,0,.04) !important}
+/* 法人長條圖背景 */
+[data-theme="light"] #chipForeignBars,
+[data-theme="light"] #chipTrustBars{background:rgba(0,0,0,.05) !important}
+/* AI 分析面板背景 */
+[data-theme="light"] #panel-short [style*="rgba(0,0,0"],
+[data-theme="light"] #panel-mid   [style*="rgba(0,0,0"],
+[data-theme="light"] #panel-long  [style*="rgba(0,0,0"]{
+  background:var(--surface) !important;
+}
+/* periodTabs 背景 */
+[data-theme="light"] #periodTabs{background:rgba(0,0,0,.06) !important}
+/* 深色 tooltip */
+[data-theme="light"] #chartTooltip{background:rgba(255,255,255,.97) !important;border-color:rgba(0,0,0,.12) !important}
+[data-theme="light"] #trendTip{background:rgba(0,0,0,.08) !important}
+[data-theme="light"] #chartLongPressHint{background:rgba(0,0,0,.1) !important;color:var(--text2) !important}
+/* pulse 底部 meta 分隔線 */
+[data-theme="light"] #pulseMeta > div{border-color:rgba(0,0,0,.08) !important}
+/* 深度分析結果卡 */
+[data-theme="light"] #deepModuleResult{background:rgba(0,0,0,.03) !important}
+/* 操作建議三格（近月支撐/壓力/參考價）*/
+[data-theme="light"] #aiActionBox [style*="rgba(0,0,0,.2)"]{background:var(--surface) !important}
+/* 法人籌碼趨勢背景 */
+[data-theme="light"] .chip-bg{background:rgba(0,0,0,.04) !important}
+/* 籌碼集中度進度條軌道 */
+[data-theme="light"] [style*="rgba(0,0,0,.15)"]{background:rgba(0,0,0,.06) !important}
+/* 免責聲明框 */
+[data-theme="light"] [style*="rgba(255,255,255,.08)"]{background:rgba(0,0,0,.04) !important}
+/* Modal 遮罩已ok，文字顏色確保 */
+[data-theme="light"] .hist-filter{color:var(--text2) !important}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans TC',sans-serif;min-height:100vh;overflow-x:hidden}
 #app{max-width:480px;margin:0 auto;padding-bottom:80px}
 .page{display:none}.page.active{display:block}
@@ -898,19 +937,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <!-- 操作參考建議框（動態注入）-->
     <div id="aiActionBox" style="margin-top:14px"></div>
 
-    <!-- 成效展示（動態讀取用戶回測記錄）-->
-    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px" id="stratShowcase">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:1px">📊 我的策略成效</div>
-        <div style="font-size:9px;color:var(--text3)" id="showcaseUpdated">—</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="showcaseGrid">
-        <!-- 動態注入 -->
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.5;text-align:center">
-        根據本機已驗證回測記錄自動計算。過去績效不代表未來結果，投資有風險。
-      </div>
-    </div>
+
 
     <!-- ═══ 基本面摘要 ═══ -->
     <div id="fundamentalCard" style="margin-top:0;border-top:1px solid var(--border);padding-top:16px;display:none">
@@ -9493,7 +9520,9 @@ async function checkBacktestNow(){
   let checked   = 0;
   let changed   = false;
 
-  // 抓股價輔助（有 cache 不重複請求）
+  showToast('⏳ 驗證中，請稍候…');
+
+  // 取出口價格（有快取不重複請求）
   async function getExitPx(id){
     try{
       const raw = await fmStockData(id, 5);
@@ -9502,63 +9531,97 @@ async function checkBacktestNow(){
     }catch(e){ return null; }
   }
 
-  function calcResult(entryPx, exitPx){
-    if(!entryPx || !exitPx) return {result:'flat', pct:0};
-    const pct = +((exitPx - entryPx) / entryPx * 100).toFixed(2);
-    // 勝負標準：
-    // 勝：+2% 以上（扣除手續費後仍有獲利）
-    // 敗：-2% 以下（跌破停損線）
-    // 平：-2% ~ +2%（無效交易，成本內）
+  // 計算勝負：entryPx 可能為 null（記錄時取價失敗）
+  // 若無進場價，以當日收盤為基準（day0 vs dayN）
+  function calcResult(entryPx, exitPx, fallbackEntry){
+    const entry = entryPx || fallbackEntry;
+    if(!entry || !exitPx) return {result:'flat', pct:0};
+    const pct = +((exitPx - entry) / entry * 100).toFixed(2);
     return { result: pct>=2?'win':pct<=-2?'loss':'flat', pct };
   }
 
-  for(const r of records){
-    // 7日驗證
+  // 找到期未驗證的記錄（含強制驗證所有到期記錄）
+  const pendingRecords = records.filter(r=>{
+    const d7  = !r.verified   && (r.checkDate||'9999')   <= today;
+    const d14 = !r.verified14 && (r.checkDate14||'9999') <= today;
+    const d30 = !r.verifiedM  && (r.checkDateM||'9999')  <= today;
+    const d90 = !r.verifiedQ  && (r.checkDateQ||'9999')  <= today;
+    return d7 || d14 || d30 || d90;
+  });
+
+  console.log('[Verify] pending records:', pendingRecords.length, '/', records.length);
+
+  if(!pendingRecords.length){
+    showToast('ℹ️ 尚無到期記錄');
+    renderBacktestPanel();
+    return;
+  }
+
+  for(const r of pendingRecords){
+    // 先取所有股票的出口價（並行）
+    const exitPxMap = {};
+    await Promise.all(r.stocks.map(async s=>{
+      exitPxMap[s.id] = await getExitPx(s.id);
+    }));
+
+    // ─ 7日 ─
     if(!r.verified && (r.checkDate||'9999') <= today){
+      let allDone = true;
       for(const s of r.stocks){
-        if(s.result7 || !s.entryPx) continue;
-        const exitPx = await getExitPx(s.id);
-        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPx7=exitPx; s.result7=result; s.pct7=pct; }
-        else { s.result7='flat'; s.pct7=0; }
+        if(s.result7) continue; // 已有結果
+        const exit = exitPxMap[s.id];
+        if(exit){
+          const {result,pct} = calcResult(s.entryPx, exit, exit);
+          s.exitPx7=exit; s.result7=result; s.pct7=pct;
+        } else {
+          // 取不到股價：標為 flat（不阻塞整批驗證）
+          s.result7='flat'; s.pct7=0; s.exitPx7=null;
+        }
       }
-      if(r.stocks.every(s=>s.result7)){ r.verified=true; checked++; changed=true; }
+      r.verified = true; checked++; changed = true;
     }
-    // 14日驗證
+
+    // ─ 14日 ─
     if(!r.verified14 && (r.checkDate14||'9999') <= today){
       for(const s of r.stocks){
-        if(s.result14 || !s.entryPx) continue;
-        const exitPx = await getExitPx(s.id);
-        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPx14=exitPx; s.result14=result; s.pct14=pct; }
+        if(s.result14) continue;
+        const exit = exitPxMap[s.id];
+        if(exit){ const {result,pct}=calcResult(s.entryPx,exit,exit); s.exitPx14=exit; s.result14=result; s.pct14=pct; }
         else { s.result14='flat'; s.pct14=0; }
       }
-      if(r.stocks.every(s=>s.result14)){ r.verified14=true; changed=true; }
+      r.verified14=true; changed=true;
     }
-    // 月驗證
+
+    // ─ 月 ─
     if(!r.verifiedM && (r.checkDateM||'9999') <= today){
       for(const s of r.stocks){
-        if(s.resultM || !s.entryPx) continue;
-        const exitPx = await getExitPx(s.id);
-        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPxM=exitPx; s.resultM=result; s.pctM=pct; }
+        if(s.resultM) continue;
+        const exit = exitPxMap[s.id];
+        if(exit){ const {result,pct}=calcResult(s.entryPx,exit,exit); s.exitPxM=exit; s.resultM=result; s.pctM=pct; }
         else { s.resultM='flat'; s.pctM=0; }
       }
-      if(r.stocks.every(s=>s.resultM)){ r.verifiedM=true; changed=true; }
+      r.verifiedM=true; changed=true;
     }
-    // 季驗證
+
+    // ─ 季 ─
     if(!r.verifiedQ && (r.checkDateQ||'9999') <= today){
       for(const s of r.stocks){
-        if(s.resultQ || !s.entryPx) continue;
-        const exitPx = await getExitPx(s.id);
-        if(exitPx){ const {result,pct}=calcResult(s.entryPx,exitPx); s.exitPxQ=exitPx; s.resultQ=result; s.pctQ=pct; }
+        if(s.resultQ) continue;
+        const exit = exitPxMap[s.id];
+        if(exit){ const {result,pct}=calcResult(s.entryPx,exit,exit); s.exitPxQ=exit; s.resultQ=result; s.pctQ=pct; }
         else { s.resultQ='flat'; s.pctQ=0; }
       }
-      if(r.stocks.every(s=>s.resultQ)){ r.verifiedQ=true; changed=true; }
+      r.verifiedQ=true; changed=true;
     }
   }
 
-  if(changed) saveBtRecords(records);
-  renderBacktestPanel();
-  if(checked > 0) showToast(`✅ 驗證完成 ${checked} 筆`);
-  else showToast('ℹ️ 尚無到期記錄');
+  if(changed){
+    saveBtRecords(records);
+    renderBacktestPanel();
+    renderBattleBanner();
+    renderStratShowcase();
+  }
+  showToast(checked>0 ? '✅ 驗證完成 '+checked+' 筆！' : 'ℹ️ 已是最新，無新到期記錄');
 }
 
 // 清除所有回測記錄
