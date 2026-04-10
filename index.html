@@ -1718,6 +1718,17 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       <!-- 最佳策略評語 -->
       <div id="btVerdict" style="display:none;padding:10px 12px;background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.25);border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:8px"></div>
 
+      <!-- AI 換股建議面板 -->
+      <div id="btSwapPanel" style="display:none;margin-bottom:8px;border:1px solid rgba(124,92,252,.3);border-radius:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(124,92,252,.08);border-bottom:1px solid rgba(124,92,252,.2)">
+          <span style="font-size:14px">🔄</span>
+          <span style="font-size:12px;font-weight:700;color:var(--purple);flex:1" id="btSwapTitle">AI 換股建議</span>
+          <button onclick="document.getElementById('btSwapPanel').style.display='none'"
+            style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0">✕</button>
+        </div>
+        <div id="btSwapContent" style="padding:12px"></div>
+      </div>
+
       <!-- 待驗證清單 -->
       <div id="backtestPending" style="font-size:11px;color:var(--text3)"></div>
 
@@ -9785,6 +9796,143 @@ function clearBacktest(){
 }
 
 // 渲染比較表（依當前週期）
+// ════════════════════════════════════════════════════
+// AI 換股建議：分析策略績效，給出留下/替換建議
+// ════════════════════════════════════════════════════
+async function runBtSwapAnalysis(stratKey){
+  const panel     = document.getElementById('btSwapPanel');
+  const content   = document.getElementById('btSwapContent');
+  const titleEl   = document.getElementById('btSwapTitle');
+  const WORKER    = API ? API.replace(/\/$/,'')+'/v1/messages' : null;
+  if(!panel || !content) return;
+  if(!WORKER){ showToast('❌ 請先設定 API'); return; }
+
+  const STRAT_NAMES = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
+  const stratName = STRAT_NAMES[stratKey] || stratKey;
+
+  // 取出此策略所有已驗證記錄
+  const records = getBtRecords().filter(r=>
+    r.stratKey===stratKey && r.verified
+  );
+
+  if(!records.length){
+    showToast('⚠️ 此策略尚無已驗證記錄，無法分析');
+    return;
+  }
+
+  // 顯示面板並開始載入
+  panel.style.display = 'block';
+  if(titleEl) titleEl.textContent = stratName + ' — AI 換股建議';
+  content.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">'
+    +'<div style="animation:shimmer 1.5s infinite;background:linear-gradient(90deg,var(--surface) 25%,var(--card) 50%,var(--surface) 75%);background-size:200% 100%;border-radius:4px;height:12px;margin-bottom:8px"></div>'.repeat(4)
+    +'<div style="margin-top:12px;font-size:12px">🤖 AI 正在分析個股績效…</div></div>';
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  // 聚合每支股票的表現
+  const stockStats = {};
+  for(const r of records){
+    for(const s of r.stocks){
+      const id = s.id;
+      if(!stockStats[id]) stockStats[id] = {id, name:s.name||NAME_MAP[id]||id, wins:0, losses:0, flats:0, pcts:[], appearances:0};
+      stockStats[id].appearances++;
+      const res = s.result7||s.resultM||s.resultQ;
+      const pct = s.pct7  ??s.pctM  ??s.pctQ  ??null;
+      if(res==='win')  stockStats[id].wins++;
+      else if(res==='loss') stockStats[id].losses++;
+      else stockStats[id].flats++;
+      if(pct!=null) stockStats[id].pcts.push(pct);
+    }
+  }
+
+  // 計算每支股票分數
+  const stockList = Object.values(stockStats).map(s=>{
+    const total  = s.wins+s.losses+s.flats;
+    const wr     = total>0 ? Math.round(s.wins/total*100) : 0;
+    const avgPct = s.pcts.length>0 ? +(s.pcts.reduce((a,b)=>a+b,0)/s.pcts.length).toFixed(2) : 0;
+    return {...s, total, wr, avgPct,
+      score: wr*0.6 + (avgPct>0?Math.min(avgPct*5,30):avgPct*3)  // 勝率60% + 報酬40%
+    };
+  }).sort((a,b)=>b.score-a.score);
+
+  // 分類
+  const keepList    = stockList.filter(s=>s.total>=2 && s.wr>=55);
+  const weakList    = stockList.filter(s=>s.total>=2 && s.wr< 45);
+  const neutralList = stockList.filter(s=>s.total>=2 && s.wr>=45 && s.wr<55);
+
+  // 組成 AI prompt
+  const stockSummary = stockList.slice(0,15).map(s=>
+    `${s.id}${s.name}：${s.appearances}次出現，勝${s.wins}敗${s.losses}平${s.flats}，勝率${s.wr}%，均報酬${s.avgPct>=0?'+':''}${s.avgPct}%`
+  ).join('\n');
+
+  const weakSummary = weakList.map(s=>`${s.id}${s.name}（勝率${s.wr}%，均${s.avgPct}%）`).join('、') || '無明顯弱勢股';
+
+  const prompt = `你是台股策略優化顧問。以下是「${stratName}」策略的個股實測績效數據：
+
+${stockSummary}
+
+請依據上述數據，給出：
+
+1. **留下（強勢保留）**：勝率高、報酬穩定，建議繼續在此策略中使用的股票（列出代號+原因，1句話）
+
+2. **替換（弱勢汰換）**：勝率低或虧損，建議移除並說明原因（列出代號+原因，1句話）
+
+3. **替補推薦**：針對每支被汰換的弱勢股，推薦1~2支同族群但更具潛力的替代股票（提供代號+名稱+替換理由，要符合「${stratName}」策略邏輯）
+
+4. **一句話總結**：整體策略目前的問題與優化方向
+
+請用繁體中文，格式清晰，重點突出，不超過300字。`;
+
+  try{
+    const resp = await fetchWithTimeout(WORKER, 35000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:1000,
+        messages:[{role:'user', content:prompt}]
+      })
+    });
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+    if(!text) throw new Error('無回應');
+
+    // 轉換 Markdown → HTML
+    const html = text
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^(\d+)\.\s+\*\*(.+?)\*\*/gm,'<div style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--purple)">$1. $2</div>')
+      .replace(/^[-•]\s+(.+)$/gm,'<div style="font-size:12px;color:var(--text2);padding:3px 0 3px 10px;border-left:2px solid var(--border)">$1</div>')
+      .replace(/\n\n/g,'<br>')
+      .replace(/\n/g,'<br>');
+
+    // 渲染：先顯示快速摘要表格，再顯示 AI 分析
+    const summaryRows = `
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);border-radius:8px;padding:6px 10px;font-size:11px">
+          ✅ <strong style="color:var(--green)">${keepList.length}</strong> 支強勢保留
+        </div>
+        <div style="background:rgba(255,76,106,.08);border:1px solid rgba(255,76,106,.25);border-radius:8px;padding:6px 10px;font-size:11px">
+          🔄 <strong style="color:var(--red)">${weakList.length}</strong> 支建議替換
+        </div>
+        <div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:8px;padding:6px 10px;font-size:11px">
+          ⚖️ <strong style="color:var(--gold)">${neutralList.length}</strong> 支觀察中
+        </div>
+      </div>`;
+
+    content.style.opacity='0';
+    content.innerHTML = summaryRows
+      + '<div style="font-size:12px;color:var(--text2);line-height:1.8;border-top:1px solid var(--border);padding-top:10px">'
+      + colorSentiment(html)
+      + '</div>'
+      + '<div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:center">以上為 AI 分析建議，不構成投資依據。投資有風險，請自行判斷。</div>';
+    content.style.transition='opacity .5s';
+    requestAnimationFrame(()=>{ content.style.opacity='1'; });
+
+  }catch(e){
+    content.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">'
+      +'❌ 分析失敗：'+e.message
+      +'<br><button onclick="runBtSwapAnalysis(this.dataset.k)" data-k="'+stratKey+'" style="margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button></div>';
+  }
+}
+
 function renderBtCompareTable(){
   const tableEl   = document.getElementById('btCompareTable');
   const verdictEl = document.getElementById('btVerdict');
@@ -9855,9 +10003,13 @@ function renderBtCompareTable(){
           style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--purple);cursor:pointer;font-family:inherit">
           📋 查看 ${recCount} 筆記錄
         </button>
+        <button onclick="runBtSwapAnalysis('${k}')"
+          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--green);cursor:pointer;font-family:inherit">
+          🔄 換股建議
+        </button>
         <button onclick="deleteStratRecords('${k}')"
           style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;color:#ff6b6b;cursor:pointer;font-family:inherit">
-          🗑️ 刪除此策略記錄
+          🗑️ 刪除
         </button>
       </div>
     </div>`;
