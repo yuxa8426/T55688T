@@ -9844,43 +9844,55 @@ async function runBtSwapAnalysis(stratKey){
     }
   }
 
-  // 計算每支股票分數
+  // 計算每支股票分數（total>=1 即納入分析）
   const stockList = Object.values(stockStats).map(s=>{
     const total  = s.wins+s.losses+s.flats;
     const wr     = total>0 ? Math.round(s.wins/total*100) : 0;
     const avgPct = s.pcts.length>0 ? +(s.pcts.reduce((a,b)=>a+b,0)/s.pcts.length).toFixed(2) : 0;
     return {...s, total, wr, avgPct,
-      score: wr*0.6 + (avgPct>0?Math.min(avgPct*5,30):avgPct*3)  // 勝率60% + 報酬40%
+      score: wr*0.6 + (avgPct>0?Math.min(avgPct*5,30):avgPct*3)
     };
   }).sort((a,b)=>b.score-a.score);
 
-  // 分類
-  const keepList    = stockList.filter(s=>s.total>=2 && s.wr>=55);
-  const weakList    = stockList.filter(s=>s.total>=2 && s.wr< 45);
-  const neutralList = stockList.filter(s=>s.total>=2 && s.wr>=45 && s.wr<55);
+  // 分類（降低門檻至 total>=1，1次就能判斷方向）
+  const keepList    = stockList.filter(s=>s.total>=1 && s.wr>=60);
+  const weakList    = stockList.filter(s=>s.total>=1 && (s.wr< 40 || s.avgPct<=-2));
+  const neutralList = stockList.filter(s=>s.total>=1 && s.wr>=40 && s.wr<60);
 
-  // 組成 AI prompt
-  const stockSummary = stockList.slice(0,15).map(s=>
-    `${s.id}${s.name}：${s.appearances}次出現，勝${s.wins}敗${s.losses}平${s.flats}，勝率${s.wr}%，均報酬${s.avgPct>=0?'+':''}${s.avgPct}%`
-  ).join('\n');
+  // 組成 AI prompt（要求歸納相同原因 + 法人分析）
+  const stockSummary = stockList.slice(0,20).map(s=>{
+    const trend = s.wr>=60?'強勢':s.wr>=40?'中性':'弱勢';
+    return `${s.id}${s.name}｜出現${s.appearances}次｜勝${s.wins}敗${s.losses}平${s.flats}｜勝率${s.wr}%｜均報酬${s.avgPct>=0?'+':''}${s.avgPct}%｜${trend}`;
+  }).join('\n');
 
-  const weakSummary = weakList.map(s=>`${s.id}${s.name}（勝率${s.wr}%，均${s.avgPct}%）`).join('、') || '無明顯弱勢股';
-
-  const prompt = `你是台股策略優化顧問。以下是「${stratName}」策略的個股實測績效數據：
+  const prompt = `你是台股策略優化顧問。以下是「${stratName}」策略的個股實測回測數據（以「|」分隔）：
 
 ${stockSummary}
 
-請依據上述數據，給出：
+請依據上述數據給出結構化分析，格式如下：
 
-1. **留下（強勢保留）**：勝率高、報酬穩定，建議繼續在此策略中使用的股票（列出代號+原因，1句話）
+**【一、強勢保留清單】**
+逐行列出：股票代號+名稱 → 保留原因（1句）
+若多支股票保留原因相同（如：同為法人持續買超），請歸納為同一組並標示「共同原因：XXX」
 
-2. **替換（弱勢汰換）**：勝率低或虧損，建議移除並說明原因（列出代號+原因，1句話）
+**【二、弱勢汰換清單】**
+逐行列出：股票代號+名稱 → 汰換原因（1句）
+若多支股票汰換原因相同（如：同屬技術面走弱、同屬法人連續賣超），請歸納為同一組並標示「共同弱點：XXX」
 
-3. **替補推薦**：針對每支被汰換的弱勢股，推薦1~2支同族群但更具潛力的替代股票（提供代號+名稱+替換理由，要符合「${stratName}」策略邏輯）
+**【三、替換標的推薦】**
+針對每組弱勢股，推薦替換方向：
+- 每組推薦 2~3 支台股替代標的（代號+名稱+一句理由）
+- 推薦理由相同的標的歸納為同組，標示「推薦邏輯：XXX」
+- 需符合「${stratName}」策略的選股邏輯
 
-4. **一句話總結**：整體策略目前的問題與優化方向
+**【四、法人籌碼診斷】**
+分析本次策略中，哪些股票有「法人連續買超」現象？哪些沒有？
+說明缺乏法人支撐對這批股票績效的影響，以及下次執行此策略時如何加入法人條件篩選。
 
-請用繁體中文，格式清晰，重點突出，不超過300字。`;
+**【五、優化建議】**
+一句話總結策略目前最大問題，以及下次執行前應調整的核心條件。
+
+使用繁體中文，每段重點突出，不超過 400 字。`;
 
   try{
     const resp = await fetchWithTimeout(WORKER, 35000, {
@@ -9904,18 +9916,23 @@ ${stockSummary}
       .replace(/\n/g,'<br>');
 
     // 渲染：先顯示快速摘要表格，再顯示 AI 分析
-    const summaryRows = `
-      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-        <div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);border-radius:8px;padding:6px 10px;font-size:11px">
-          ✅ <strong style="color:var(--green)">${keepList.length}</strong> 支強勢保留
-        </div>
-        <div style="background:rgba(255,76,106,.08);border:1px solid rgba(255,76,106,.25);border-radius:8px;padding:6px 10px;font-size:11px">
-          🔄 <strong style="color:var(--red)">${weakList.length}</strong> 支建議替換
-        </div>
-        <div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:8px;padding:6px 10px;font-size:11px">
-          ⚖️ <strong style="color:var(--gold)">${neutralList.length}</strong> 支觀察中
-        </div>
-      </div>`;
+    // 計算統計（total>=1）
+    const totalStocks = stockList.length;
+    const summaryRows =
+      '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
+        +'✅ <strong style="color:var(--green)">'+keepList.length+'</strong> 支強勢保留'
+      +'</div>'
+      +'<div style="background:rgba(255,76,106,.08);border:1px solid rgba(255,76,106,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
+        +'🔄 <strong style="color:var(--red)">'+weakList.length+'</strong> 支建議替換'
+      +'</div>'
+      +'<div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
+        +'⚖️ <strong style="color:var(--gold)">'+neutralList.length+'</strong> 支觀察中'
+      +'</div>'
+      +'<div style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px">'
+        +'📊 共分析 <strong style="color:var(--text)">'+totalStocks+'</strong> 支'
+      +'</div>'
+      +'</div>';
 
     content.style.opacity='0';
     content.innerHTML = summaryRows
