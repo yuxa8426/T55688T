@@ -9955,7 +9955,7 @@ function renderBtCompareTable(){
   const verdictEl = document.getElementById('btVerdict');
   if(!tableEl) return;
 
-  const stats    = calcStratWinRatesByPeriod(_btPeriod);
+  const stats     = calcStratWinRatesByPeriod(_btPeriod);
   const stratInfo = {
     A:{icon:'🚀',name:'極致動能',color:'#ff4c6a'},
     B:{icon:'📈',name:'穩健成長',color:'#00d4aa'},
@@ -9964,80 +9964,178 @@ function renderBtCompareTable(){
     E:{icon:'⚖️',name:'風險平權',color:'#4fc3f7'},
     WL:{icon:'⭐',name:'自選清單',color:'#ffd54f'},
   };
+  const gradeDesc = {
+    S:'頂尖水準，持續使用',A:'表現優異，保持節奏',
+    B:'穩定成長，微調即可',C:'需要調整選股條件',D:'建議重新評估策略',
+  };
+  const dimLabels = ['勝率','報酬','樣本','一致','風控'];
 
   const keys = Object.keys(stratInfo).filter(k=>{
-    const s = stats[k];
-    return s && (s.total > 0 || s.pending > 0);
+    const s = stats[k]; return s && (s.total>0 || s.pending>0);
   });
 
   if(!keys.length){
-    tableEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">尚無資料，使用策略分析後自動累積</div>';
+    tableEl.innerHTML = '<div style="text-align:center;padding:24px 0;color:var(--text3);font-size:12px">'
+      +'<div style="font-size:28px;margin-bottom:8px">📊</div>'
+      +'尚無回測資料<br><span style="font-size:10px">執行 AI 策略分析後自動累積</span></div>';
     if(verdictEl) verdictEl.style.display='none';
     return;
   }
 
-  // 依勝率排序
+  // 排序：有驗證的依勝率，待累積的排後面
   const sorted = [...keys].sort((a,b)=>{
-    const wa = stats[a].winRate ?? -1;
-    const wb = stats[b].winRate ?? -1;
+    const wa = stats[a].winRate??-1, wb = stats[b].winRate??-1;
     return wb - wa;
   });
 
-  tableEl.innerHTML = sorted.map((k,rank)=>{
-    const s  = stats[k];
-    const si = stratInfo[k];
-    const wr = s.winRate;
-    const avgStr = s.avgPct!=null ? (s.avgPct>=0?'+':'')+s.avgPct+'%' : '—';
-    const wrColor = wr==null?'var(--text3)':wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
-    const rankIcon = rank===0&&wr!=null?'🥇':rank===1&&wr!=null?'🥈':rank===2&&wr!=null?'🥉':'';
+  // 整體概覽（加在卡片前）
+  const allVerified = sorted.filter(k=>stats[k].winRate!=null);
+  const overallHtml = allVerified.length>=2 ? (()=>{
+    const totalW = allVerified.reduce((n,k)=>n+stats[k].wins,0);
+    const totalL = allVerified.reduce((n,k)=>n+stats[k].losses,0);
+    const totalF = allVerified.reduce((n,k)=>n+stats[k].flats,0);
+    const totalN = totalW+totalL+totalF;
+    const overallWr = totalN>0?Math.round(totalW/totalN*100):0;
+    const wrC = overallWr>=60?'var(--red)':overallWr>=45?'var(--gold)':'var(--green)';
+    const allPcts = allVerified.flatMap(k=>stats[k].avgPct!=null?[stats[k].avgPct]:[]);
+    const avgAll  = allPcts.length>0?(allPcts.reduce((a,b)=>a+b,0)/allPcts.length).toFixed(1):null;
+    return '<div style="display:flex;gap:8px;margin-bottom:10px;padding:10px 12px;background:var(--surface);border-radius:10px;border:1px solid var(--border)">'
+      +'<div style="flex:1;text-align:center">'
+        +'<div style="font-size:20px;font-weight:800;color:'+wrC+'">'+overallWr+'%</div>'
+        +'<div style="font-size:9px;color:var(--text3)">整體勝率</div>'
+      +'</div>'
+      +'<div style="width:1px;background:var(--border)"></div>'
+      +'<div style="flex:1;text-align:center">'
+        +'<div style="font-size:20px;font-weight:800;color:'+(avgAll&&parseFloat(avgAll)>=0?'var(--red)':'var(--green)')+'">'+( avgAll!=null?(parseFloat(avgAll)>=0?'+':'')+avgAll+'%':'—')+'</div>'
+        +'<div style="font-size:9px;color:var(--text3)">平均報酬</div>'
+      +'</div>'
+      +'<div style="width:1px;background:var(--border)"></div>'
+      +'<div style="flex:1;text-align:center">'
+        +'<div style="font-size:20px;font-weight:800;color:var(--text)">'+totalN+'</div>'
+        +'<div style="font-size:9px;color:var(--text3)">總驗證筆</div>'
+      +'</div>'
+      +'</div>';
+  })() : '';
 
+  const cardsHtml = sorted.map((k,rank)=>{
+    const s        = stats[k];
+    const si       = stratInfo[k];
+    const wr       = s.winRate;
+    const isTop    = rank===0 && wr!=null;
+    const wrColor  = wr==null?'var(--text3)':wr>=60?'var(--red)':wr>=45?'var(--gold)':'var(--green)';
+    const rankMedal= rank===0&&wr!=null?'🥇':rank===1&&wr!=null?'🥈':rank===2&&wr!=null?'🥉':'';
     const recCount = getBtRecords().filter(r=>r.stratKey===k).length;
     const metrics  = calcStratMetrics(s);
-    const gradeTag = metrics
-      ? `<span style="font-size:11px;font-weight:900;color:${metrics.gradeColor};margin-left:4px">${metrics.grade}</span>`
-      : '';
-    const scoreLine = metrics
-      ? `<span style="font-size:9px;color:var(--text3);margin-left:4px">${metrics.totalScore}/100</span>`
-      : '';
-    return `<div style="background:var(--card);border:1px solid ${rank===0&&wr!=null?si.color:'var(--border)'};border-radius:12px;margin-bottom:8px;overflow:hidden${rank===0&&wr!=null?';box-shadow:0 0 0 1px '+si.color+'44':''}">
-      <!-- 主體列 -->
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 12px">
-        <div style="font-size:22px;flex-shrink:0">${si.icon}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center">${rankIcon} ${si.name}${gradeTag}${scoreLine}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">
-            ${wr!=null?`${s.wins}勝 ${s.losses}敗 ${s.flats}平 · 均${avgStr}${metrics&&metrics.isSignificant?' · ✅顯著':''}`:`待累積（${s.pending}筆中）`}
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;margin-right:6px">
-          <div style="font-size:20px;font-weight:800;color:${wrColor}">${wr!=null?wr+'%':'—'}</div>
-          <div style="font-size:9px;color:var(--text3)">${wr!=null?'實測勝率':'待驗證'}</div>
-        </div>
-      </div>
-      <!-- 操作列（常駐顯示）-->
-      <div style="display:flex;border-top:1px solid var(--border)">
-        <button onclick="filterHistory('${k}', null); showHistoryPanel();"
-          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--purple);cursor:pointer;font-family:inherit">
-          📋 查看 ${recCount} 筆記錄
-        </button>
-        <button onclick="runBtSwapAnalysis('${k}')"
-          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--green);cursor:pointer;font-family:inherit">
-          🔄 換股建議
-        </button>
-        <button onclick="deleteStratRecords('${k}')"
-          style="flex:1;padding:7px 0;font-size:11px;font-weight:600;background:none;border:none;color:#ff6b6b;cursor:pointer;font-family:inherit">
-          🗑️ 刪除
-        </button>
-      </div>
-    </div>`;
+    const avgStr   = s.avgPct!=null?(s.avgPct>=0?'+':'')+s.avgPct+'%':'—';
+
+    // ── 5維雷達（水平進度條）──────────────────────────────
+    const dimBars = metrics ? [
+      {label:'勝率', val:metrics.wrScore,   max:30, color:'var(--red)'},
+      {label:'報酬', val:metrics.retScore,  max:25, color:'var(--gold)'},
+      {label:'樣本', val:metrics.sigScore,  max:20, color:'var(--purple)'},
+      {label:'一致', val:metrics.consScore, max:15, color:'var(--green)'},
+      {label:'風控', val:metrics.riskScore, max:10, color:'#4fc3f7'},
+    ].map(d=>{
+      const pct = Math.round(d.val/d.max*100);
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+        +'<span style="font-size:9px;color:var(--text3);width:22px;flex-shrink:0">'+d.label+'</span>'
+        +'<div style="flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden">'
+          +'<div style="height:100%;border-radius:999px;width:'+pct+'%;background:'+d.color+';transition:width .6s ease"></div>'
+        +'</div>'
+        +'<span style="font-size:9px;color:var(--text3);width:28px;text-align:right;flex-shrink:0">'+Math.round(d.val)+'/'+d.max+'</span>'
+      +'</div>';
+    }).join('') : '';
+
+    // ── 等級徽章 + 說明 ────────────────────────────────────
+    const gradeBadge = metrics
+      ? '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:'+metrics.gradeColor+'22;border:1px solid '+metrics.gradeColor+'44">'
+          +'<span style="font-size:12px;font-weight:900;color:'+metrics.gradeColor+'">'+metrics.grade+'</span>'
+          +'<span style="font-size:9px;color:var(--text3)">'+(gradeDesc[metrics.grade]||'')+'</span>'
+        +'</div>'
+      : '<div style="font-size:10px;color:var(--text3)">累積中（需 3 筆以上）</div>';
+
+    // ── 下一步行動提示 ─────────────────────────────────────
+    const actionHtml = metrics ? (()=>{
+      const a = metrics.action;
+      const actionMap = {
+        continue:{icon:'🚀',text:'繼續使用，可加大選股比重',color:'var(--red)'},
+        keep:    {icon:'✅',text:'保持參數，等待更多樣本',  color:'var(--green)'},
+        tune:    {icon:'🔧',text:'微調選股門檻，提高精準度', color:'var(--gold)'},
+        revise:  {icon:'⚠️',text:'調整策略邏輯，換週期測試', color:'var(--gold)'},
+        replace: {icon:'🔄',text:'考慮替換策略或換股建議',  color:'var(--text3)'},
+      };
+      const am = actionMap[a]||actionMap.keep;
+      return '<div style="font-size:11px;color:'+am.color+';padding:5px 0 0;display:flex;align-items:center;gap:4px">'
+        +am.icon+' <strong>建議：</strong>'+am.text+'</div>';
+    })() : '';
+
+    // ── 勝率進度弧（簡單水平條）──────────────────────────
+    const wrBar = wr!=null ? '<div style="height:4px;border-radius:999px;background:rgba(255,255,255,.08);margin:6px 0 4px;overflow:hidden">'
+      +'<div style="height:100%;border-radius:999px;width:'+wr+'%;background:'+wrColor+';transition:width .8s ease"></div>'
+    +'</div>' : '';
+
+    return '<div style="background:var(--card);border:1.5px solid '+(isTop?si.color:'var(--border)')+';border-radius:14px;margin-bottom:10px;overflow:hidden'+(isTop?';box-shadow:0 0 0 1px '+si.color+'22':'')+'"">'
+
+      // ── 頂部：icon + 名稱 + 等級 + 勝率 ──
+      +'<div style="padding:12px 14px 8px">'
+        +'<div style="display:flex;align-items:flex-start;gap:8px">'
+          +'<div style="font-size:22px;flex-shrink:0;margin-top:1px">'+si.icon+'</div>'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">'
+              +'<span style="font-size:14px;font-weight:800;color:var(--text)">'+rankMedal+' '+si.name+'</span>'
+              +gradeBadge
+            +'</div>'
+            // 勝敗統計行
+            +'<div style="font-size:10px;color:var(--text3)">'
+              +(wr!=null
+                ? '<span style="color:var(--red)">勝'+s.wins+'</span> · '
+                  +'<span style="color:var(--green)">敗'+s.losses+'</span> · '
+                  +'<span>平'+s.flats+'</span>'
+                  +' · 均報酬 <strong style="color:'+(s.avgPct!=null&&s.avgPct>=0?'var(--red)':'var(--green)')+'">'+avgStr+'</strong>'
+                  +(metrics&&metrics.isSignificant?' · <span style="color:var(--gold)">✅ 統計顯著</span>':'')
+                : '待累積（已送出 '+s.pending+' 筆，驗證中）')
+            +'</div>'
+            +wrBar
+          +'</div>'
+          // 右側勝率大字
+          +'<div style="text-align:center;flex-shrink:0">'
+            +'<div style="font-size:24px;font-weight:900;color:'+wrColor+';line-height:1">'+(wr!=null?wr+'%':'—')+'</div>'
+            +'<div style="font-size:9px;color:var(--text3)">'+(wr!=null?'實測勝率':'待驗證')+'</div>'
+            +(metrics?'<div style="font-size:9px;color:var(--text3);margin-top:2px">'+metrics.totalScore+'/100</div>':'')
+          +'</div>'
+        +'</div>'
+
+        // ── 5維進度條（展開區域）──
+        +(metrics&&dimBars
+          ? '<div style="margin-top:8px;padding:8px 0 2px;border-top:1px dashed var(--border)">'+dimBars+'</div>'
+          : '')
+
+        // ── 下一步行動 ──
+        +actionHtml
+      +'</div>'
+
+      // ── 操作列 ──
+      +'<div style="display:flex;border-top:1px solid var(--border)">'
+        +'<button onclick="filterHistory(this.dataset.k,null);showHistoryPanel()" data-k="'+k+'" style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--purple);cursor:pointer;font-family:inherit">'
+          +' style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--purple);cursor:pointer;font-family:inherit">'
+          +'📋 '+recCount+' 筆記錄'
+        +'</button>'
+        +'<button onclick="runBtSwapAnalysis(this.dataset.k)" data-k="'+k+'" style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--green);cursor:pointer;font-family:inherit">'
+          +' style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;border-right:1px solid var(--border);color:var(--green);cursor:pointer;font-family:inherit">'
+          +'🔄 換股建議'
+        +'</button>'
+        +'<button onclick="deleteStratRecords(this.dataset.k)" data-k="'+k+'" style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;color:var(--text3);cursor:pointer;font-family:inherit">'
+          +' style="flex:1;padding:8px 0;font-size:11px;font-weight:600;background:none;border:none;color:var(--text3);cursor:pointer;font-family:inherit">'
+          +'🗑️'
+        +'</button>'
+      +'</div>'
+    +'</div>';
   }).join('');
 
-  // 評語
-  const verdict = getBtVerdict(stats, _btPeriod);
-  if(verdictEl){
-    if(verdict){ verdictEl.style.display='block'; verdictEl.innerHTML=verdict; }
-    else verdictEl.style.display='none';
-  }
+  tableEl.innerHTML = overallHtml + cardsHtml;
+
+  // btVerdict 移入卡片內，此處隱藏
+  if(verdictEl) verdictEl.style.display='none';
 }
 
 // 渲染回測面板
