@@ -9799,155 +9799,268 @@ function clearBacktest(){
 // ════════════════════════════════════════════════════
 // AI 換股建議：分析策略績效，給出留下/替換建議
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// 換股建議系統 v3：JSON 結構化 + 卡片 UI + 一鍵換股
+// ════════════════════════════════════════════════════
 async function runBtSwapAnalysis(stratKey){
-  const panel     = document.getElementById('btSwapPanel');
-  const content   = document.getElementById('btSwapContent');
-  const titleEl   = document.getElementById('btSwapTitle');
-  const WORKER    = API ? API.replace(/\/$/,'')+'/v1/messages' : null;
-  if(!panel || !content) return;
+  const panel   = document.getElementById('btSwapPanel');
+  const content = document.getElementById('btSwapContent');
+  const titleEl = document.getElementById('btSwapTitle');
+  const WORKER  = API ? API.replace(/\/$/,'')+'/v1/messages' : null;
+  if(!panel||!content) return;
   if(!WORKER){ showToast('❌ 請先設定 API'); return; }
 
   const STRAT_NAMES = {A:'極致動能',B:'穩健成長',C:'價值發現',D:'情緒反轉',E:'風險平權',WL:'自選清單'};
-  const stratName = STRAT_NAMES[stratKey] || stratKey;
+  const stratName = STRAT_NAMES[stratKey]||stratKey;
+  const records   = getBtRecords().filter(r=>r.stratKey===stratKey && r.verified);
+  if(!records.length){ showToast('⚠️ 尚無已驗證記錄，執行策略並驗證後再試'); return; }
 
-  // 取出此策略所有已驗證記錄
-  const records = getBtRecords().filter(r=>
-    r.stratKey===stratKey && r.verified
-  );
-
-  if(!records.length){
-    showToast('⚠️ 此策略尚無已驗證記錄，無法分析');
-    return;
-  }
-
-  // 顯示面板並開始載入
   panel.style.display = 'block';
-  if(titleEl) titleEl.textContent = stratName + ' — AI 換股建議';
-  content.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">'
-    +'<div style="animation:shimmer 1.5s infinite;background:linear-gradient(90deg,var(--surface) 25%,var(--card) 50%,var(--surface) 75%);background-size:200% 100%;border-radius:4px;height:12px;margin-bottom:8px"></div>'.repeat(4)
-    +'<div style="margin-top:12px;font-size:12px">🤖 AI 正在分析個股績效…</div></div>';
-  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  if(titleEl) titleEl.textContent = stratName+' · 換股建議';
+  content.innerHTML = '<div style="padding:24px 0;text-align:center;color:var(--text3)">'
+    +'<div style="font-size:22px;margin-bottom:8px">🤖</div>'
+    +'<div style="font-size:12px">AI 正在分析你的回測績效…</div></div>';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
 
-  // 聚合每支股票的表現
-  const stockStats = {};
-  for(const r of records){
+  // 聚合個股績效
+  const stk = {};
+  for(const r of records)
     for(const s of r.stocks){
-      const id = s.id;
-      if(!stockStats[id]) stockStats[id] = {id, name:s.name||NAME_MAP[id]||id, wins:0, losses:0, flats:0, pcts:[], appearances:0};
-      stockStats[id].appearances++;
-      const res = s.result7||s.resultM||s.resultQ;
-      const pct = s.pct7  ??s.pctM  ??s.pctQ  ??null;
-      if(res==='win')  stockStats[id].wins++;
-      else if(res==='loss') stockStats[id].losses++;
-      else stockStats[id].flats++;
-      if(pct!=null) stockStats[id].pcts.push(pct);
+      if(!stk[s.id]) stk[s.id]={id:s.id,name:s.name||NAME_MAP[s.id]||s.id,w:0,l:0,f:0,pcts:[],n:0};
+      stk[s.id].n++;
+      const res=s.result7||s.resultM||s.resultQ;
+      const pct=s.pct7??s.pctM??s.pctQ??null;
+      if(res==='win')stk[s.id].w++;else if(res==='loss')stk[s.id].l++;else stk[s.id].f++;
+      if(pct!=null)stk[s.id].pcts.push(pct);
     }
-  }
 
-  // 計算每支股票分數（total>=1 即納入分析）
-  const stockList = Object.values(stockStats).map(s=>{
-    const total  = s.wins+s.losses+s.flats;
-    const wr     = total>0 ? Math.round(s.wins/total*100) : 0;
-    const avgPct = s.pcts.length>0 ? +(s.pcts.reduce((a,b)=>a+b,0)/s.pcts.length).toFixed(2) : 0;
-    return {...s, total, wr, avgPct,
-      score: wr*0.6 + (avgPct>0?Math.min(avgPct*5,30):avgPct*3)
-    };
-  }).sort((a,b)=>b.score-a.score);
+  const stockList = Object.values(stk).map(s=>{
+    const tot=s.w+s.l+s.f, wr=tot>0?Math.round(s.w/tot*100):0;
+    const avgPct=s.pcts.length>0?+(s.pcts.reduce((a,b)=>a+b,0)/s.pcts.length).toFixed(1):0;
+    return {...s,tot,wr,avgPct};
+  }).sort((a,b)=>b.wr-a.wr);
 
-  // 分類（降低門檻至 total>=1，1次就能判斷方向）
-  const keepList    = stockList.filter(s=>s.total>=1 && s.wr>=60);
-  const weakList    = stockList.filter(s=>s.total>=1 && (s.wr< 40 || s.avgPct<=-2));
-  const neutralList = stockList.filter(s=>s.total>=1 && s.wr>=40 && s.wr<60);
-
-  // 組成 AI prompt（要求歸納相同原因 + 法人分析）
-  const stockSummary = stockList.slice(0,20).map(s=>{
-    const trend = s.wr>=60?'強勢':s.wr>=40?'中性':'弱勢';
-    return `${s.id}${s.name}｜出現${s.appearances}次｜勝${s.wins}敗${s.losses}平${s.flats}｜勝率${s.wr}%｜均報酬${s.avgPct>=0?'+':''}${s.avgPct}%｜${trend}`;
+  const dataLines = stockList.map(s=>{
+    const tag=s.wr>=60?'強勢':s.wr<40||s.avgPct<=-2?'弱勢':'觀察';
+    return s.id+' '+s.name+'｜勝'+s.w+'敗'+s.l+'平'+s.f+'｜勝率'+s.wr+'%｜均報酬'+(s.avgPct>=0?'+':'')+s.avgPct+'%｜'+tag;
   }).join('\n');
 
-  const prompt = `你是台股策略優化顧問。以下是「${stratName}」策略的個股實測回測數據（以「|」分隔）：
-
-${stockSummary}
-
-請依據上述數據給出結構化分析，格式如下：
-
-**【一、強勢保留清單】**
-逐行列出：股票代號+名稱 → 保留原因（1句）
-若多支股票保留原因相同（如：同為法人持續買超），請歸納為同一組並標示「共同原因：XXX」
-
-**【二、弱勢汰換清單】**
-逐行列出：股票代號+名稱 → 汰換原因（1句）
-若多支股票汰換原因相同（如：同屬技術面走弱、同屬法人連續賣超），請歸納為同一組並標示「共同弱點：XXX」
-
-**【三、替換標的推薦】**
-針對每組弱勢股，推薦替換方向：
-- 每組推薦 2~3 支台股替代標的（代號+名稱+一句理由）
-- 推薦理由相同的標的歸納為同組，標示「推薦邏輯：XXX」
-- 需符合「${stratName}」策略的選股邏輯
-
-**【四、法人籌碼診斷】**
-分析本次策略中，哪些股票有「法人連續買超」現象？哪些沒有？
-說明缺乏法人支撐對這批股票績效的影響，以及下次執行此策略時如何加入法人條件篩選。
-
-**【五、優化建議】**
-一句話總結策略目前最大問題，以及下次執行前應調整的核心條件。
-
-使用繁體中文，每段重點突出，不超過 400 字。`;
+  const prompt = '你是台股回測教練，幫投資人分析「'+stratName+'」策略的個股實測結果。\n\n'
+    +'個股績效：\n'+dataLines+'\n\n'
+    +'請輸出純 JSON，格式如下，不加任何說明文字：\n'
+    +'{\n'
+    +'  "summary": "一句話點出這組策略最關鍵問題（20字內）",\n'
+    +'  "keep": [{"id":"代號","name":"名稱","reason":"繼續持有原因（12字內）"}],\n'
+    +'  "swap": [\n'
+    +'    {\n'
+    +'      "out_id":"被換代號","out_name":"被換名稱","weak":"汰換原因（12字內）",\n'
+    +'      "in": [{"id":"新代號","name":"新名稱","reason":"推薦理由（15字內）","sector":"族群"}]\n'
+    +'    }\n'
+    +'  ],\n'
+    +'  "watch": [{"id":"代號","name":"名稱","reason":"觀察原因（12字內）"}],\n'
+    +'  "inst_note": "法人籌碼診斷：缺乏法人買超的影響（25字內）",\n'
+    +'  "next_action": "下次執行前最重要的一個調整（15字內）"\n'
+    +'}\n'
+    +'注意：swap 每筆 in 陣列推薦 1~2 支，優先符合'+stratName+'策略邏輯且近期法人買超的台股。';
 
   try{
     const resp = await fetchWithTimeout(WORKER, 35000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:1000,
-        messages:[{role:'user', content:prompt}]
-      })
+      body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,
+        messages:[{role:'user',content:prompt}]})
     });
     if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const data = await resp.json();
-    const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-    if(!text) throw new Error('無回應');
+    const raw  = (await resp.json()).content.map(b=>b.type==='text'?b.text:'').join('').trim();
+    const m    = raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/);
+    if(!m) throw new Error('AI 回傳格式錯誤，請重試');
+    _renderSwapCards(content, JSON.parse(m[0]), stockList, stratKey);
+  }catch(e){
+    content.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">'
+      +'❌ '+e.message
+      +'<br><span style="font-size:10px;color:var(--text3)">（若持續失敗，請確認網路或重新整理）</span>'
+      +'<br><button data-k="'+stratKey+'" onclick="runBtSwapAnalysis(this.dataset.k)"'
+      +' style="margin-top:10px;padding:6px 16px;border:1px solid var(--border);border-radius:8px;'
+      +'background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button></div>';
+  }
+}
 
-    // 轉換 Markdown → HTML
-    const html = text
-      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-      .replace(/^(\d+)\.\s+\*\*(.+?)\*\*/gm,'<div style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--purple)">$1. $2</div>')
-      .replace(/^[-•]\s+(.+)$/gm,'<div style="font-size:12px;color:var(--text2);padding:3px 0 3px 10px;border-left:2px solid var(--border)">$1</div>')
-      .replace(/\n\n/g,'<br>')
-      .replace(/\n/g,'<br>');
+function _renderSwapCards(content, ai, stockList, stratKey){
+  let html = '';
 
-    // 渲染：先顯示快速摘要表格，再顯示 AI 分析
-    // 計算統計（total>=1）
-    const totalStocks = stockList.length;
-    const summaryRows =
-      '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
-      +'<div style="background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
-        +'✅ <strong style="color:var(--green)">'+keepList.length+'</strong> 支強勢保留'
-      +'</div>'
-      +'<div style="background:rgba(255,76,106,.08);border:1px solid rgba(255,76,106,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
-        +'🔄 <strong style="color:var(--red)">'+weakList.length+'</strong> 支建議替換'
-      +'</div>'
-      +'<div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:8px;padding:6px 10px;font-size:11px">'
-        +'⚖️ <strong style="color:var(--gold)">'+neutralList.length+'</strong> 支觀察中'
-      +'</div>'
-      +'<div style="background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px">'
-        +'📊 共分析 <strong style="color:var(--text)">'+totalStocks+'</strong> 支'
-      +'</div>'
+  // ── ① 總結橫幅 ───────────────────────────────────────
+  if(ai.summary){
+    html += '<div style="padding:10px 12px;border-radius:10px;'
+      +'background:rgba(124,92,252,.08);border-left:3px solid var(--purple);'
+      +'font-size:12px;font-weight:600;color:var(--text);margin-bottom:12px;line-height:1.5">'
+      +'💡 '+ai.summary+'</div>';
+  }
+
+  // ── ② 建議替換（核心區，最突出）────────────────────
+  if(ai.swap && ai.swap.length){
+    html += '<div style="margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">'
+      +'🔄 建議替換（共 '+ai.swap.length+' 支）</div>';
+
+    for(const s of ai.swap){
+      const perfData = stockList.find(x=>x.id===s.out_id);
+      const wrShow   = perfData ? perfData.wr+'%' : '—';
+      const pctShow  = perfData ? (perfData.avgPct>=0?'+':'')+perfData.avgPct+'%' : '—';
+
+      html += '<div style="border:1px solid rgba(255,76,106,.3);border-radius:12px;'
+        +'margin-bottom:8px;overflow:hidden;background:var(--card)">';
+
+      // 被替換股：左欄深色頭部
+      html += '<div style="padding:10px 12px;background:rgba(255,76,106,.06);'
+        +'border-bottom:1px solid rgba(255,76,106,.2)">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between">'
+          +'<div>'
+            +'<span style="font-size:14px;font-weight:800;color:var(--red)">'+s.out_id+'</span>'
+            +' <span style="font-size:13px;color:var(--text);font-weight:600">'+s.out_name+'</span>'
+          +'</div>'
+          +'<div style="text-align:right">'
+            +'<span style="font-size:11px;color:var(--red)">勝率 '+wrShow+'</span>'
+            +' <span style="font-size:11px;color:var(--text3)">均 '+pctShow+'</span>'
+          +'</div>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--text3);margin-top:3px">⚠️ '+s.weak+'</div>'
       +'</div>';
 
-    content.style.opacity='0';
-    content.innerHTML = summaryRows
-      + '<div style="font-size:12px;color:var(--text2);line-height:1.8;border-top:1px solid var(--border);padding-top:10px">'
-      + colorSentiment(html)
-      + '</div>'
-      + '<div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:center">以上為 AI 分析建議，不構成投資依據。投資有風險，請自行判斷。</div>';
-    content.style.transition='opacity .5s';
-    requestAnimationFrame(()=>{ content.style.opacity='1'; });
+      // 替換候選
+      const inList = s.in||s.candidates||[];
+      html += '<div style="padding:8px 12px">';
+      html += '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">▼ 推薦替代標的</div>';
 
-  }catch(e){
-    content.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">'
-      +'❌ 分析失敗：'+e.message
-      +'<br><button onclick="runBtSwapAnalysis(this.dataset.k)" data-k="'+stratKey+'" style="margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button></div>';
+      for(const c of inList){
+        html += '<div style="display:flex;align-items:center;gap:8px;'
+          +'padding:8px 10px;border-radius:8px;margin-bottom:6px;'
+          +'background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2)">'
+          +'<div style="flex:1;min-width:0">'
+            +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
+              +'<span style="font-size:13px;font-weight:800;color:var(--green)">'+c.id+'</span>'
+              +'<span style="font-size:13px;font-weight:600;color:var(--text)">'+c.name+'</span>'
+              +'<span style="font-size:9px;padding:1px 5px;border-radius:4px;'
+              +'background:rgba(0,212,170,.1);color:var(--green)">'+(c.sector||'')+'</span>'
+            +'</div>'
+            +'<div style="font-size:10px;color:var(--text2)">'+c.reason+'</div>'
+          +'</div>'
+          // 一鍵換股按鈕
+          +'<button data-out="'+s.out_id+'" data-in-id="'+c.id+'" data-in-name="'+c.name+'"'
+            +' onclick="_doSwap(this)"'
+            +' style="flex-shrink:0;padding:6px 10px;border-radius:8px;border:none;'
+            +'background:var(--green);color:#fff;font-size:11px;font-weight:700;'
+            +'cursor:pointer;font-family:inherit;white-space:nowrap">'
+            +'⚡ 一鍵換股'
+          +'</button>'
+        +'</div>';
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
   }
+
+  // ── ③ 強勢保留 ───────────────────────────────────────
+  if(ai.keep && ai.keep.length){
+    html += '<div style="margin-bottom:12px">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">'
+      +'✅ 強勢保留（'+ai.keep.length+' 支）</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px">';
+    for(const k of ai.keep){
+      const d = stockList.find(x=>x.id===k.id);
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;'
+        +'background:rgba(0,212,170,.05);border-radius:8px;border:1px solid rgba(0,212,170,.15)">'
+        +'<span style="font-size:12px;font-weight:700;color:var(--green);flex-shrink:0">'+k.id+'</span>'
+        +'<span style="font-size:12px;color:var(--text);font-weight:600;flex-shrink:0">'+k.name+'</span>'
+        +(d?'<span style="font-size:10px;color:var(--green);font-weight:600">'+d.wr+'%</span>':'')
+        +'<span style="font-size:10px;color:var(--text3);margin-left:auto;text-align:right">'+k.reason+'</span>'
+        +'</div>';
+    }
+    html += '</div></div>';
+  }
+
+  // ── ④ 觀察中 ─────────────────────────────────────────
+  if(ai.watch && ai.watch.length){
+    html += '<div style="margin-bottom:12px">'
+      +'<div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">'
+      +'⚖️ 觀察中（'+ai.watch.length+' 支）</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:4px">';
+    for(const w of ai.watch){
+      html += '<div style="padding:5px 10px;border-radius:20px;'
+        +'background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);font-size:11px">'
+        +'<span style="color:var(--gold);font-weight:700">'+w.id+'</span>'
+        +' <span style="color:var(--text)">'+w.name+'</span>'
+        +'<span style="color:var(--text3);margin-left:4px">'+w.reason+'</span>'
+        +'</div>';
+    }
+    html += '</div></div>';
+  }
+
+  // ── ⑤ 法人診斷 + 下一步 ──────────────────────────────
+  if(ai.inst_note||ai.next_action){
+    html += '<div style="padding:10px 12px;background:var(--surface);border-radius:8px;'
+      +'border:1px solid var(--border);margin-bottom:8px">';
+    if(ai.inst_note)
+      html += '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;line-height:1.5">'
+        +'🏦 '+ai.inst_note+'</div>';
+    if(ai.next_action)
+      html += '<div style="font-size:11px;font-weight:700;color:var(--purple)">'
+        +'▶ 下次調整：'+ai.next_action+'</div>';
+    html += '</div>';
+  }
+
+  html += '<div style="font-size:10px;color:var(--text3);text-align:center;padding-top:4px">'
+    +'AI 建議僅供參考，投資有風險，請自行判斷</div>';
+
+  content.style.opacity = '0';
+  content.innerHTML = html;
+  content.style.transition = 'opacity .4s';
+  requestAnimationFrame(()=>{ content.style.opacity='1'; });
+}
+
+// 一鍵換股（由按鈕 data 屬性傳參，避免引號問題）
+async function _doSwap(btn){
+  const outId  = btn.dataset.out;
+  const inId   = btn.dataset.inId;
+  const inName = btn.dataset.inName;
+  if(!outId||!inId||!inName){ showToast('❌ 參數錯誤'); return; }
+
+  const wl     = getMyWL();
+  const hasIn  = wl.some(s=>s.id===inId);
+  if(hasIn){ showToast('ℹ️ '+inId+' '+inName+' 已在自選股中'); return; }
+
+  const hasOut = wl.some(s=>s.id===outId);
+  const msg    = hasOut
+    ? '確定將「'+outId+'」換成「'+inId+' '+inName+'」？\n（原股票將從自選股移除）'
+    : '確定加入「'+inId+' '+inName+'」到自選股？';
+  if(!confirm(msg)) return;
+
+  // 移除舊股
+  if(hasOut){
+    const filtered = wl.filter(s=>s.id!==outId);
+    localStorage.setItem(MY_WL_KEY, JSON.stringify(filtered));
+  }
+
+  // 取入場參考價
+  let price = null;
+  try{
+    const raw = await fmStockData(inId, 3);
+    const q   = _parseQuote(raw, inId);
+    if(q?.price) price = q.price;
+  }catch(e){}
+
+  // 加入新股
+  const now = new Date().toISOString().slice(0,10);
+  const cur  = getMyWL();
+  cur.push({id:inId, name:inName, addedDate:now, entryPx:price});
+  localStorage.setItem(MY_WL_KEY, JSON.stringify(cur));
+
+  // 更新按鈕狀態
+  btn.textContent = '✅ 已換股';
+  btn.disabled    = true;
+  btn.style.background = 'rgba(0,212,170,.2)';
+  btn.style.color      = 'var(--green)';
+
+  renderWatchlistStocks();
+  showToast('✅ 已加入自選股：'+inId+' '+inName+(price?' · 入場參考 '+fmt(price):''));
 }
 
 function renderBtCompareTable(){
