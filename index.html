@@ -180,6 +180,88 @@
 [data-theme="light"] [style*="rgba(255,255,255,.09)"]{background:rgba(0,0,0,.05) !important}
 [data-theme="light"] [style*="rgba(255,255,255,.1)"]{background:rgba(0,0,0,.05) !important}
 [data-theme="light"] [style*="rgba(255,255,255,.12)"]{background:rgba(0,0,0,.07) !important}
+
+/* ── 亮色模式補丁 v2：修正所有殘留白字 / 暗底問題 ─────── */
+
+/* 成交量 bar 低量柱 */
+[data-theme="light"] .vb:not([style*="#ff4c6a"]):not([style*="#00d4aa"]){
+  background:rgba(0,0,0,.13) !important }
+
+/* 策略選股說明小字（白字 .55 -> 深色）*/
+[data-theme="light"] [style*="rgba(255,255,255,.55)"]{color:var(--text2) !important}
+[data-theme="light"] [style*="rgba(255,255,255,.25)"]{color:var(--text3) !important}
+[data-theme="light"] [style*="rgba(255,255,255,.2)"] {color:var(--text3) !important}
+[data-theme="light"] [style*="rgba(255,255,255,.4)"] {color:var(--text2) !important}
+
+/* vzone（策略選股分區標籤）*/
+[data-theme="light"] .vzone{color:var(--text2) !important}
+
+/* vol-dates 日期 */
+[data-theme="light"] .vol-dates span{color:var(--text3) !important}
+
+/* 策略卡片 rating 等級說明 / 詳細說明文字 */
+[data-theme="light"] .bt-grade-desc{color:var(--text2) !important}
+[data-theme="light"] .bt-next-tip  {color:var(--text2) !important}
+
+/* 驗證進度行（深色 border-bottom）*/
+[data-theme="light"] #pendingVerify [style*="rgba(255,255,255,.08)"]{
+  border-bottom-color:rgba(0,0,0,.07) !important}
+
+/* AI 分析框背景 */
+[data-theme="light"] #aiSection [style*="rgba(255,255,255,.04)"],
+[data-theme="light"] #aiSection [style*="rgba(255,255,255,.05)"]{
+  background:rgba(0,0,0,.03) !important}
+
+/* 先行指標 Tab 背景 */
+[data-theme="light"] .li-tab:not(.active){
+  color:var(--text2) !important; background:rgba(0,0,0,.04) !important}
+
+/* 歷史記錄 modal 內 inline 白色 border */
+[data-theme="light"] #historyModal [style*="rgba(255,255,255,.08)"]{
+  border-color:rgba(0,0,0,.08) !important}
+[data-theme="light"] #historyModal [style*="rgba(255,255,255,.06)"]{
+  background:rgba(0,0,0,.04) !important}
+
+/* 換股建議卡片 */
+[data-theme="light"] #btSwapPanel [style*="rgba(255,255,255,.06)"]{
+  background:rgba(0,0,0,.04) !important}
+[data-theme="light"] #btSwapPanel [style*="rgba(255,255,255,.08)"]{
+  border-color:rgba(0,0,0,.07) !important}
+
+/* 國際新聞展開區 */
+[data-theme="light"] #intlNewsList [style*="rgba(255,255,255,.06)"]{
+  background:rgba(0,0,0,.04) !important}
+
+/* 推播通知設定項目 */
+[data-theme="light"] #pushItemsList [style*="rgba(255,255,255,.06)"]{
+  background:rgba(0,0,0,.04) !important}
+
+/* 自選股頁面 */
+[data-theme="light"] #wlItems [style*="rgba(255,255,255,.06)"]{
+  background:rgba(0,0,0,.03) !important}
+[data-theme="light"] #wlItems [style*="rgba(255,255,255,.08)"]{
+  border-color:rgba(0,0,0,.07) !important}
+
+/* 警示股 badge */
+[data-theme="light"] .abadge{filter:brightness(.9) !important}
+
+/* 深色卡片背景殘留 */
+[data-theme="light"] [style*="background:rgba(14,14,22"],
+[data-theme="light"] [style*="background:rgba(10,10,15"],
+[data-theme="light"] [style*="background:#0a0a0f"],
+[data-theme="light"] [style*="background:#0e0e16"]{
+  background:var(--surface) !important; color:var(--text) !important}
+
+/* 盤中資料時間戳 */
+[data-theme="light"] #fresh-quote{color:var(--text3) !important}
+
+/* 族群概覽 sector tag */
+[data-theme="light"] .sector-tag{color:var(--text2) !important;
+  background:rgba(0,0,0,.06) !important;border-color:rgba(0,0,0,.1) !important}
+
+/* chart tooltip（長按）確保文字可讀 */
+[data-theme="light"] #chartTooltip *{color:var(--text) !important}
+[data-theme="light"] #ttChange{color:var(--text2) !important}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans TC',sans-serif;min-height:100vh;overflow-x:hidden}
 #app{max-width:480px;margin:0 auto;padding-bottom:80px}
 .page{display:none}.page.active{display:block}
@@ -243,6 +325,8 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .vol-head span:first-child{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px}
 .vol-head span:last-child{font-size:13px;font-weight:700}
 .vol-bars{display:flex;align-items:flex-end;gap:3px;height:48px}
+.vol-dates{display:flex;justify-content:space-between;margin-top:3px;padding:0 1px}
+.vol-dates span{font-size:9px;color:var(--text3);flex:1;text-align:center;overflow:hidden;white-space:nowrap}
 .vb{flex:1;border-radius:3px 3px 0 0;min-height:3px;transition:height .5s ease}
 .vol-signal{font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5}
 .ai-card{background:linear-gradient(135deg,#1a1030,#0d1a2a);border-radius:16px;margin:0 16px 14px;padding:16px;border:1px solid rgba(124,92,252,.3)}
@@ -780,6 +864,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <div class="vol-sec">
       <div class="vol-head"><span>📊 成交量</span><span id="stockVolText" class="up">38,472 張 · 均量 ×1.4</span></div>
       <div class="vol-bars" id="volBars"></div>
+      <div class="vol-dates" id="volDates"></div>
       <div class="vol-signal" id="volSignal">📊 <strong class="up">技術面參考</strong> — 投資決策請自行判斷，風險自負</div>
     </div>
   </div>
@@ -4790,15 +4875,57 @@ function drawFallbackChart(isUp){
 }
 
 // ── 成交量柱狀圖 ──────────────────────────────────────
-function renderVolBars(isUp){
-  const h=[18,28,46,30,16,22,14,24,42,50], c=document.getElementById('volBars');
-  c.innerHTML='';
-  h.forEach((v,i)=>{
-    const d=document.createElement('div'); d.className='vb';
-    d.style.background = i===h.length-1?(isUp?'#ff4c6a':'#00d4aa'):v>35?(isUp?'#ff8fa0':'#00d4aa'):'rgba(255,255,255,0.15)';
-    d.style.height='0'; c.appendChild(d);
-    setTimeout(()=>d.style.height=Math.round(v/50*46)+'px', i*40+100);
+function renderVolBars(isUp, histData){
+  const el   = document.getElementById('volBars');
+  const dtEl = document.getElementById('volDates');
+  if(!el) return;
+
+  // 真實成交量（最近10根日K）
+  const vols  = histData?.volume?.filter(v=>v>0).slice(-10) || [];
+  const dates = histData?.dates?.slice(-10) || [];
+  const mx    = vols.length ? Math.max(...vols) : 0;
+  const hArr  = vols.length >= 3
+    ? vols.map(v => mx>0 ? Math.max(3, Math.round(v/mx*46)) : 4)
+    : [18,28,46,30,16,22,14,24,42,50];
+
+  // 更新成交量文字
+  const avgVol  = vols.length ? vols.reduce((a,b)=>a+b,0)/vols.length : 0;
+  const lastVol = vols[vols.length-1] || 0;
+  const volText = document.getElementById('stockVolText');
+  if(volText && lastVol > 0){
+    const ratio = avgVol > 0 ? ' · 均量 ×'+(lastVol/avgVol).toFixed(1) : '';
+    volText.textContent = Number(lastVol).toLocaleString()+' 張'+ratio;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  el.innerHTML = '';
+  hArr.forEach((v,i)=>{
+    const d = document.createElement('div');
+    d.className = 'vb';
+    const isLast = i === hArr.length-1;
+    const ratio  = v / 46;
+    if(isLast)          d.style.background = isUp ? '#ff4c6a' : '#00d4aa';
+    else if(ratio>0.65) d.style.background = isUp ? 'rgba(255,76,106,.45)' : 'rgba(0,212,170,.45)';
+    else                d.style.background = isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.13)';
+    d.style.height = '0';
+    el.appendChild(d);
+    setTimeout(()=>{ d.style.height = v+'px'; }, i*40+100);
   });
+
+  // 日期軸：首、中、末 3 個標記
+  if(dtEl){
+    const fmt = s => s ? s.slice(5).replace('-','/') : '';
+    const cnt = hArr.length;
+    dtEl.innerHTML = '';
+    for(let i=0; i<cnt; i++){
+      const sp = document.createElement('span');
+      if(i === 0)                   sp.textContent = fmt(dates[0]);
+      else if(i === Math.floor(cnt/2)) sp.textContent = fmt(dates[Math.floor(dates.length/2)]);
+      else if(i === cnt-1)          sp.textContent = fmt(dates[dates.length-1]);
+      dtEl.appendChild(sp);
+    }
+  }
+
   document.getElementById('volSignal').innerHTML = isUp
     ? '📊 <strong class="up">量增價漲</strong> — 技術面偏多參考，投資決策請自行判斷'
     : '📊 <strong class="dn">量增價跌</strong> — 技術面偏弱參考，注意價格波動風險';
@@ -7110,7 +7237,7 @@ async function selectStock(el, name, ticker){
 
     const isUp = quoteData.changePct >= 0;
     renderStockHeader(name, currentTicker, quoteData.price, quoteData.changePct, isUp, quoteData.date);
-    renderVolBars(isUp);
+    renderVolBars(isUp, histData);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
     const dates = histData?.dates||[];
     // 1D 圖：優先用分鐘K（已並行取得），fallback 用日K近5日
