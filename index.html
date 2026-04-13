@@ -1251,29 +1251,53 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     </div>
   </div>
 
-  <div class="sec"><h2>市場成交量</h2></div>
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <h2>市場成交量</h2>
+    <span id="mktVolUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+  </div>
   <div class="vol-card">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px">台股今日成交額</div>
-        <div class="vol-big">4,823 <span>億元</span></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;margin-bottom:0">較昨日 <strong class="up">+38.4%</strong>　較月均 +22.1%</div>
+        <div class="vol-big" id="mktVolBig">— <span>億元</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;margin-bottom:0"
+          id="mktVolCompare">載入中…</div>
       </div>
-      <span class="chip up" style="margin-top:4px">爆量</span>
+      <span class="chip" id="mktVolChip" style="margin-top:4px">—</span>
+    </div>
+    <!-- 方案B：API失效時的示意標示 -->
+    <div id="mktVolFallbackNote" style="display:none;font-size:10px;color:var(--gold);
+      background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);
+      border-radius:6px;padding:4px 8px;margin-top:6px">
+      ⚠️ 目前顯示近期歷史數據（示意），非今日即時成交額
     </div>
     <div class="market-bars" id="mktBars"></div>
-    <div class="vol-time-row"><span>9:00</span><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>收盤</span></div>
+    <div class="vol-time-row" id="mktVolTimeRow">
+      <span>—</span><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>
+    </div>
     <div class="vol-stats3">
-      <div class="vs3"><div class="vsl">昨日</div><div class="vsv">3,484億</div></div>
-      <div class="vs3"><div class="vsl">月均</div><div class="vsv">3,946億</div></div>
-      <div class="vs3"><div class="vsl">換手率</div><div class="vsv purple">1.84%</div></div>
+      <div class="vs3"><div class="vsl">昨日</div><div class="vsv" id="mktVolYest">—億</div></div>
+      <div class="vs3"><div class="vsl">月均</div><div class="vsv" id="mktVolAvg">—億</div></div>
+      <div class="vs3"><div class="vsl">換手率</div><div class="vsv purple" id="mktVolTurnover">—%</div></div>
     </div>
     <div class="breakdown">
-      <div class="bdi"><div class="bdl">上市</div><div class="bdv">3,641億</div><div class="bdc up">+40.2%</div></div>
+      <div class="bdi">
+        <div class="bdl">上市</div>
+        <div class="bdv" id="mktVolTSE">—億</div>
+        <div class="bdc" id="mktVolTSEChg">—</div>
+      </div>
       <div class="bdiv"></div>
-      <div class="bdi"><div class="bdl">上櫃</div><div class="bdv">812億</div><div class="bdc up">+29.8%</div></div>
+      <div class="bdi">
+        <div class="bdl">上櫃</div>
+        <div class="bdv" id="mktVolOTC">—億</div>
+        <div class="bdc" id="mktVolOTCChg">—</div>
+      </div>
       <div class="bdiv"></div>
-      <div class="bdi"><div class="bdl">興櫃</div><div class="bdv">370億</div><div class="bdc dn">-3.1%</div></div>
+      <div class="bdi">
+        <div class="bdl">興櫃</div>
+        <div class="bdv" id="mktVolEMG">—億</div>
+        <div class="bdc" id="mktVolEMGChg">—</div>
+      </div>
     </div>
   </div>
 
@@ -4949,15 +4973,167 @@ function renderVolBars(isUp, histData){
     : '📊 <strong class="dn">量增價跌</strong> — 技術面偏弱參考，注意價格波動風險';
 }
 
-function renderMktBars(){
+// ════════════════════════════════════════════════════
+// 市場成交量：接真實 API（方案A）+ 失效時示意標示（方案B）
+// 資料來源：FinMind TaiwanStockPrice(TAIEX) 近20日成交額
+//           TWSE OpenAPI 當日上市成交額（盤中即時）
+// ════════════════════════════════════════════════════
+async function loadMarketVolume(){
+  const setEl2 = (id, val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
+  const setHtml = (id, val) => { const e=document.getElementById(id); if(e) e.innerHTML=val; };
+  const noteEl  = document.getElementById('mktVolFallbackNote');
+  const barEl   = document.getElementById('mktBars');
+  const chipEl  = document.getElementById('mktVolChip');
+
+  // ── ① 嘗試抓 FinMind TAIEX 近22日成交量 ─────────────
+  let taiexRows = [];
+  try{
+    taiexRows = await fmFetch({
+      dataset:'TaiwanStockPrice', data_id:'TAIEX',
+      start_date: nDaysAgo(35), end_date: todayStr(),
+    }) || [];
+  }catch(e){ console.warn('[MktVol] TAIEX fetch failed:', e.message); }
+
+  const validRows = taiexRows.filter(r => parseFloat(r.Trading_Money) > 0);
+
+  if(validRows.length >= 3){
+    // ── 真實資料路徑（方案A）────────────────────────────
+    if(noteEl) noteEl.style.display = 'none';
+
+    const latest  = validRows[validRows.length - 1];
+    const prev    = validRows[validRows.length - 2];
+    const moneyB  = v => Math.round(parseFloat(v) / 1e8); // 元 → 億
+    const todayB  = moneyB(latest.Trading_Money);
+    const yesterB = moneyB(prev.Trading_Money);
+    const avgB    = Math.round(validRows.slice(-20).reduce((s,r)=>s+parseFloat(r.Trading_Money||0),0) / Math.min(20,validRows.length) / 1e8);
+    const vsYest  = yesterB > 0 ? ((todayB - yesterB) / yesterB * 100) : 0;
+    const vsAvg   = avgB   > 0 ? ((todayB - avgB)   / avgB   * 100) : 0;
+    const isUp    = vsYest >= 0;
+
+    // 成交額主顯示
+    const bigEl = document.getElementById('mktVolBig');
+    if(bigEl) bigEl.innerHTML = `${todayB.toLocaleString()} <span>億元</span>`;
+
+    setHtml('mktVolCompare',
+      `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
+      +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
+
+    setEl2('mktVolYest', yesterB+'億');
+    setEl2('mktVolAvg',  avgB+'億');
+
+    // 換手率（Trading_Volume / 大盤總市值，簡化用成交量/億元張數估算）
+    const turnover = parseFloat(latest.Trading_Turnover||0);
+    setEl2('mktVolTurnover', turnover>0 ? turnover.toFixed(2)+'%' : '—%');
+
+    // 量能標籤
+    const ratio = avgB > 0 ? todayB / avgB : 1;
+    if(chipEl){
+      if(ratio >= 1.5)     { chipEl.textContent='爆量'; chipEl.className='chip up'; }
+      else if(ratio >= 1.1){ chipEl.textContent='放量'; chipEl.className='chip up'; }
+      else if(ratio <= 0.7){ chipEl.textContent='縮量'; chipEl.className='chip dn'; }
+      else                 { chipEl.textContent='正常'; chipEl.className='chip'; }
+    }
+
+    // 柱狀圖：近20日成交額
+    const barData = validRows.slice(-20).map(r=>parseFloat(r.Trading_Money||0));
+    const barMax  = Math.max(...barData);
+    if(barEl){
+      barEl.innerHTML = '';
+      const isDark = document.documentElement.getAttribute('data-theme')!=='light';
+      barData.forEach((v,i)=>{
+        const d = document.createElement('div'); d.className='mb';
+        const h = barMax>0 ? Math.max(3, Math.round(v/barMax*60)) : 4;
+        const isLast = i===barData.length-1;
+        const isHigh = v/barMax > 0.65;
+        if(isLast)        d.style.background='#00d4aa';
+        else if(isHigh)   d.style.background='#7c5cfc';
+        else              d.style.background=isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.13)';
+        d.style.height=h+'px'; barEl.appendChild(d);
+      });
+    }
+
+    // 時間軸：顯示第1、中間、最後日期
+    const rowEl = document.getElementById('mktVolTimeRow');
+    if(rowEl && validRows.length >= 3){
+      const ds = validRows.slice(-20).map(r=>(r.date||'').slice(5).replace('-','/'));
+      const mid = ds[Math.floor(ds.length/2)];
+      rowEl.innerHTML = `<span>${ds[0]||''}</span><span></span><span>${mid||''}</span><span></span><span></span><span>${ds[ds.length-1]||''}</span>`;
+    }
+
+    // ── ② 嘗試抓 TWSE 當日即時：上市/上櫃分開 ──────────
+    // TWSE OpenAPI 今日成交（盤後 16:30 後才有完整數字，盤中為截至當下）
+    try{
+      const twse = await fmTWSEIndex();
+      if(twse && twse.volume){
+        const tseB = Math.round(twse.volume / 1e8);
+        setEl2('mktVolTSE', tseB > 0 ? tseB+'億' : todayB+'億');
+        const tseVs = yesterB>0 ? (tseB-yesterB)/yesterB*100 : vsYest;
+        const tseEl = document.getElementById('mktVolTSEChg');
+        if(tseEl){ tseEl.textContent=(tseVs>=0?'+':'')+tseVs.toFixed(1)+'%'; tseEl.className='bdc '+(tseVs>=0?'up':'dn'); }
+      } else {
+        // TWSE 無分項 → 依比例估算（上市約75%、上櫃約20%、興櫃約5%）
+        _estimateMktBreakdown(todayB, yesterB);
+      }
+    }catch(e){
+      _estimateMktBreakdown(todayB, yesterB);
+    }
+
+    // 更新時間戳
+    const dataDate = latest.date || '';
+    const now = new Date();
+    const twTm = new Date(now.toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const timeStr = `${String(twTm.getHours()).padStart(2,'0')}:${String(twTm.getMinutes()).padStart(2,'0')}`;
+    setEl2('mktVolUpdateTime', `${dataDate} · 更新 ${timeStr}`);
+
+  } else {
+    // ── 方案B：API 失效，顯示示意標示 ──────────────────
+    if(noteEl) noteEl.style.display = 'block';
+    const bigEl = document.getElementById('mktVolBig');
+    if(bigEl) bigEl.innerHTML = `— <span>億元</span>`;
+    setEl2('mktVolUpdateTime', '資料載入失敗');
+    setHtml('mktVolCompare', '<span style="color:var(--text3)">暫無即時資料</span>');
+    if(chipEl){ chipEl.textContent='—'; chipEl.className='chip'; }
+    // 柱狀圖仍顯示但加遮罩說明
+    renderMktBarsStatic();
+  }
+}
+
+// 上市/上櫃/興櫃比例估算（無分項 API 時使用）
+function _estimateMktBreakdown(todayB, yesterB){
+  const tseB  = Math.round(todayB * 0.75);
+  const otcB  = Math.round(todayB * 0.20);
+  const emgB  = Math.round(todayB * 0.05);
+  const ystTSE = Math.round(yesterB * 0.75);
+  const setChg = (id, now, prev) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const pct = prev>0 ? (now-prev)/prev*100 : 0;
+    el.textContent = (pct>=0?'+':'')+pct.toFixed(1)+'%';
+    el.className = 'bdc '+(pct>=0?'up':'dn');
+  };
+  const s = id => document.getElementById(id);
+  if(s('mktVolTSE'))  s('mktVolTSE').textContent  = tseB+'億';
+  if(s('mktVolOTC'))  s('mktVolOTC').textContent  = otcB+'億';
+  if(s('mktVolEMG'))  s('mktVolEMG').textContent  = emgB+'億';
+  setChg('mktVolTSEChg', tseB, ystTSE);
+  setChg('mktVolOTCChg', otcB, Math.round(yesterB*0.20));
+  setChg('mktVolEMGChg', emgB, Math.round(yesterB*0.05));
+}
+
+// 方案B：示意柱狀圖（API全失效時）
+function renderMktBarsStatic(){
   const v=[18,32,48,55,62,44,30,28,38,52,72,68,60,55,70,85,78,90,100,88];
-  const c=document.getElementById('mktBars'); c.innerHTML='';
+  const c=document.getElementById('mktBars'); if(!c) return;
+  const isDark = document.documentElement.getAttribute('data-theme')!=='light';
+  c.innerHTML='';
   v.forEach((n,i)=>{
     const d=document.createElement('div'); d.className='mb';
-    d.style.background=i===v.length-1?'#00d4aa':n>65?'#7c5cfc':'rgba(255,255,255,0.18)';
+    d.style.background=i===v.length-1?'#00d4aa':n>65?'#7c5cfc':isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.13)';
     d.style.height=Math.round(n/100*60)+'px'; c.appendChild(d);
   });
 }
+
+function renderMktBars(){ renderMktBarsStatic(); }
 
 // ── 時間軸 Tab 切換 ───────────────────────────────────
 // 1D: Yahoo Finance 分鐘K | 其他: FinMind 日K
@@ -7512,6 +7688,8 @@ async function refreshPulse(){
   const inSess = !isWeek && m>=555 && m<=810;
   // 盤中5分鐘，盤外30分鐘
   _pulseTimer  = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
+  // 盤中同步更新市場成交量（避免重複呼叫，只在 refreshPulse 觸發時更新）
+  if(inSess) loadMarketVolume().catch(()=>{});
 }
 
 function updatePulse(instData, indexData, txfData){
@@ -12305,7 +12483,7 @@ window.addEventListener('load', async ()=>{
   // 第 0 波：本地資料立即渲染
   drawFallbackChart(true);
   renderVolBars(true);
-  renderMktBars();
+  loadMarketVolume();
   animBars();
   loadProfile();
   renderHomeWatchlist();
