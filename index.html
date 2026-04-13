@@ -11789,10 +11789,30 @@ async function initPushUI(){
   const statusEl = document.getElementById('pushStatusText');
   if(!btn) return;
 
-  // 不支援
+  // 不支援：偵測 iOS 給出加到主畫面引導，其他顯示一般提示
   if(!('serviceWorker' in navigator) || !('PushManager' in window)){
-    if(statusEl) statusEl.textContent = '此瀏覽器不支援推播（請用 Chrome / Safari 17+）';
-    btn.textContent = '不支援'; btn.disabled = true;
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isInStandalone = window.navigator.standalone === true;
+
+    if(isIOS && !isInStandalone){
+      // iPhone/iPad 在 Safari 瀏覽器內：需加到主畫面
+      if(statusEl){
+        statusEl.innerHTML =
+          '📱 iPhone 需加到主畫面才能啟用推播<br>'
+          +'<span style="font-size:10px;color:var(--text3)">'
+          +'Safari → 分享 ↑ → 加入主畫面 → 從桌面圖示開啟</span>';
+      }
+      btn.textContent = '查看步驟';
+      btn.disabled = false;
+      btn.style.background   = 'rgba(124,92,252,.1)';
+      btn.style.color        = 'var(--purple)';
+      btn.style.borderColor  = 'rgba(124,92,252,.4)';
+      btn.onclick = ()=>_showA2HSGuide();
+    } else {
+      // 非 iOS 或其他不支援瀏覽器
+      if(statusEl) statusEl.textContent = '此瀏覽器不支援推播（請用 Chrome 或 Safari 17+）';
+      btn.textContent = '不支援'; btn.disabled = true;
+    }
     return;
   }
 
@@ -11813,6 +11833,54 @@ async function initPushUI(){
       btn.style.color='var(--green)';
       btn.style.borderColor='rgba(0,212,170,.4)'; }
   }
+}
+
+// ── 加到主畫面（A2HS）教學 Modal ────────────────────────
+function _showA2HSGuide(){
+  // 若已有 modal 就移除
+  const existing = document.getElementById('a2hsModal');
+  if(existing){ existing.remove(); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'a2hsModal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);'
+    +'display:flex;align-items:flex-end;justify-content:center;padding-bottom:0';
+  modal.innerHTML =
+    '<div style="width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;'
+    +'padding:24px 20px 40px;border-top:1px solid var(--border)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+        +'<div style="font-size:16px;font-weight:800;color:var(--text)">📱 加入主畫面教學</div>'
+        +'<button onclick="document.getElementById(\'a2hsModal\').remove()" '
+          +'style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0">✕</button>'
+      +'</div>'
+      // 步驟
+      +'<div style="display:flex;flex-direction:column;gap:14px">'
+        +_a2hsStep('1','點擊 Safari 下方的「分享」按鈕','方形加箭頭的圖示 ↑','rgba(0,122,255,.15)','#007aff')
+        +_a2hsStep('2','向下滑動，找到「加入主畫面」','英文顯示為 Add to Home Screen','rgba(0,212,170,.12)','var(--green)')
+        +_a2hsStep('3','點擊右上角「新增」確認','App 名稱會顯示為「股析」','rgba(124,92,252,.12)','var(--purple)')
+        +_a2hsStep('4','從主畫面開啟「股析」App','再到「我的」頁面開啟推播通知 🔔','rgba(245,200,66,.12)','var(--gold)')
+      +'</div>'
+      +'<div style="margin-top:18px;padding:10px 12px;background:rgba(255,255,255,.05);'
+        +'border-radius:10px;font-size:11px;color:var(--text3);line-height:1.6">'
+        +'ℹ️ iOS 16.4 以上支援 Web Push，需以 PWA 模式（主畫面 App）執行才能收到通知'
+      +'</div>'
+    +'</div>';
+
+  document.body.appendChild(modal);
+  // 點背景關閉
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+function _a2hsStep(num, title, desc, bg, color){
+  return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;'
+    +'background:'+bg+';border-radius:10px">'
+    +'<div style="width:26px;height:26px;border-radius:50%;background:'+color+';color:#fff;'
+    +'font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+num+'</div>'
+    +'<div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+title+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+desc+'</div>'
+    +'</div>'
+  +'</div>';
 }
 
 function _updatePushUI(isSubscribed){
