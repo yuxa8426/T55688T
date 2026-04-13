@@ -356,9 +356,27 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .ai-card h3{font-size:16px;font-weight:700;margin-bottom:8px}
 .ai-card p{font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px}
 .metrics{display:flex;gap:10px}
-.metric{flex:1;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;border:1px solid var(--border)}
+.metric{flex:1;background:var(--card);border-radius:10px;padding:10px 12px;border:1px solid var(--border)}
 .metric .ml{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase}
-.metric .mv{font-size:16px;font-weight:700;margin-top:3px}
+.metric .mv{font-size:16px;font-weight:700;margin-top:3px;color:var(--text)}
+/* AI 面板通用卡片（短/中/長期小數字卡片）*/
+.ai-mini-card{flex:1;background:var(--card);border-radius:10px;padding:10px;text-align:center;border:1px solid var(--border)}
+.ai-mini-card .ai-mini-label{font-size:10px;color:var(--text3);margin-bottom:4px}
+.ai-mini-card .ai-mini-val{font-size:18px;font-weight:700;color:var(--text)}
+/* 小分數卡片（短/中/長/法人 4格）*/
+.ai-score-card{flex:1;background:var(--card);border-radius:8px;padding:7px;text-align:center;border:1px solid var(--border)}
+.ai-score-card .ai-sc-lbl{font-size:9px;color:var(--text3);margin-bottom:2px}
+.ai-score-card .ai-sc-val{font-size:14px;font-weight:700;color:var(--text)}
+/* 觀察重點文字區 */
+.ai-obs-box{background:var(--card);border-radius:10px;padding:11px 13px;border:1px solid var(--border)}
+.ai-obs-box .ai-obs-lbl{font-size:11px;color:var(--text3);margin-bottom:4px}
+.ai-obs-box .ai-obs-body{font-size:13px;color:var(--text);line-height:1.6}
+/* 評分進度條背景 */
+.ai-bar-bg{height:6px;border-radius:999px;background:var(--border);margin-top:6px;overflow:hidden}
+.ai-bar-bg-lg{height:8px;border-radius:999px;background:var(--border);margin-bottom:10px;overflow:hidden}
+/* 近月支撐/壓力/參考價位 3格 */
+.ai-stat-card{flex:1;background:var(--card);border-radius:8px;padding:7px 9px;border:1px solid var(--border)}
+.ai-stat-lbl{font-size:9px;color:var(--text3);margin-bottom:2px}
 .sig{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;margin-top:12px;border:1px solid;cursor:pointer}
 .sig.buy{background:rgba(255,76,106,.12);color:var(--red);border-color:rgba(255,76,106,.3)}
 .sig.sell{background:rgba(0,212,170,.12);color:var(--green);border-color:rgba(0,212,170,.3)}
@@ -691,7 +709,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       <!-- 多空區域標籤 -->
       <div style="display:flex;gap:6px;margin-bottom:12px">
         <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(255,76,106,.08);color:var(--red)">PCR &lt; 0.8 多方</span>
-        <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(255,255,255,.09);color:var(--text3)">0.8~1.2 中性</span>
+        <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:var(--card);border:1px solid var(--border);color:var(--text3)">0.8~1.2 中性</span>
         <span style="flex:1;text-align:center;font-size:10px;padding:4px;border-radius:6px;background:rgba(0,212,170,.08);color:var(--green)">PCR &gt; 1.2 空方</span>
       </div>
       <!-- AI 分析 -->
@@ -886,7 +904,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <p id="aiBody" style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">載入中…</p>
 
     <!-- 短/中/長期 Tab -->
-    <div style="display:flex;background:rgba(255,255,255,.09);border-radius:10px;padding:3px;margin-bottom:14px" id="periodTabs">
+    <div id="periodTabs" style="display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:14px">
       <button onclick="showPeriod('short')" id="ptab-short"
         style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--green);color:#000">
         短期 5日
@@ -904,22 +922,22 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <!-- 短期面板 -->
     <div id="panel-short">
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">RSI(14)</div>
-          <div style="font-size:18px;font-weight:700" id="s-rsi">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">RSI(14)</div>
+          <div class="ai-mini-val" id="s-rsi">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">5日動能</div>
-          <div style="font-size:18px;font-weight:700" id="s-mom">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">5日動能</div>
+          <div class="ai-mini-val" id="s-mom">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">法人近5日</div>
-          <div style="font-size:18px;font-weight:700" id="s-inst">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">法人近5日</div>
+          <div class="ai-mini-val" id="s-inst">—</div>
         </div>
       </div>
-      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:11px 13px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">短期觀察重點</div>
-        <div style="font-size:13px;color:var(--text);line-height:1.6" id="s-body">—</div>
+      <div class="ai-obs-box">
+        <div class="ai-obs-lbl">短期觀察重點</div>
+        <div class="ai-obs-body" id="s-body">—</div>
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--text2)">短期評分</span>
@@ -928,7 +946,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           <span style="font-size:11px;color:var(--text3)">/10</span>
         </div>
       </div>
-      <div style="height:6px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden">
+      <div class="ai-bar-bg">
         <div id="s-bar" style="height:100%;border-radius:999px;width:0%;transition:width .7s ease;background:linear-gradient(90deg,#ff4c6a,#f5c842,#00d4aa)"></div>
       </div>
     </div>
@@ -936,22 +954,22 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <!-- 中期面板 -->
     <div id="panel-mid" style="display:none">
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">MA20</div>
-          <div style="font-size:18px;font-weight:700" id="m-ma20">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">MA20</div>
+          <div class="ai-mini-val" id="m-ma20">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">月漲幅</div>
-          <div style="font-size:18px;font-weight:700" id="m-month">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">月漲幅</div>
+          <div class="ai-mini-val" id="m-month">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">月位置</div>
-          <div style="font-size:18px;font-weight:700" id="m-pos">—</div>
+        <div class="ai-mini-card">
+          <div class="ai-mini-label">月位置</div>
+          <div class="ai-mini-val" id="m-pos">—</div>
         </div>
       </div>
-      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:11px 13px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">中期觀察重點</div>
-        <div style="font-size:13px;color:var(--text);line-height:1.6" id="m-body">—</div>
+      <div class="ai-obs-box">
+        <div class="ai-obs-lbl">中期觀察重點</div>
+        <div class="ai-obs-body" id="m-body">—</div>
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--text2)">中期評分</span>
@@ -960,7 +978,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           <span style="font-size:11px;color:var(--text3)">/10</span>
         </div>
       </div>
-      <div style="height:6px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden">
+      <div class="ai-bar-bg">
         <div id="m-bar" style="height:100%;border-radius:999px;width:0%;transition:width .7s ease;background:linear-gradient(90deg,#ff4c6a,#f5c842,#00d4aa)"></div>
       </div>
     </div>
@@ -972,15 +990,15 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
       <!-- 行1：均線組 -->
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA60 季線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma60">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA120 半年線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma120">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">MA250 年線</div>
           <div style="font-size:16px;font-weight:700" id="l-ma250">—</div>
         </div>
@@ -988,15 +1006,15 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
       <!-- 行2：漲幅組 -->
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">季漲幅（60日）</div>
           <div style="font-size:16px;font-weight:700" id="l-quarter">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">半年漲幅</div>
           <div style="font-size:16px;font-weight:700" id="l-half">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">年漲幅（52W）</div>
           <div style="font-size:16px;font-weight:700" id="l-year">—</div>
         </div>
@@ -1004,7 +1022,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
       <!-- 行3：52週高低 + 週期 -->
       <div style="display:flex;gap:6px;margin-bottom:10px">
-        <div style="flex:1.4;background:rgba(255,255,255,.09);border-radius:10px;padding:9px">
+        <div class="ai-mini-card" style="flex:1.4;text-align:left">
           <div style="font-size:9px;color:var(--text3);margin-bottom:4px">52週高低點</div>
           <div style="font-size:11px" id="l-52w">—</div>
           <!-- 52週位置條 -->
@@ -1013,23 +1031,23 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           </div>
           <div style="font-size:9px;color:var(--text3);margin-top:2px" id="l-52w-pos">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.09);border-radius:10px;padding:9px;text-align:center">
+        <div class="ai-mini-card">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">週期規律</div>
           <div style="font-size:15px;font-weight:700" id="l-cycle">—</div>
         </div>
       </div>
 
       <!-- 月份漲跌週期圖 -->
-      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:12px 13px;margin-bottom:10px">
+      <div class="ai-obs-box" style="margin-bottom:10px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:600">近12個月漲跌節律</div>
         <div id="cycleChart" style="display:flex;align-items:flex-end;gap:3px;height:52px"></div>
         <div id="cycleLabels" style="display:flex;gap:3px;margin-top:4px"></div>
       </div>
 
       <!-- 長期觀察重點 -->
-      <div style="background:rgba(0,0,0,.2);border-radius:10px;padding:11px 13px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">長期觀察重點</div>
-        <div style="font-size:13px;color:var(--text);line-height:1.6" id="l-body">—</div>
+      <div class="ai-obs-box">
+        <div class="ai-obs-lbl">長期觀察重點</div>
+        <div class="ai-obs-body" id="l-body">—</div>
       </div>
 
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
@@ -1039,7 +1057,7 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           <span style="font-size:11px;color:var(--text3)">/10</span>
         </div>
       </div>
-      <div style="height:6px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:6px;overflow:hidden">
+      <div class="ai-bar-bg">
         <div id="l-bar" style="height:100%;border-radius:999px;width:0%;transition:width .7s ease;background:linear-gradient(90deg,#ff4c6a,#f5c842,#00d4aa)"></div>
       </div>
     </div>
@@ -1060,25 +1078,25 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           <span style="font-size:12px;color:var(--text3)">/10</span>
         </div>
       </div>
-      <div style="height:8px;border-radius:999px;background:rgba(255,255,255,.08);margin-bottom:10px;overflow:hidden">
+      <div class="ai-bar-bg-lg">
         <div id="scoreBar" style="height:100%;border-radius:999px;width:0%;transition:width .8s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,#ff4c6a,#f5c842,#00d4aa)"></div>
       </div>
       <div style="display:flex;gap:6px">
-        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">短期</div>
-          <div style="font-size:14px;font-weight:700" id="scoreTech">—</div>
+        <div class="ai-score-card">
+          <div class="ai-sc-lbl">短期</div>
+          <div class="ai-sc-val" id="scoreTech">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">中期</div>
-          <div style="font-size:14px;font-weight:700" id="scoreInst">—</div>
+        <div class="ai-score-card">
+          <div class="ai-sc-lbl">中期</div>
+          <div class="ai-sc-val" id="scoreInst">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">長期</div>
-          <div style="font-size:14px;font-weight:700" id="scoreMom">—</div>
+        <div class="ai-score-card">
+          <div class="ai-sc-lbl">長期</div>
+          <div class="ai-sc-val" id="scoreMom">—</div>
         </div>
-        <div style="flex:1;background:rgba(255,255,255,.08);border-radius:8px;padding:7px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">法人</div>
-          <div style="font-size:14px;font-weight:700" id="scoreInstVal">—</div>
+        <div class="ai-score-card">
+          <div class="ai-sc-lbl">法人</div>
+          <div class="ai-sc-val" id="scoreInstVal">—</div>
         </div>
       </div>
     </div>
@@ -4639,16 +4657,16 @@ function updateAI(name, q){
         </div>
         <div style="font-size:12px;color:var(--text2);line-height:1.7">${actionDesc}</div>
         <div style="display:flex;gap:8px;margin-top:10px">
-          <div style="flex:1;background:rgba(0,0,0,.2);border-radius:8px;padding:7px 9px">
-            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">近月支撐</div>
+          <div class="ai-stat-card">
+            <div class="ai-stat-lbl">近月支撐</div>
             <div style="font-size:14px;font-weight:700;color:var(--red)">${support}</div>
           </div>
-          <div style="flex:1;background:rgba(0,0,0,.2);border-radius:8px;padding:7px 9px">
-            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">近月壓力</div>
+          <div class="ai-stat-card">
+            <div class="ai-stat-lbl">近月壓力</div>
             <div style="font-size:14px;font-weight:700;color:var(--green)">${resist}</div>
           </div>
-          <div style="flex:1;background:rgba(0,0,0,.2);border-radius:8px;padding:7px 9px">
-            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">參考價位</div>
+          <div class="ai-stat-card">
+            <div class="ai-stat-lbl">參考價位</div>
             <div style="font-size:14px;font-weight:700;color:${actionColor}">${target}</div>
           </div>
         </div>
