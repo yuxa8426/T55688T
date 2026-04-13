@@ -2737,10 +2737,25 @@ const _fmFlight      = new Map(); // url → Promise（in-flight dedup）
 const _intradayCache = new Map(); // stockId → {data, ts}
 const INTRADAY_TTL   = 30 * 1000; // 盤中 30 秒更新
 // 每 5 分鐘清除過期 cache，防記憶體持續增長
+// 每5分鐘清理過期快取 + 偵測跨日自動清除所有股價快取
+let _lastCacheDate = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
 setInterval(()=>{
-  const now = Date.now();
+  const now     = Date.now();
+  const today   = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'});
+
+  // ── 跨日偵測：清除所有股價 & 法人快取，確保資料是當日最新 ──
+  if(today !== _lastCacheDate){
+    console.log('[Cache] 跨日清除，強制重新抓取最新股價');
+    _fmCache.clear();          // 清除所有 FinMind 快取
+    _intradayCache.clear();    // 清除所有盤中資料
+    _lastCacheDate = today;
+  }
+
+  // 一般 TTL 清理
   _fmCache.forEach((v,k)=>{
-    const ttl = FM_CACHE_TTL_MAP[k.split('dataset=')[1]?.split('&')[0]] ?? FM_CACHE_DEFAULT;
+    const ds  = k.split('dataset=')[1]?.split('&')[0];
+    const ttl = typeof FM_CACHE_TTL_MAP[ds] === 'function'
+      ? FM_CACHE_TTL_MAP[ds]() : (FM_CACHE_TTL_MAP[ds] ?? FM_CACHE_DEFAULT());
     if(now-v.ts > ttl*2) _fmCache.delete(k);
   });
   _newsCache.forEach((v,k)=>{ if(now-v.ts > NEWS_CACHE_TTL*2) _newsCache.delete(k); });
@@ -7078,6 +7093,21 @@ async function selectStock(el, name, ticker){
   setLoading('chartSvg', false);
 
   if(quoteData){
+    // ── 盤中即時報價覆蓋（intraday 有資料時，用最新分鐘K覆蓋 FinMind 日K）──
+    if(intra && intra.pts.length > 2){
+      const livePrice  = intra.pts[intra.pts.length - 1];
+      const prevClose  = quoteData.prevClose || quoteData.price;
+      const liveChange = prevClose > 0 ? (livePrice - prevClose) / prevClose * 100 : 0;
+      const liveTime   = intra.times[intra.times.length - 1];
+      const twDate     = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei',
+                           month:'2-digit',day:'2-digit'}).replace('/','/');
+      quoteData.price     = livePrice;
+      quoteData.changePct = liveChange;
+      quoteData.change    = livePrice - prevClose;
+      quoteData.date      = twDate + ' ' + liveTime + '（即時）';
+      console.log('[Quote] live override', stockId, livePrice, liveChange.toFixed(2)+'%');
+    }
+
     const isUp = quoteData.changePct >= 0;
     renderStockHeader(name, currentTicker, quoteData.price, quoteData.changePct, isUp, quoteData.date);
     renderVolBars(isUp);
