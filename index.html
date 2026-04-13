@@ -4974,126 +4974,122 @@ function renderVolBars(isUp, histData){
 }
 
 // ════════════════════════════════════════════════════
-// 市場成交量：接真實 API（方案A）+ 失效時示意標示（方案B）
-// 資料來源：FinMind TaiwanStockPrice(TAIEX) 近20日成交額
-//           TWSE OpenAPI 當日上市成交額（盤中即時）
+// 市場成交量：接真實 TWSE API（方案A）+ 失效示意（方案B）
+// 來源1：Worker /marketvol → TWSE FMTQIK（每日歷史）
+// 來源2：Worker /marketvol → TWSE MIS（盤中即時）
 // ════════════════════════════════════════════════════
 async function loadMarketVolume(){
-  const setEl2 = (id, val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
-  const setHtml = (id, val) => { const e=document.getElementById(id); if(e) e.innerHTML=val; };
-  const noteEl  = document.getElementById('mktVolFallbackNote');
-  const barEl   = document.getElementById('mktBars');
-  const chipEl  = document.getElementById('mktVolChip');
+  const se = (id, val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
+  const sh = (id, val) => { const e=document.getElementById(id); if(e) e.innerHTML=val; };
+  const noteEl = document.getElementById('mktVolFallbackNote');
+  const barEl  = document.getElementById('mktBars');
+  const chipEl = document.getElementById('mktVolChip');
+  const bigEl  = document.getElementById('mktVolBig');
 
-  // ── ① 嘗試抓 FinMind TAIEX 近22日成交量 ─────────────
-  let taiexRows = [];
+  // 更新時間（台灣時區）
+  const twNow   = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const nowStr  = `${String(twNow.getHours()).padStart(2,'0')}:${String(twNow.getMinutes()).padStart(2,'0')}`;
+
   try{
-    taiexRows = await fmFetch({
-      dataset:'TaiwanStockPrice', data_id:'TAIEX',
-      start_date: nDaysAgo(35), end_date: todayStr(),
-    }) || [];
-  }catch(e){ console.warn('[MktVol] TAIEX fetch failed:', e.message); }
+    // ── 呼叫 Worker /marketvol ─────────────────────────
+    const res = await fetchWithTimeout(`${API}/marketvol`, 10000);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json = await res.json();
 
-  const validRows = taiexRows.filter(r => parseFloat(r.Trading_Money) > 0);
+    if(json.source === 'TWSE_FMTQIK' && json.rows?.length >= 3){
+      // ── 方案A：TWSE FMTQIK 歷史資料 ─────────────────
+      if(noteEl) noteEl.style.display = 'none';
 
-  if(validRows.length >= 3){
-    // ── 真實資料路徑（方案A）────────────────────────────
-    if(noteEl) noteEl.style.display = 'none';
+      const rows   = json.rows;
+      const latest = rows[rows.length-1];
+      const prev   = rows[rows.length-2];
 
-    const latest  = validRows[validRows.length - 1];
-    const prev    = validRows[validRows.length - 2];
-    const moneyB  = v => Math.round(parseFloat(v) / 1e8); // 元 → 億
-    const todayB  = moneyB(latest.Trading_Money);
-    const yesterB = moneyB(prev.Trading_Money);
-    const avgB    = Math.round(validRows.slice(-20).reduce((s,r)=>s+parseFloat(r.Trading_Money||0),0) / Math.min(20,validRows.length) / 1e8);
-    const vsYest  = yesterB > 0 ? ((todayB - yesterB) / yesterB * 100) : 0;
-    const vsAvg   = avgB   > 0 ? ((todayB - avgB)   / avgB   * 100) : 0;
-    const isUp    = vsYest >= 0;
+      // TradeValue 單位：元 → 億
+      const toB    = v => Math.round((v||0) / 1e8);
+      const todayB = toB(latest.value);
+      const yesterB= toB(prev.value);
+      const slice20= rows.slice(-20);
+      const avgB   = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0) / slice20.length / 1e8);
 
-    // 成交額主顯示
-    const bigEl = document.getElementById('mktVolBig');
-    if(bigEl) bigEl.innerHTML = `${todayB.toLocaleString()} <span>億元</span>`;
+      const vsYest = yesterB > 0 ? (todayB-yesterB)/yesterB*100 : 0;
+      const vsAvg  = avgB    > 0 ? (todayB-avgB)/avgB*100 : 0;
 
-    setHtml('mktVolCompare',
-      `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
-      +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
+      if(bigEl) bigEl.innerHTML = `${todayB.toLocaleString()} <span>億元</span>`;
+      sh('mktVolCompare',
+        `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
+        +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
 
-    setEl2('mktVolYest', yesterB+'億');
-    setEl2('mktVolAvg',  avgB+'億');
+      se('mktVolYest', yesterB+'億');
+      se('mktVolAvg',  avgB+'億');
+      se('mktVolTurnover', '—%'); // FMTQIK 無換手率欄位
 
-    // 換手率（Trading_Volume / 大盤總市值，簡化用成交量/億元張數估算）
-    const turnover = parseFloat(latest.Trading_Turnover||0);
-    setEl2('mktVolTurnover', turnover>0 ? turnover.toFixed(2)+'%' : '—%');
-
-    // 量能標籤
-    const ratio = avgB > 0 ? todayB / avgB : 1;
-    if(chipEl){
-      if(ratio >= 1.5)     { chipEl.textContent='爆量'; chipEl.className='chip up'; }
-      else if(ratio >= 1.1){ chipEl.textContent='放量'; chipEl.className='chip up'; }
-      else if(ratio <= 0.7){ chipEl.textContent='縮量'; chipEl.className='chip dn'; }
-      else                 { chipEl.textContent='正常'; chipEl.className='chip'; }
-    }
-
-    // 柱狀圖：近20日成交額
-    const barData = validRows.slice(-20).map(r=>parseFloat(r.Trading_Money||0));
-    const barMax  = Math.max(...barData);
-    if(barEl){
-      barEl.innerHTML = '';
-      const isDark = document.documentElement.getAttribute('data-theme')!=='light';
-      barData.forEach((v,i)=>{
-        const d = document.createElement('div'); d.className='mb';
-        const h = barMax>0 ? Math.max(3, Math.round(v/barMax*60)) : 4;
-        const isLast = i===barData.length-1;
-        const isHigh = v/barMax > 0.65;
-        if(isLast)        d.style.background='#00d4aa';
-        else if(isHigh)   d.style.background='#7c5cfc';
-        else              d.style.background=isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.13)';
-        d.style.height=h+'px'; barEl.appendChild(d);
-      });
-    }
-
-    // 時間軸：顯示第1、中間、最後日期
-    const rowEl = document.getElementById('mktVolTimeRow');
-    if(rowEl && validRows.length >= 3){
-      const ds = validRows.slice(-20).map(r=>(r.date||'').slice(5).replace('-','/'));
-      const mid = ds[Math.floor(ds.length/2)];
-      rowEl.innerHTML = `<span>${ds[0]||''}</span><span></span><span>${mid||''}</span><span></span><span></span><span>${ds[ds.length-1]||''}</span>`;
-    }
-
-    // ── ② 嘗試抓 TWSE 當日即時：上市/上櫃分開 ──────────
-    // TWSE OpenAPI 今日成交（盤後 16:30 後才有完整數字，盤中為截至當下）
-    try{
-      const twse = await fmTWSEIndex();
-      if(twse && twse.volume){
-        const tseB = Math.round(twse.volume / 1e8);
-        setEl2('mktVolTSE', tseB > 0 ? tseB+'億' : todayB+'億');
-        const tseVs = yesterB>0 ? (tseB-yesterB)/yesterB*100 : vsYest;
-        const tseEl = document.getElementById('mktVolTSEChg');
-        if(tseEl){ tseEl.textContent=(tseVs>=0?'+':'')+tseVs.toFixed(1)+'%'; tseEl.className='bdc '+(tseVs>=0?'up':'dn'); }
-      } else {
-        // TWSE 無分項 → 依比例估算（上市約75%、上櫃約20%、興櫃約5%）
-        _estimateMktBreakdown(todayB, yesterB);
+      // 量能標籤
+      const ratio = avgB > 0 ? todayB / avgB : 1;
+      if(chipEl){
+        if(ratio>=1.5)      { chipEl.textContent='爆量'; chipEl.className='chip up'; }
+        else if(ratio>=1.1) { chipEl.textContent='放量'; chipEl.className='chip up'; }
+        else if(ratio<=0.7) { chipEl.textContent='縮量'; chipEl.className='chip dn'; }
+        else                { chipEl.textContent='正常'; chipEl.className='chip'; }
       }
-    }catch(e){
+
+      // 柱狀圖：近20日真實成交額
+      const barData = slice20.map(r=>r.value||0);
+      const barMax  = Math.max(...barData);
+      if(barEl){
+        barEl.innerHTML='';
+        const isDark = document.documentElement.getAttribute('data-theme')!=='light';
+        barData.forEach((v,i)=>{
+          const d=document.createElement('div'); d.className='mb';
+          const h=barMax>0?Math.max(3,Math.round(v/barMax*60)):4;
+          const isLast=i===barData.length-1, isHigh=v/barMax>0.65;
+          if(isLast)       d.style.background='#00d4aa';
+          else if(isHigh)  d.style.background='#7c5cfc';
+          else             d.style.background=isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.13)';
+          d.style.height=h+'px'; barEl.appendChild(d);
+        });
+      }
+
+      // 時間軸：首/中/末日期
+      const rowEl=document.getElementById('mktVolTimeRow');
+      if(rowEl){
+        const ds = slice20.map(r=>(r.date||'').replace(/(\d{4})(\d{2})(\d{2})/,'$2/$3'));
+        const mid = ds[Math.floor(ds.length/2)]||'';
+        rowEl.innerHTML=`<span>${ds[0]||''}</span><span></span><span>${mid}</span><span></span><span></span><span>${ds[ds.length-1]||''}</span>`;
+      }
+
+      // 上市/上櫃/興櫃：比例估算（FMTQIK 只有上市總額）
       _estimateMktBreakdown(todayB, yesterB);
+
+      // 時間戳
+      se('mktVolUpdateTime', `${latest.date||''} · ${nowStr}`);
+
+    } else if(json.source === 'TWSE_MIS' && json.today){
+      // ── 方案A：MIS 盤中即時 ──────────────────────────
+      if(noteEl) noteEl.style.display = 'none';
+      const t = json.today;
+      // MIS tv 欄位單位：萬元 → 億（除以10000）
+      const todayB = Math.round((t.value||0) / 10000);
+      if(bigEl) bigEl.innerHTML = `${todayB > 0 ? todayB.toLocaleString() : '—'} <span>億元</span>`;
+      sh('mktVolCompare','<span style="color:var(--text3)">盤中即時（截至 '+nowStr+'）</span>');
+      if(chipEl){ chipEl.textContent='盤中'; chipEl.className='chip'; }
+      se('mktVolUpdateTime', `盤中 · ${nowStr}（${t.time||''}）`);
+      se('mktVolYest','—億'); se('mktVolAvg','—億'); se('mktVolTurnover','—%');
+      _estimateMktBreakdown(todayB, 0);
+      renderMktBarsStatic();
+
+    } else {
+      throw new Error('unexpected response');
     }
 
-    // 更新時間戳
-    const dataDate = latest.date || '';
-    const now = new Date();
-    const twTm = new Date(now.toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const timeStr = `${String(twTm.getHours()).padStart(2,'0')}:${String(twTm.getMinutes()).padStart(2,'0')}`;
-    setEl2('mktVolUpdateTime', `${dataDate} · 更新 ${timeStr}`);
-
-  } else {
-    // ── 方案B：API 失效，顯示示意標示 ──────────────────
-    if(noteEl) noteEl.style.display = 'block';
-    const bigEl = document.getElementById('mktVolBig');
-    if(bigEl) bigEl.innerHTML = `— <span>億元</span>`;
-    setEl2('mktVolUpdateTime', '資料載入失敗');
-    setHtml('mktVolCompare', '<span style="color:var(--text3)">暫無即時資料</span>');
+  }catch(e){
+    // ── 方案B：API失效，示意標示 ─────────────────────────
+    console.warn('[MktVol]', e.message);
+    if(noteEl) noteEl.style.display='block';
+    if(bigEl) bigEl.innerHTML='— <span>億元</span>';
+    sh('mktVolCompare','<span style="color:var(--text3)">暫無即時資料</span>');
+    se('mktVolUpdateTime', '⚠️ 資料暫時無法取得');
     if(chipEl){ chipEl.textContent='—'; chipEl.className='chip'; }
-    // 柱狀圖仍顯示但加遮罩說明
+    se('mktVolYest','—億'); se('mktVolAvg','—億'); se('mktVolTurnover','—%');
     renderMktBarsStatic();
   }
 }
