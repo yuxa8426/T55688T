@@ -9861,7 +9861,10 @@ async function runBtSwapAnalysis(stratKey){
     +'  "inst_note": "法人籌碼診斷：缺乏法人買超的影響（25字內）",\n'
     +'  "next_action": "下次執行前最重要的一個調整（15字內）"\n'
     +'}\n'
-    +'注意：swap 每筆 in 陣列推薦 1~2 支，優先符合'+stratName+'策略邏輯且近期法人買超的台股。';
+    +'注意：1. swap 每筆 in 陣列推薦 1~2 支，優先符合'+stratName+'策略邏輯且近期法人買超的台股。'
+    +' 2. 【重要】所有 swap.in 推薦的代號不得重複，同一支股票不能出現在兩個不同的替換建議中。'
+    +' 3. 推薦標的也不得與 keep 或 watch 清單中的代號相同。'
+    +' 4. 每個 in 代號必須唯一，全局不重複。';
 
   try{
     const resp = await fetchWithTimeout(WORKER, 35000, {
@@ -9886,6 +9889,20 @@ async function runBtSwapAnalysis(stratKey){
 
 function _renderSwapCards(content, ai, stockList, stratKey){
   let html = '';
+
+  // ── 前端去重：確保所有推薦 in 代號全局唯一 ──────────
+  const usedInIds = new Set();
+  // 同時排除 keep / watch 中已出現的代號
+  (ai.keep||[]).forEach(k=>usedInIds.add(k.id));
+  (ai.watch||[]).forEach(w=>usedInIds.add(w.id));
+  if(ai.swap) ai.swap = ai.swap.map(s=>({
+    ...s,
+    in: (s.in||s.candidates||[]).filter(c=>{
+      if(usedInIds.has(c.id)) return false;
+      usedInIds.add(c.id);
+      return true;
+    })
+  })).filter(s=>s.in.length>0); // 移除沒有候選的 swap 項
 
   // ── ① 總結橫幅 ───────────────────────────────────────
   if(ai.summary){
