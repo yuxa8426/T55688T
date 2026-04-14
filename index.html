@@ -9548,6 +9548,81 @@ function applyCustomTemplate(key){
 }
 
 // 執行自訂策略分析
+// ── AI 選股回傳 JSON 強健解析 ────────────────────────────
+// 處理：截斷、多餘文字、換行混入、中文逗號、缺逗號等問題
+function _parseStocksFromAI(raw){
+  try{
+    // Step1: 清理 markdown
+    let text = raw.replace(/```json|```/gi,'').trim();
+
+    // Step2: 只取第一個 { ... } 區塊
+    const m = text.match(/\{[\s\S]*\}/);
+    if(!m) return _extractStocksManually(text);
+    let jsonStr = m[0];
+
+    // Step3: 直接嘗試解析
+    try{
+      const p = JSON.parse(jsonStr);
+      if(p?.stocks?.length) return p.stocks.filter(s=>s.id&&s.name);
+    }catch(e1){}
+
+    // Step4: 修復常見問題
+    let fixed = jsonStr
+      .replace(/，/g,',')           // 中文逗號
+      .replace(/：/g,':')           // 中文冒號
+      .replace(/[“”]/g,'"') // 中文引號
+      .replace(/,\s*([}\]])/g,'$1') // 尾部多餘逗號
+      .replace(/([}\]])\s*([{[])/g,'$1,$2'); // 物件間缺逗號
+
+    try{
+      const p = JSON.parse(fixed);
+      if(p?.stocks?.length){
+        console.log('[AI] fixed JSON, stocks:', p.stocks.length);
+        return p.stocks.filter(s=>s.id&&s.name);
+      }
+    }catch(e2){}
+
+    // Step5: 截斷修復（移除最後不完整的物件）
+    const lastGood = fixed.search(/,\s*\{"id"[^}]*$/) > 0
+      ? fixed.lastIndexOf(',{"id"')
+      : fixed.lastIndexOf(',"id"');
+    if(lastGood > 50){
+      let truncated = fixed.slice(0, lastGood);
+      const ob = (truncated.match(/\{/g)||[]).length - (truncated.match(/\}/g)||[]).length;
+      const ab = (truncated.match(/\[/g)||[]).length - (truncated.match(/\]/g)||[]).length;
+      truncated += '}'.repeat(Math.max(0,ob)) + ']'.repeat(Math.max(0,ab)) + '}';
+      try{
+        const p = JSON.parse(truncated);
+        if(p?.stocks?.length){
+          console.log('[AI] truncation fixed, stocks:', p.stocks.length);
+          return p.stocks.filter(s=>s.id&&s.name);
+        }
+      }catch(e3){}
+    }
+
+    // Step6: 逐行手動提取（最後手段）
+    return _extractStocksManually(fixed);
+  }catch(e){
+    console.error('[AI parse]', e.message);
+    return [];
+  }
+}
+
+// 手動逐行提取股票資料（正則萃取）
+function _extractStocksManually(text){
+  const stocks = [];
+  // 嘗試提取 "id":"XXXX","name":"YYYY" 模式
+  const re = /"id"\s*:\s*"(\d{4,6})"\s*,\s*"name"\s*:\s*"([^"]{2,20})"/g;
+  let m;
+  while((m=re.exec(text))!==null){
+    if(!stocks.find(s=>s.id===m[1])){
+      stocks.push({ id:m[1], name:m[2], sector:'—', winRate:60, risk:5, reason:'AI推薦' });
+    }
+  }
+  console.log('[AI] manual extract:', stocks.length, 'stocks');
+  return stocks;
+}
+
 async function runCustomStratAnalysis(){
   const nameEl    = document.getElementById('customStratName');
   const promptEl  = document.getElementById('customStratPrompt');
@@ -9666,30 +9741,9 @@ ${quantContext}
     const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
     if(!text) throw new Error('AI 無回應，請稍後重試');
 
-    // 容錯解析：處理截斷的 JSON
+    // ── 強健 JSON 解析（處理多種 AI 輸出異常）─────────────
     let parsed = null;
-    const clean = text.replace(/```json|```/g,'').trim();
-    const jsonStr = clean.match(/\{[\s\S]*\}/)?.[0] || clean;
-    try{
-      parsed = JSON.parse(jsonStr);
-    }catch(e){
-      // JSON 被截斷：嘗試修復（補上缺失的括號）
-      let fixed = jsonStr;
-      // 移除最後一個不完整的物件
-      const lastComma = fixed.lastIndexOf(',{"id"');
-      if(lastComma > 0) fixed = fixed.slice(0, lastComma);
-      // 確保陣列和物件閉合
-      const openBrackets = (fixed.match(/\[/g)||[]).length - (fixed.match(/\]/g)||[]).length;
-      const openBraces   = (fixed.match(/\{/g)||[]).length - (fixed.match(/\}/g)||[]).length;
-      fixed += '}'.repeat(Math.max(0,openBraces)) + ']'.repeat(Math.max(0,openBrackets)) + '}';
-      try{
-        parsed = JSON.parse(fixed);
-        console.log('[CustomStrat] JSON auto-fixed, recovered stocks:', parsed?.stocks?.length);
-      }catch(e2){
-        throw new Error('AI 回傳格式錯誤，請重試（'+e.message.slice(0,40)+'）');
-      }
-    }
-    const stocks= (parsed?.stocks||[]).filter(s=>s.id&&s.name);
+    const stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
 
     // 記錄到回測系統（key 用 'CUSTOM_' + 時間戳）
