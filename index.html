@@ -8367,8 +8367,7 @@ async function calcQuantScore(stockId, stratKey){
   }catch(e){ return null; }
 }
 
-const JSON_FORMAT = `請直接輸出JSON，禁止任何開場白、說明或markdown格式：
-{"stocks":[{"id":"4位數字代號","name":"股名","sector":"產業","winRate":0-100,"risk":1-10,"reason":"15字以內原因"}]}`;
+const JSON_FORMAT = '只輸出以下JSON，不加任何文字說明或markdown：\n{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}\nreason限6字。';
 
 const STRATEGIES = {
   A:{
@@ -8658,35 +8657,25 @@ async function runStratAnalysis(){
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
 
-    const resp = await fetchWithTimeout(WORKER, 30000, {
+    const resp = await fetchWithTimeout(WORKER, 45000, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
+        model: 'gemini-2.5-flash',
+        max_tokens: 3000,
         messages: [{ role:'user', content: prompt }],
       }),
     });
 
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data = await resp.json();
+    if(data.error) throw new Error(data.error);
     const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
-    if(!text) throw new Error('no content');
+    if(!text) throw new Error('AI 無回應，請稍後重試');
 
-    // 解析 JSON（Gemini/Claude 回傳格式）
-    let parsed;
-    try{
-      const clean = text.replace(/```json|```/g,'').trim();
-      parsed = JSON.parse(clean);
-    }catch(e){
-      // 嘗試提取 JSON 片段
-      const m = text.match(/\{[\s\S]*\}/);
-      if(m) parsed = JSON.parse(m[0]);
-      else throw new Error('JSON 解析失敗');
-    }
-
-    const stocks = parsed.stocks || [];
-    if(!stocks.length) throw new Error('無股票資料');
+    // 使用強健解析（6步容錯）
+    const stocks = _parseStocksFromAI(text);
+    if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
 
     // 記錄到回測系統（背景執行，不阻塞渲染）
     recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
@@ -8712,7 +8701,7 @@ async function runStratAnalysis(){
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
           <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
           ${(()=>{
-            const q = top20.find(t=>t.id===s.id)?.quant;
+            const q = top50.find(t=>t.id===s.id)?.quant;
             if(!q) return '';
             return `<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
               <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(124,92,252,.15);color:var(--purple)">量化 ${q.score}</span>
