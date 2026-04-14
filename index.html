@@ -8072,21 +8072,52 @@ async function buildFullMarketQuant(){
   const weekAgo = nDaysAgo(7);
 
   // ── 3次並行 API 取得全市場資料 ────────────────────────
-  const [dayTradingData, instData, priceToday] = await Promise.all([
-    // 1. 當日沖銷（含成交量、漲跌幅，全市場一次取完）
-    fmFetch({ dataset:'TaiwanStockDayTrading',
-      start_date: weekAgo, end_date: today }, 20000).catch(()=>null),
-
-    // 2. 三大法人（全市場，一次取完）
-    fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
-      start_date: weekAgo, end_date: today }, 20000).catch(()=>null),
-
-    // 3. 個股 PER/PBR（含股價，全市場一次取完）
+  // TaiwanStockPER 是最穩定的全市場資料（含 name、PE、PB、股價）
+  // TaiwanStockTotalInstitutionalInvestors 含法人資料
+  // TaiwanStockDayTrading 含近日漲跌幅（部分帳號可能無此資料集）
+  const [priceToday, instData, dayTradingData] = await Promise.all([
+    // 1. PER/PBR + 名稱（最重要，必須成功）
     fmFetch({ dataset:'TaiwanStockPER',
-      start_date: nDaysAgo(3), end_date: today }, 20000).catch(()=>null),
+      start_date: nDaysAgo(5), end_date: today }, 25000).catch(()=>null),
+
+    // 2. 三大法人（全市場）
+    fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
+      start_date: weekAgo, end_date: today, _optional:true }, 20000).catch(()=>null),
+
+    // 3. 近期股價漲跌（備用，失敗不影響主流程）
+    fmFetch({ dataset:'TaiwanStockDayTrading',
+      start_date: weekAgo, end_date: today, _optional:true }, 15000).catch(()=>null),
   ]);
 
-  const scoreMap = {}; // stock_id → {score, ret5, vol, instScore, pe, pb}
+  // TaiwanStockPER 失敗時用備援：抓法人資料的股票名稱
+  const perOk = priceToday?.length > 0;
+  console.log('[FullQuant] API results - PER:', priceToday?.length||0,
+    'inst:', instData?.length||0, 'dayTrading:', dayTradingData?.length||0);
+
+  const scoreMap = {}; // stock_id → {score, ret5, vol, instScore, pe, pb, name}
+
+  // ── 先解析 PER/PBR（含名稱，最重要）────────────────────
+  if(priceToday?.length){
+    const latest = {};
+    priceToday.forEach(r=>{
+      const id = r.stock_id;
+      if(!id) return;
+      if(!latest[id] || r.date > latest[id].date) latest[id] = r;
+    });
+    Object.entries(latest).forEach(([id, r])=>{
+      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
+      scoreMap[id].pe    = parseFloat(r.PER||r.per||0)||null;
+      scoreMap[id].pb    = parseFloat(r.PBR||r.pbr||0)||null;
+      scoreMap[id].close = parseFloat(r.closing_price||r.close_price||r.close||0)||null;
+      // 名稱：FinMind PER 資料有 name 欄位
+      const apiName = r.name||r.stock_name||r.company_name||'';
+      if(apiName && apiName.length >= 2)
+        scoreMap[id].name = apiName;
+      else if(NAME_MAP[id])
+        scoreMap[id].name = NAME_MAP[id];
+    });
+    console.log('[FullQuant] PER parsed:', Object.keys(scoreMap).length, 'stocks');
+  }
 
   // ── 解析當日沖銷（取近5日漲跌幅 + 量能）────────────────
   if(dayTradingData?.length){
@@ -8144,25 +8175,7 @@ async function buildFullMarketQuant(){
     });
   }
 
-  // ── 解析 PER/PBR（估值）────────────────────────────
-  if(priceToday?.length){
-    const latest = {};
-    priceToday.forEach(r=>{
-      const id = r.stock_id;
-      if(!latest[id] || r.date > latest[id].date) latest[id] = r;
-    });
-    Object.entries(latest).forEach(([id, r])=>{
-      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
-      scoreMap[id].pe   = parseFloat(r.PER||r.per||0)||null;
-      scoreMap[id].pb   = parseFloat(r.PBR||r.pbr||0)||null;
-      scoreMap[id].close= parseFloat(r.closing_price||r.close||0)||null;
-      // FinMind PER 資料含股票名稱，補充 NAME_MAP 沒有的
-      if(r.name && !scoreMap[id].name)
-        scoreMap[id].name = r.name;
-      else if(!scoreMap[id].name)
-        scoreMap[id].name = NAME_MAP[id] || null;
-    });
-  }
+  // PER 已在前面解析（見上方）
 
   // 存快取
   try{
@@ -8171,7 +8184,12 @@ async function buildFullMarketQuant(){
     }));
   }catch(e){}
 
-  console.log('[FullQuant] built scores for', Object.keys(scoreMap).length, 'stocks');
+  const total = Object.keys(scoreMap).length;
+  const withName = Object.values(scoreMap).filter(d=>d.name && d.name.length>=2).length;
+  console.log('[FullQuant] total:', total, 'with name:', withName,
+    'dayTrading:', dayTradingData?.length||0,
+    'inst:', instData?.length||0,
+    'per:', priceToday?.length||0);
   return scoreMap;
 }
 
@@ -9695,20 +9713,42 @@ async function runCustomStratAnalysis(){
 
       // ── 全市場排序，取前 count*8 支（確保 AI 有足夠選擇）──
       const pickCount = Math.min(count * 8, 120);
+      // DEFAULT_STOCKS 建立 id→name 快速查表
+      const DS_MAP = {};
+      DEFAULT_STOCKS.forEach(s=>{ DS_MAP[s.t] = {name:s.n, sector:s.s}; });
+
       candidates = Object.entries(fullQuant)
-        .map(([id,data])=>({
-          id,
-          name:     data.name || NAME_MAP[id] || null,
-          sector:   SECTOR_MAP[id] || '—',
-          score:    scoreFn(data),
-          ret5:     +(data.ret5||0).toFixed(2),
-          inst:     data.instScore||0,
-          volRatio: +(data.volRatio||1).toFixed(2),
-          pe:       data.pe||null,
-          pb:       data.pb||null,
-          close:    data.close||null,
-        }))
-        .filter(s => s.name && s.name !== s.id && s.name.length >= 2)
+        .map(([id,data])=>{
+          // name 多層 fallback：API資料 → NAME_MAP → DEFAULT_STOCKS → id本身
+          const name = data.name
+            || NAME_MAP[id]
+            || DS_MAP[id]?.name
+            || null;
+          const sector = SECTOR_MAP[id]
+            || DS_MAP[id]?.sector
+            || data.sector
+            || '—';
+          return {
+            id,
+            name,
+            sector,
+            score:    scoreFn(data),
+            ret5:     +(data.ret5||0).toFixed(2),
+            inst:     data.instScore||0,
+            volRatio: +(data.volRatio||1).toFixed(2),
+            pe:       data.pe||null,
+            pb:       data.pb||null,
+            close:    data.close||null,
+          };
+        })
+        // 保留有名稱的（NAME_MAP/DEFAULT_STOCKS覆蓋）+ 有基本量化資料的
+        .filter(s => {
+          if(!s.id) return false;
+          // 有名稱：直接保留
+          if(s.name && s.name !== s.id && s.name.length >= 2) return true;
+          // 沒名稱但有量化資料：用 id 作名稱仍保留（AI 可能認識代號）
+          return (Math.abs(s.ret5) > 0 || s.inst !== 0);
+        })
         .sort((a,b) => b.score - a.score)
         .slice(0, pickCount);
 
@@ -9716,8 +9756,16 @@ async function runCustomStratAnalysis(){
         'top:', candidates.slice(0,3).map(s=>s.id+s.name).join(','));
     }
 
+    // 若 candidates 仍為空（API 全部失敗），降級用 DEFAULT_STOCKS
     if(!candidates.length){
-      throw new Error('量化資料載入失敗，請稍後重試');
+      console.warn('[CustomStrat] fullQuant empty, falling back to DEFAULT_STOCKS');
+      const DS_MAP2 = {};
+      DEFAULT_STOCKS.forEach(s=>{ DS_MAP2[s.t]={name:s.n,sector:s.s}; });
+      candidates = DEFAULT_STOCKS.slice(0, 80).map(s=>({
+        id: s.t, name: s.n, sector: s.s,
+        score: 50, ret5: 0, inst: 0, volRatio: 1, pe: null, pb: null, close: null,
+      }));
+      showToast('⚠️ 量化資料暫時無法取得，使用基本股票清單', 3000);
     }
 
     // ── 第二步：AI 從程式篩選結果中排序 + 說明理由 ──────────
