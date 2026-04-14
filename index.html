@@ -8058,124 +8058,90 @@ const FULL_QUANT_TTL = _msTillMidnight;  // 快取到午夜
 
 // 全市場批次量化：3次API取得全部1800支的指標
 async function buildFullMarketQuant(){
-  // 檢查快取
+  // 快取：4小時
   try{
     const cached = JSON.parse(localStorage.getItem(FULL_QUANT_KEY)||'null');
-    if(cached && cached.ts && Date.now()-cached.ts < 4*60*60*1000){ // 4小時快取
-      console.log('[FullQuant] cache hit, stocks:', Object.keys(cached.data).length);
+    if(cached && cached.ts && Date.now()-cached.ts < 4*60*60*1000){
+      console.log('[FullQuant] cache hit:', Object.keys(cached.data).length, 'stocks');
       return cached.data;
     }
   }catch(e){}
 
-  console.log('[FullQuant] building full market quant scores...');
+  console.log('[FullQuant] building with free FinMind datasets...');
   const today   = todayStr();
-  const weekAgo = nDaysAgo(7);
+  const weekAgo = nDaysAgo(10);
 
-  // ── 3次並行 API 取得全市場資料 ────────────────────────
-  // TaiwanStockPER 是最穩定的全市場資料（含 name、PE、PB、股價）
-  // TaiwanStockTotalInstitutionalInvestors 含法人資料
-  // TaiwanStockDayTrading 含近日漲跌幅（部分帳號可能無此資料集）
-  const [priceToday, instData, dayTradingData] = await Promise.all([
-    // 1. PER/PBR + 名稱（最重要，必須成功）
-    fmFetch({ dataset:'TaiwanStockPER',
-      start_date: nDaysAgo(5), end_date: today }, 25000).catch(()=>null),
+  // ── 免費方案可用的資料集 ──────────────────────────────
+  // TaiwanStockPrice：個股日K（逐支查，免費）
+  // TaiwanStockInstitutionalInvestorsBuySell：個股法人（逐支查，免費）
+  // TaiwanStockTotalInstitutionalInvestors：全市場法人彙總（免費，但無 stock_id）
+  // ── 策略：對 QUANT_POOL 的 97 支並行批次抓取 ──────────
 
-    // 2. 三大法人（全市場）
-    fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
-      start_date: weekAgo, end_date: today, _optional:true }, 20000).catch(()=>null),
+  const scoreMap = {};
+  const BATCH = 8; // 每批8支，避免超限
+  const pool   = QUANT_POOL; // 97支，涵蓋各族群
 
-    // 3. 近期股價漲跌（備用，失敗不影響主流程）
-    fmFetch({ dataset:'TaiwanStockDayTrading',
-      start_date: weekAgo, end_date: today, _optional:true }, 15000).catch(()=>null),
-  ]);
+  console.log('[FullQuant] fetching', pool.length, 'stocks in batches of', BATCH);
 
-  // TaiwanStockPER 失敗時用備援：抓法人資料的股票名稱
-  const perOk = priceToday?.length > 0;
-  console.log('[FullQuant] API results - PER:', priceToday?.length||0,
-    'inst:', instData?.length||0, 'dayTrading:', dayTradingData?.length||0);
+  for(let i=0; i<pool.length; i+=BATCH){
+    const batch = pool.slice(i, i+BATCH);
+    await Promise.all(batch.map(async stock=>{
+      try{
+        // 並行取：日K（5日）+ 法人
+        const [priceData, instStock] = await Promise.all([
+          fmFetch({ dataset:'TaiwanStockPrice', data_id:stock.id,
+            start_date:weekAgo, end_date:today, _optional:true }, 8000).catch(()=>null),
+          fmFetch({ dataset:'TaiwanStockInstitutionalInvestorsBuySell', data_id:stock.id,
+            start_date:weekAgo, end_date:today, _optional:true }, 8000).catch(()=>null),
+        ]);
 
-  const scoreMap = {}; // stock_id → {score, ret5, vol, instScore, pe, pb, name}
+        // 計算 ret5、volRatio
+        let ret5=0, volRatio=1, close=null;
+        if(priceData?.length >= 2){
+          const rows  = [...priceData].sort((a,b)=>a.date>b.date?1:-1);
+          const last  = rows[rows.length-1];
+          const first = rows[0];
+          close  = parseFloat(last.close||0);
+          ret5   = first.close>0 ? +((close-parseFloat(first.close))/parseFloat(first.close)*100).toFixed(2) : 0;
+          const vols   = rows.map(r=>parseInt(r.Trading_Volume||0)).filter(v=>v>0);
+          const avgVol = vols.length>1 ? vols.slice(0,-1).reduce((a,b)=>a+b,0)/(vols.length-1) : 0;
+          volRatio = avgVol>0 ? +(vols[vols.length-1]/avgVol).toFixed(2) : 1;
+        }
 
-  // ── 先解析 PER/PBR（含名稱，最重要）────────────────────
-  if(priceToday?.length){
-    const latest = {};
-    priceToday.forEach(r=>{
-      const id = r.stock_id;
-      if(!id) return;
-      if(!latest[id] || r.date > latest[id].date) latest[id] = r;
-    });
-    Object.entries(latest).forEach(([id, r])=>{
-      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
-      scoreMap[id].pe    = parseFloat(r.PER||r.per||0)||null;
-      scoreMap[id].pb    = parseFloat(r.PBR||r.pbr||0)||null;
-      scoreMap[id].close = parseFloat(r.closing_price||r.close_price||r.close||0)||null;
-      // 名稱：FinMind PER 資料有 name 欄位
-      const apiName = r.name||r.stock_name||r.company_name||'';
-      if(apiName && apiName.length >= 2)
-        scoreMap[id].name = apiName;
-      else if(NAME_MAP[id])
-        scoreMap[id].name = NAME_MAP[id];
-    });
-    console.log('[FullQuant] PER parsed:', Object.keys(scoreMap).length, 'stocks');
+        // 計算法人分數
+        let instScore=0, foreign=0, trust=0;
+        if(instStock?.length){
+          instStock.forEach(r=>{
+            const nm  = r.name||r.institutional_investors||'';
+            const net = parseInt(r.buy||0)-parseInt(r.sell||0);
+            if(nm.includes('外資')||nm.includes('Foreign')) foreign+=net;
+            else if(nm.includes('投信')) trust+=net;
+          });
+          instScore = (foreign>0?2:foreign<0?-2:0)+(trust>0?1:0);
+        }
+
+        scoreMap[stock.id] = {
+          name:      stock.name,
+          sector:    stock.s || SECTOR_MAP[stock.id] || '—',
+          ret5, volRatio, instScore, close,
+          pe:null, pb:null, // 免費方案無法取得
+        };
+      }catch(e){
+        // 單支失敗不影響其他
+        scoreMap[stock.id] = {name:stock.name, sector:stock.s||'—',
+          ret5:0, volRatio:1, instScore:0, close:null, pe:null, pb:null};
+      }
+    }));
+
+    // 批次間等待（避免 FinMind 速率限制）
+    if(i+BATCH < pool.length){
+      await new Promise(r=>setTimeout(r, 300));
+    }
   }
 
-  // ── 解析當日沖銷（取近5日漲跌幅 + 量能）────────────────
-  if(dayTradingData?.length){
-    const byId = {};
-    dayTradingData.forEach(r=>{
-      const id  = r.stock_id;
-      const dt  = r.date||'';
-      if(!byId[id]) byId[id] = [];
-      byId[id].push({ date:dt,
-        close:   parseFloat(r.close||0),
-        volume:  parseInt(r.Trading_Volume||r.close_volume||0),
-        change:  parseFloat(r.spread||r.price_change||0),
-      });
-    });
+  console.log('[FullQuant] done:', Object.keys(scoreMap).length, 'stocks');
 
-    Object.entries(byId).forEach(([id, rows])=>{
-      if(rows.length < 2) return;
-      rows.sort((a,b)=>a.date>b.date?1:-1);
-      const last   = rows[rows.length-1];
-      const first  = rows[0];
-      if(!last.close || !first.close) return;
-
-      const ret5   = (last.close - first.close) / first.close * 100;
-      const vols   = rows.map(r=>r.volume).filter(v=>v>0);
-      const avgVol = vols.length ? vols.slice(0,-1).reduce((a,b)=>a+b,0)/Math.max(vols.length-1,1) : 0;
-      const lastVol= vols[vols.length-1] || 0;
-      const volRatio = avgVol > 0 ? lastVol/avgVol : 1;
-
-      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
-      scoreMap[id].ret5     = +ret5.toFixed(2);
-      scoreMap[id].volRatio = +volRatio.toFixed(2);
-      // 優先用 FinMind 回傳的 name，再查 NAME_MAP，最後用 id
-      if(!scoreMap[id].name) scoreMap[id].name = NAME_MAP[id] || id;
-    });
-  }
-
-  // ── 解析三大法人（近7日累計）────────────────────────
-  if(instData?.length){
-    const byId = {};
-    instData.forEach(r=>{
-      const id    = r.stock_id;
-      const nm    = r.name||r.institutional_investors||'';
-      const sName = r.stock_name||r.company_name||'';
-      const net   = parseInt(r.buy||0)-parseInt(r.sell||0);
-      if(!byId[id]) byId[id] = {foreign:0, trust:0, stockName:''};
-      if(sName && !byId[id].stockName) byId[id].stockName = sName;
-      if(nm.includes('外資')||nm.includes('Foreign')) byId[id].foreign += net;
-      else if(nm.includes('投信')) byId[id].trust += net;
-    });
-    Object.entries(byId).forEach(([id, inst])=>{
-      if(!scoreMap[id]) scoreMap[id] = {ret5:0, volRatio:1, instScore:0, pe:null};
-      scoreMap[id].instScore = (inst.foreign>0?2:inst.foreign<0?-2:0) + (inst.trust>0?1:0);
-      // 補充名稱
-      if(inst.stockName && !scoreMap[id].name) scoreMap[id].name = inst.stockName;
-    });
-  }
-
-  // PER 已在前面解析（見上方）
+  // 資料已在上方批次解析完成
 
   // 存快取
   try{
