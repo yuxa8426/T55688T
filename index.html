@@ -9598,12 +9598,37 @@ ${quantContext}
     renderStratShowcase(); // 更新成效展示
 
   }catch(e){
-    const is429 = e.message.includes('429');
+    const msg   = e.message||'';
+    const is429 = msg.includes('速率上限')||msg.includes('達到速率')||msg.includes('上限')||msg.includes('429');
+    const sec0  = 60;
     if(resultEl){
       resultEl.style.display='block';
-      resultEl.innerHTML=`<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;background:var(--card);border-radius:10px">
-        ${is429?'⏳ AI 請求過於頻繁，請等30秒後重試':'❌ 分析失敗：'+e.message}
-      </div>`;
+      resultEl.innerHTML = is429
+        ? '<div style="padding:16px;text-align:center;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);border-radius:10px">'
+          +'<div style="font-size:22px;margin-bottom:8px">⏳</div>'
+          +'<div style="font-size:13px;font-weight:700;color:var(--gold)">AI 模型暫時繁忙</div>'
+          +'<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.7">'
+            +'Gemini 免費版每分鐘有請求限制<br>'
+            +'<span id="retryCountdown" style="color:var(--gold);font-weight:700">'+sec0+'</span> 秒後可重試'
+          +'</div>'
+          +'<div style="font-size:10px;color:var(--text3);margin-top:8px;padding:6px 10px;background:rgba(255,255,255,.04);border-radius:6px">'
+            +'💡 在 Cloudflare 設定 GEMINI_API_KEY2 ~ KEY5 可提升並發上限'
+          +'</div>'
+        +'</div>'
+        : '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px;background:var(--card);border-radius:10px">'
+          +'❌ 分析失敗：'+msg+'</div>';
+    }
+    if(is429){
+      runBtn.disabled=true;
+      let sec=sec0;
+      const t=setInterval(()=>{
+        sec--;
+        const el=document.getElementById('retryCountdown');
+        if(el) el.textContent=sec;
+        runBtn.textContent='⏳ '+sec+'s 後重試';
+        if(sec<=0){ clearInterval(t); runBtn.disabled=false; runBtn.textContent='🔄 點擊重試'; }
+      },1000);
+      return;
     }
   }finally{
     runBtn.disabled=false;
