@@ -8560,11 +8560,13 @@ async function runStratAnalysis(){
         console.log('[FullQuant] scope:', stockCount, 'top30 score range:',
           scored[0]?.quant.score, '~', scored[29]?.quant.score);
       } else {
-        throw new Error('full quant insufficient');
+        console.error('[FullQuant] insufficient stocks:', stockCount, 'keys:', Object.keys(fullQuant).slice(0,5));
+        throw new Error('full quant insufficient: only '+stockCount+' stocks');
       }
     }catch(e){
       // 備援：用 DEFAULT_STOCKS 作基礎，不逐一呼叫 API
-      console.warn('[FullQuant] fallback to DEFAULT_STOCKS:', e.message);
+      console.error('[FullQuant] FAILED, falling back. Error:', e.message);
+      showToast('⚠️ 全市場掃描失敗，使用基礎清單，結果可能不完整', 5000);
       DEFAULT_STOCKS.forEach(s=>{
         scored.push({
           id: s.t, name: s.n, s: s.s,
