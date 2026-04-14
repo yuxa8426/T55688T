@@ -9519,22 +9519,15 @@ async function runCustomStratAnalysis(){
     const vixCache = loadVixCache();
     const vixStr = vixCache ? `VIX ${vixCache.vix.toFixed(1)}` : '';
 
-    const fullPrompt = `你是台股選股助理。請嚴格依照以下設計者指定的條件，從台灣上市上櫃全市場選出${count}支股票。
+    const fullPrompt = `台股選股任務。依條件選出${count}支股票，只輸出JSON不加說明。
 
-【分析日期】${today}
-【市場狀況】${vixStr}
-【設計者策略名稱】${stratName}
-【設計者選股條件】
-${userPrompt}
-${quantContext}
+策略：${stratName}
+日期：${today}${vixStr?' VIX:'+vixStr:''}
+條件：${userPrompt}${quantContext}
 
-【輸出要求】
-- 嚴格遵守設計者條件，不可自行更改
-- 每支股票說明符合哪個條件
-- 輸出${count}支，JSON格式
-
-請直接輸出JSON，無任何說明：
-{"stocks":[{"id":"代號","name":"股名","sector":"產業","winRate":0-100,"risk":1-10,"reason":"符合條件的15字說明"}]}`;
+輸出格式（嚴格遵守，reason限10字內）：
+{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":75,"risk":4,"reason":"法人買超量增"}]}
+共${count}支，直接輸出JSON：`;
 
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
@@ -9542,7 +9535,7 @@ ${quantContext}
     const resp = await fetchWithTimeout(WORKER, 45000, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'gemini-2.0-flash', max_tokens:1500,
+        model:'gemini-2.5-flash', max_tokens:800,
         messages:[{role:'user', content:fullPrompt}]
       })
     });
@@ -9552,9 +9545,31 @@ ${quantContext}
     if(data.error) throw new Error(data.error);
     const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
     if(!text) throw new Error('AI 無回應，請稍後重試');
+
+    // 容錯解析：處理截斷的 JSON
+    let parsed = null;
     const clean = text.replace(/```json|```/g,'').trim();
-    const parsed= JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
-    const stocks= parsed.stocks||[];
+    const jsonStr = clean.match(/\{[\s\S]*\}/)?.[0] || clean;
+    try{
+      parsed = JSON.parse(jsonStr);
+    }catch(e){
+      // JSON 被截斷：嘗試修復（補上缺失的括號）
+      let fixed = jsonStr;
+      // 移除最後一個不完整的物件
+      const lastComma = fixed.lastIndexOf(',{"id"');
+      if(lastComma > 0) fixed = fixed.slice(0, lastComma);
+      // 確保陣列和物件閉合
+      const openBrackets = (fixed.match(/\[/g)||[]).length - (fixed.match(/\]/g)||[]).length;
+      const openBraces   = (fixed.match(/\{/g)||[]).length - (fixed.match(/\}/g)||[]).length;
+      fixed += '}'.repeat(Math.max(0,openBraces)) + ']'.repeat(Math.max(0,openBrackets)) + '}';
+      try{
+        parsed = JSON.parse(fixed);
+        console.log('[CustomStrat] JSON auto-fixed, recovered stocks:', parsed?.stocks?.length);
+      }catch(e2){
+        throw new Error('AI 回傳格式錯誤，請重試（'+e.message.slice(0,40)+'）');
+      }
+    }
+    const stocks= (parsed?.stocks||[]).filter(s=>s.id&&s.name);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
 
     // 記錄到回測系統（key 用 'CUSTOM_' + 時間戳）
