@@ -9507,10 +9507,10 @@ async function runCustomStratAnalysis(){
           score: Math.round(50 + (data.instScore||0)*5 + (data.ret5||0)*1)
         }))
         .sort((a,b)=>b.score-a.score);
-      top30 = allScored.slice(0,40); // 給 AI 更多選擇
+      top30 = allScored.slice(0,20);
       const count30 = Object.keys(fullQuant).length;
-      quantContext = `\n\n【量化預篩（已從全市場${count30}支中初步篩選前40名）】\n`+
-        top30.slice(0,30).map((s,i)=>`${i+1}.${s.id}${s.name}(綜合${s.score})`).join(' ');
+      quantContext = '\n\n【量化預篩：從全市場'+count30+'支篩出前20名】\n'+
+        top30.map(s=>s.id+s.name).join('、');
     }
 
     // 第二步：AI 依用戶指令選股
@@ -9542,17 +9542,20 @@ ${quantContext}
     const resp = await fetchWithTimeout(WORKER, 45000, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514', max_tokens:2000,
+        model:'gemini-2.0-flash', max_tokens:1500,
         messages:[{role:'user', content:fullPrompt}]
       })
     });
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data  = await resp.json();
+    // Worker 回傳 error 欄位（非 HTTP 錯誤，如 Gemini API key 未設定、429 等）
+    if(data.error) throw new Error(data.error);
     const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
-    const clean = text.replace(/\`\`\`json|\`\`\`/g,'').trim();
+    if(!text) throw new Error('AI 無回應，請稍後重試');
+    const clean = text.replace(/```json|```/g,'').trim();
     const parsed= JSON.parse(clean.match(/\{[\s\S]*\}/)?.[0]||clean);
     const stocks= parsed.stocks||[];
-    if(!stocks.length) throw new Error('無結果');
+    if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
 
     // 記錄到回測系統（key 用 'CUSTOM_' + 時間戳）
     const customKey = 'CUS';
