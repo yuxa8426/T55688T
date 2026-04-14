@@ -9643,86 +9643,103 @@ async function runCustomStratAnalysis(){
   if(resultEl) resultEl.style.display = 'none';
 
   try{
-    // 第一步：全市場量化篩選
+    // ══════════════════════════════════════════════════════
+    // 架構：程式直接篩選全市場 → AI 從篩選結果排序＋說明理由
+    // 不依賴 AI 來"知道"哪些股票存在
+    // ══════════════════════════════════════════════════════
+
+    // ── 第一步：全市場量化篩選（程式執行，100% 覆蓋）──────
     showToast('🔢 量化掃描全市場…', 4000);
     const fullQuant = await buildFullMarketQuant().catch(()=>null);
 
-    let quantContext = '';
-    let top30 = [];
+    let candidates = []; // 程式篩選後的候選池
 
     if(fullQuant && Object.keys(fullQuant).length >= 100){
-      const count30 = Object.keys(fullQuant).length;
+      const totalCount = Object.keys(fullQuant).length;
       const up = userPrompt.toLowerCase();
 
-      // ── 依策略關鍵字選擇最適合的排序維度 ────────────────
+      // ── 依條件關鍵字做硬篩選（程式層面，非 AI）───────────
+      let hardFilter = () => true; // 預設不過濾
+      if(/法人|外資.*買|投信.*買|買超/.test(up)){
+        hardFilter = d => (d.instScore||0) > 0;
+      }
+      if(/強勢|突破|漲幅.*[5-9]%|漲幅.*1[0-9]%/.test(up)){
+        hardFilter = (d,prev) => prev((d)) && (d.ret5||0) >= 3;
+      }
+      if(/超跌|反彈|跌幅/.test(up)){
+        hardFilter = d => (d.ret5||0) < -5;
+      }
+      if(/PE.*[0-9]|本益比.*[0-9]|低估值/.test(up)){
+        hardFilter = d => d.pe && d.pe > 0 && d.pe < 20;
+      }
+
+      // ── 依策略類型計分排序 ────────────────────────────────
       let scoreFn;
       if(/動能|突破|強勢|漲幅|放量|量增/.test(up)){
-        // 動能型：重視漲幅 + 量能
         scoreFn = d => (d.ret5||0)*3 + (d.volRatio||1)*5 + (d.instScore||0)*2;
       } else if(/法人|外資|投信|買超|籌碼/.test(up)){
-        // 法人型：重視法人買超
         scoreFn = d => (d.instScore||0)*10 + (d.ret5||0)*1;
       } else if(/低估|PE|本益比|PB|淨值|價值|超跌/.test(up)){
-        // 價值型：重視低 PE/PB
         scoreFn = d => {
-          const peScore = d.pe && d.pe > 0 && d.pe < 20 ? (20-d.pe)*2 : 0;
-          const pbScore = d.pb && d.pb > 0 && d.pb < 2  ? (2-d.pb)*5  : 0;
+          const peScore = d.pe && d.pe>0 && d.pe<20 ? (20-d.pe)*2 : 0;
+          const pbScore = d.pb && d.pb>0 && d.pb<2  ? (2-d.pb)*5  : 0;
           return peScore + pbScore + (d.instScore||0)*1;
         };
       } else if(/殖利率|配息|股息|防禦/.test(up)){
-        // 防禦型：重視穩定 + 低波動
         scoreFn = d => (d.instScore||0)*3 - Math.abs(d.ret5||0)*0.5;
-      } else if(/半導體|AI|科技|晶片|伺服器/.test(up)){
-        // 科技型：動能 + 法人
+      } else if(/半導體|AI|科技|晶片|伺服器|HBM|CoWoS/.test(up)){
         scoreFn = d => (d.ret5||0)*2 + (d.instScore||0)*6 + (d.volRatio||1)*3;
       } else {
-        // 通用：綜合評分
         scoreFn = d => (d.instScore||0)*5 + (d.ret5||0)*2 + (d.volRatio||1)*2;
       }
 
-      const allScored = Object.entries(fullQuant)
+      // ── 全市場排序，取前 count*8 支（確保 AI 有足夠選擇）──
+      const pickCount = Math.min(count * 8, 120);
+      candidates = Object.entries(fullQuant)
         .map(([id,data])=>({
           id,
-          name:  data.name||NAME_MAP[id]||id,
-          score: scoreFn(data),
-          ret5:  data.ret5||0,
-          inst:  data.instScore||0,
-          pe:    data.pe||null,
+          name:     data.name || NAME_MAP[id] || null,
+          sector:   SECTOR_MAP[id] || '—',
+          score:    scoreFn(data),
+          ret5:     +(data.ret5||0).toFixed(2),
+          inst:     data.instScore||0,
+          volRatio: +(data.volRatio||1).toFixed(2),
+          pe:       data.pe||null,
+          pb:       data.pb||null,
+          close:    data.close||null,
         }))
-        .filter(s => s.name && s.name !== s.id && s.name.length >= 2) // 過濾無名稱的票
-        .sort((a,b)=>b.score-a.score);
+        .filter(s => s.name && s.name !== s.id && s.name.length >= 2)
+        .sort((a,b) => b.score - a.score)
+        .slice(0, pickCount);
 
-      // 取前60支作為候選，在 prompt 裡傳50支（提升覆蓋率）
-      top30 = allScored.slice(0,60);
-      const preview = top30.slice(0,50).map(s=>{
-        let hint = s.id+s.name;
-        if(s.inst > 0)  hint += '↑';  // 法人買超
-        if(s.ret5 > 5)  hint += '▲';  // 強勢
-        if(s.pe && s.pe < 12) hint += 'P'; // 低估值
-        return hint;
-      }).join('、');
-
-      quantContext = '\n\n【量化預篩 '+count30+' 支→推薦50支，符合策略邏輯（↑法人買超 ▲強勢 P低估值）】\n'+preview;
+      console.log('[CustomStrat] candidates:', candidates.length, '/', totalCount,
+        'top:', candidates.slice(0,3).map(s=>s.id+s.name).join(','));
     }
 
-    // 第二步：AI 依用戶指令選股
-    showToast('🤖 AI 依你的條件選股…', 4000);
-    const today = new Date().toLocaleDateString('zh-TW');
+    if(!candidates.length){
+      throw new Error('量化資料載入失敗，請稍後重試');
+    }
+
+    // ── 第二步：AI 從程式篩選結果中排序 + 說明理由 ──────────
+    // AI 只看到程式已篩好的候選，不需要"知道"哪些股票存在
+    showToast('🤖 AI 分析篩選結果…', 4000);
+    const today    = new Date().toLocaleDateString('zh-TW');
     const vixCache = loadVixCache();
-    const vixStr = vixCache ? `VIX ${vixCache.vix.toFixed(1)}` : '';
+    const vixStr   = vixCache ? 'VIX '+vixCache.vix.toFixed(1) : '';
 
-    const fullPrompt = `台股選股任務。依條件從台灣全市場1700+支股票中選出${count}支，只輸出JSON。
+    // 把候選資料格式化（含量化指標，讓 AI 有依據）
+    const candLines = candidates.slice(0, Math.min(candidates.length, 80)).map(s=>{
+      const tags = [];
+      if(s.inst > 0)      tags.push('法人買');
+      if(s.inst < 0)      tags.push('法人賣');
+      if(s.ret5 >= 5)     tags.push('強勢');
+      if(s.ret5 <= -5)    tags.push('超跌');
+      if(s.volRatio>=1.5) tags.push('放量');
+      if(s.pe && s.pe<12) tags.push('低PE');
+      return s.id+'('+s.name+') '+tags.join('/');
+    }).join(', ');
 
-策略：${stratName}
-日期：${today}${vixStr?' VIX:'+vixStr:''}
-條件：
-${userPrompt}
-${quantContext}
-
-重要：不限於知名大股票，可選中小型股，只要符合條件即可。
-輸出格式（reason限6字）：
-{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":75,"risk":4,"reason":"買超強"}]}
-直接輸出JSON，共${count}支：`;
+    const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+count+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
 
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
@@ -9736,15 +9753,37 @@ ${quantContext}
     });
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data  = await resp.json();
-    // Worker 回傳 error 欄位（非 HTTP 錯誤，如 Gemini API key 未設定、429 等）
     if(data.error) throw new Error(data.error);
     const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
     if(!text) throw new Error('AI 無回應，請稍後重試');
 
-    // ── 強健 JSON 解析（處理多種 AI 輸出異常）─────────────
-    let parsed = null;
-    const stocks = _parseStocksFromAI(text);
-    if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
+    // ── AI 回傳 JSON 解析 + 用程式資料補全 ──────────────────
+    let aiStocks = _parseStocksFromAI(text);
+
+    // 若 AI 回傳不足，用量化排名直接補足
+    if(aiStocks.length < count){
+      const aiIds = new Set(aiStocks.map(s=>s.id));
+      const extra = candidates
+        .filter(s => !aiIds.has(s.id))
+        .slice(0, count - aiStocks.length)
+        .map(s=>({id:s.id, name:s.name, sector:s.sector||'—',
+                  winRate:60, risk:5, reason:'量化篩選'}));
+      aiStocks = [...aiStocks, ...extra];
+    }
+
+    // 用程式的 scoreMap 補全 sector / name（確保正確）
+    const stocks = aiStocks.slice(0, count).map(s=>{
+      const q = fullQuant[s.id] || {};
+      return {
+        ...s,
+        name:   s.name || q.name || NAME_MAP[s.id] || s.id,
+        sector: SECTOR_MAP[s.id] || s.sector || '—',
+        ret5:   q.ret5 || 0,
+        inst:   q.instScore || 0,
+      };
+    });
+
+    if(!stocks.length) throw new Error('篩選無結果，請調整條件後重試');
 
     // 記錄到回測系統（key 用 'CUSTOM_' + 時間戳）
     const customKey = 'CUS';
