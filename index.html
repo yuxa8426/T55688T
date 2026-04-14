@@ -9525,9 +9525,9 @@ async function runCustomStratAnalysis(){
 日期：${today}${vixStr?' VIX:'+vixStr:''}
 條件：${userPrompt}${quantContext}
 
-輸出格式（嚴格遵守，reason限10字內）：
-{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":75,"risk":4,"reason":"法人買超量增"}]}
-共${count}支，直接輸出JSON：`;
+只輸出以下 JSON，不加任何文字說明、不加 markdown：
+{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":75,"risk":4,"reason":"買超"}]}
+reason 最多6個中文字。共${count}支。`;
 
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
@@ -9535,7 +9535,7 @@ async function runCustomStratAnalysis(){
     const resp = await fetchWithTimeout(WORKER, 45000, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model:'gemini-2.5-flash', max_tokens:800,
+        model:'gemini-2.5-flash', max_tokens:3000,
         messages:[{role:'user', content:fullPrompt}]
       })
     });
