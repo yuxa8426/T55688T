@@ -8260,6 +8260,23 @@ const QUANT_POOL = [
   // ETF
   {id:'0050',name:'元大台灣50',s:'ETF'},{id:'0056',name:'元大高股息',s:'ETF'},
   {id:'00878',name:'國泰永續高股息',s:'ETF'},{id:'00929',name:'復華科技優息',s:'ETF'},
+  {id:'00631L',name:'元大台灣50正2',s:'ETF'},
+  // 散熱/電源/AI周邊
+  {id:'3017',name:'奇鋐',s:'散熱'},{id:'6214',name:'精誠',s:'IT服務'},
+  {id:'2360',name:'致茂',s:'量測'},{id:'6669',name:'緯穎',s:'伺服器'},
+  {id:'5364',name:'力致',s:'散熱'},{id:'3529',name:'力旺',s:'IP'},
+  // 中小型科技
+  {id:'3035',name:'智原',s:'IC設計'},{id:'6548',name:'長科',s:'封測'},
+  {id:'4966',name:'譜瑞-KY',s:'IC設計'},{id:'3105',name:'穩懋',s:'砷化鎵'},
+  {id:'6202',name:'盛群',s:'IC設計'},{id:'2383',name:'台光電',s:'PCB材料'},
+  // 生技/醫療
+  {id:'4174',name:'浩鼎',s:'生技'},{id:'1795',name:'美時',s:'製藥'},
+  {id:'4123',name:'晟德',s:'製藥'},{id:'6547',name:'高端疫苗',s:'生技'},
+  // 傳產補充
+  {id:'1102',name:'亞泥',s:'水泥'},{id:'1326',name:'台化',s:'石化'},
+  {id:'2615',name:'萬海',s:'航運'},{id:'2610',name:'華航',s:'航空'},
+  {id:'2883',name:'開發金',s:'金融'},{id:'2887',name:'台新金',s:'金融'},
+  {id:'2884',name:'玉山金',s:'金融'},{id:'5871',name:'中租-KY',s:'租賃'},
 ];
 
 // 用真實數據計算量化分數
@@ -8547,36 +8564,35 @@ async function runStratAnalysis(){
         throw new Error('full quant insufficient');
       }
     }catch(e){
-      // 備援：100支固定池
-      console.warn('[FullQuant] fallback to QUANT_POOL:', e.message);
-      const BATCH_SIZE = 5;
-      for(let i=0; i<QUANT_POOL.length; i+=BATCH_SIZE){
-        const batch = QUANT_POOL.slice(i, i+BATCH_SIZE);
-        const results = await Promise.all(
-          batch.map(async stock=>{
-            const q = await calcQuantScore(stock.id, key);
-            return q ? {...stock, quant:q} : null;
-          })
-        );
-        results.forEach(r=>{ if(r) scored.push(r); });
-        if(i+BATCH_SIZE < QUANT_POOL.length)
-          await new Promise(r=>setTimeout(r,200));
-      }
-      scored.sort((a,b)=>(b.quant.score||0)-(a.quant.score||0));
-      scored = scored.slice(0,30);
-      quantScopeLabel = '精選100支';
+      // 備援：用 DEFAULT_STOCKS 作基礎，不逐一呼叫 API
+      console.warn('[FullQuant] fallback to DEFAULT_STOCKS:', e.message);
+      DEFAULT_STOCKS.forEach(s=>{
+        scored.push({
+          id: s.t, name: s.n, s: s.s,
+          quant:{ score:50, ret5:0, volRatio:1, instScore:0, pe:null, pb:null }
+        });
+      });
+      quantScopeLabel = '基礎'+DEFAULT_STOCKS.length+'支';
     }
 
-    const top20 = scored.slice(0,20);
+    const top50 = scored.slice(0,50);
 
-    // 組合量化摘要
-    const quantSummary = top20.map((s,i)=>{
+    // 組合量化摘要（加入指標標示，讓 AI 有更多依據）
+    const quantSummary = top50.map(s=>{
       const q = s.quant;
-      return `${i+1}.${s.id}${s.name}(量化${q.score},5日${q.ret5>=0?'+':''}${q.ret5}%,法人${q.instScore>0?'買':q.instScore<0?'賣':'中'}${q.pe?',PE'+q.pe:''})`
-    }).join(' ');
+      const tags = [];
+      if(q.instScore > 0)      tags.push('法↑');
+      if(q.instScore < 0)      tags.push('法↓');
+      if(q.ret5 >= 5)          tags.push('強');
+      if(q.ret5 <= -5)         tags.push('跌');
+      if(q.volRatio >= 1.5)    tags.push('量');
+      if(q.pe && q.pe < 12)    tags.push('低PE');
+      const tag = tags.length ? '('+tags.join('/')+ ')' : '';
+      return s.id+s.name+tag;
+    }).join('、');
 
     runBtn.textContent = '⏳ AI 深度分析中（第2/2步）…';
-    showToast(`🤖 AI 從${quantScopeLabel}中選出最佳10支…`, 4000);
+    showToast(`🤖 AI 從${quantScopeLabel}篩選${top50.length}支中選出最佳10支…`, 4000);
 
     // ══ 第二步：收集市場背景 ══════════════════════════════
 
@@ -8634,8 +8650,8 @@ async function runStratAnalysis(){
       '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
     ].filter(Boolean).join('；');
 
-    const quantContext = top20.length >= 5
-      ? `\n\n【量化預篩結果（真實數據計算，分數越高越符合此策略）】\n${quantSummary}\n請優先從以上量化排名靠前的股票中選出10支，並說明選擇理由。`
+    const quantContext = top50.length >= 5
+      ? '\n\n【量化預篩結果（真實數據，'+quantScopeLabel+'→篩出'+top50.length+'支）】\n'+quantSummary+'\n請從以上量化篩選結果中，挑出最符合策略條件的10支，不限制只選知名大股票。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext);
     const WORKER = (typeof API !== 'undefined' && API)
