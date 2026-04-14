@@ -8058,49 +8058,101 @@ const FULL_QUANT_TTL = _msTillMidnight;  // 快取到午夜
 
 // 全市場批次量化：3次API取得全部1800支的指標
 async function buildFullMarketQuant(){
-  // 快取：4小時
+  // 快取：盤中5分鐘，盤後到午夜
   try{
     const cached = JSON.parse(localStorage.getItem(FULL_QUANT_KEY)||'null');
-    if(cached && cached.ts && Date.now()-cached.ts < 4*60*60*1000){
+    const ttl = _isTradingSession() ? 5*60*1000 : _msTillMidnight();
+    if(cached && cached.ts && Date.now()-cached.ts < ttl){
       console.log('[FullQuant] cache hit:', Object.keys(cached.data).length, 'stocks');
       return cached.data;
     }
   }catch(e){}
 
-  console.log('[FullQuant] building with free FinMind datasets...');
-  const today   = todayStr();
-  const weekAgo = nDaysAgo(10);
+  console.log('[FullQuant] fetching full market via TWSE+TPEX+FinMind...');
 
-  // ── 免費方案可用的資料集 ──────────────────────────────
-  // TaiwanStockPrice：個股日K（逐支查，免費）
-  // TaiwanStockInstitutionalInvestorsBuySell：個股法人（逐支查，免費）
-  // TaiwanStockTotalInstitutionalInvestors：全市場法人彙總（免費，但無 stock_id）
-  // ── 策略：對 QUANT_POOL 的 97 支並行批次抓取 ──────────
+  // ══════════════════════════════════════════════════════
+  // 三層並行抓取：
+  // ① Worker /market-all → TWSE+TPEX 免費 API（2000+支）
+  // ② FinMind 法人（QUANT_POOL 97支逐支查，免費）
+  // ③ 合併成 scoreMap
+  // ══════════════════════════════════════════════════════
 
   const scoreMap = {};
-  const BATCH = 8; // 每批8支，避免超限
-  const pool   = QUANT_POOL; // 97支，涵蓋各族群
 
-  console.log('[FullQuant] fetching', pool.length, 'stocks in batches of', BATCH);
+  // ── 第一層：TWSE+TPEX 全市場行情（免費，2000+支）────────
+  let twseOtcLoaded = false;
+  try{
+    const res = await fetchWithTimeout(API.replace(/\/$/,'')+'/market-all', 20000);
+    if(res.ok){
+      const json = await res.json();
+      const tse  = json.data?.tse || [];
+      const otc  = json.data?.otc || [];
+      const peMap = {};
+      (json.data?.pe||[]).forEach(r=>{ peMap[r.id]=r; });
 
-  for(let i=0; i<pool.length; i+=BATCH){
-    const batch = pool.slice(i, i+BATCH);
+      // 上市股票
+      tse.forEach(r=>{
+        if(!r.id || !r.name) return;
+        scoreMap[r.id] = {
+          name:      r.name,
+          sector:    SECTOR_MAP[r.id] || '—',
+          close:     r.close,
+          ret5:      0, // 只有今日，無5日
+          changePct: r.changePct || 0,
+          volume:    r.volume || 0,
+          volRatio:  1,
+          instScore: 0,
+          pe:        peMap[r.id]?.pe   || null,
+          pb:        peMap[r.id]?.pb   || null,
+          yield:     peMap[r.id]?.yield|| null,
+          market:    'TSE',
+        };
+      });
+
+      // 上櫃股票
+      otc.forEach(r=>{
+        if(!r.id || !r.name) return;
+        scoreMap[r.id] = {
+          name:      r.name,
+          sector:    SECTOR_MAP[r.id] || '—',
+          close:     r.close,
+          ret5:      0,
+          changePct: r.changePct || 0,
+          volume:    r.volume || 0,
+          volRatio:  1,
+          instScore: 0,
+          pe:        null, pb:null, yield:null,
+          market:    'OTC',
+        };
+      });
+
+      twseOtcLoaded = Object.keys(scoreMap).length > 100;
+      console.log('[FullQuant] TWSE+TPEX loaded:', Object.keys(scoreMap).length, 'stocks');
+    }
+  }catch(e){ console.warn('[FullQuant] market-all failed:', e.message); }
+
+  // ── 第二層：FinMind 個股法人 + 5日漲跌（QUANT_POOL）──────
+  // 補強最重要的 97 支股票（法人資料 + 準確5日漲跌）
+  const today   = todayStr();
+  const weekAgo = nDaysAgo(10);
+  const BATCH   = 8;
+
+  for(let i=0; i<QUANT_POOL.length; i+=BATCH){
+    const batch = QUANT_POOL.slice(i, i+BATCH);
     await Promise.all(batch.map(async stock=>{
       try{
-        // 並行取：日K（5日）+ 法人
-        const [priceData, instStock] = await Promise.all([
-          fmFetch({ dataset:'TaiwanStockPrice', data_id:stock.id,
-            start_date:weekAgo, end_date:today, _optional:true }, 8000).catch(()=>null),
-          fmFetch({ dataset:'TaiwanStockInstitutionalInvestorsBuySell', data_id:stock.id,
-            start_date:weekAgo, end_date:today, _optional:true }, 8000).catch(()=>null),
+        const [priceData, instData] = await Promise.all([
+          fmFetch({dataset:'TaiwanStockPrice', data_id:stock.id,
+            start_date:weekAgo, end_date:today, _optional:true}, 8000).catch(()=>null),
+          fmFetch({dataset:'TaiwanStockInstitutionalInvestorsBuySell', data_id:stock.id,
+            start_date:weekAgo, end_date:today, _optional:true}, 8000).catch(()=>null),
         ]);
 
-        // 計算 ret5、volRatio
+        // 5日漲跌幅 + 量能比
         let ret5=0, volRatio=1, close=null;
         if(priceData?.length >= 2){
-          const rows  = [...priceData].sort((a,b)=>a.date>b.date?1:-1);
-          const last  = rows[rows.length-1];
-          const first = rows[0];
+          const rows = [...priceData].sort((a,b)=>a.date>b.date?1:-1);
+          const last=rows[rows.length-1], first=rows[0];
           close  = parseFloat(last.close||0);
           ret5   = first.close>0 ? +((close-parseFloat(first.close))/parseFloat(first.close)*100).toFixed(2) : 0;
           const vols   = rows.map(r=>parseInt(r.Trading_Volume||0)).filter(v=>v>0);
@@ -8108,10 +8160,10 @@ async function buildFullMarketQuant(){
           volRatio = avgVol>0 ? +(vols[vols.length-1]/avgVol).toFixed(2) : 1;
         }
 
-        // 計算法人分數
+        // 法人分數
         let instScore=0, foreign=0, trust=0;
-        if(instStock?.length){
-          instStock.forEach(r=>{
+        if(instData?.length){
+          instData.forEach(r=>{
             const nm  = r.name||r.institutional_investors||'';
             const net = parseInt(r.buy||0)-parseInt(r.sell||0);
             if(nm.includes('外資')||nm.includes('Foreign')) foreign+=net;
@@ -8120,28 +8172,28 @@ async function buildFullMarketQuant(){
           instScore = (foreign>0?2:foreign<0?-2:0)+(trust>0?1:0);
         }
 
-        scoreMap[stock.id] = {
-          name:      stock.name,
-          sector:    stock.s || SECTOR_MAP[stock.id] || '—',
-          ret5, volRatio, instScore, close,
-          pe:null, pb:null, // 免費方案無法取得
-        };
-      }catch(e){
-        // 單支失敗不影響其他
-        scoreMap[stock.id] = {name:stock.name, sector:stock.s||'—',
-          ret5:0, volRatio:1, instScore:0, close:null, pe:null, pb:null};
-      }
+        // 更新（或新增）scoreMap
+        if(scoreMap[stock.id]){
+          // 用精確的5日資料覆蓋 TWSE 的當日資料
+          scoreMap[stock.id].ret5      = ret5;
+          scoreMap[stock.id].volRatio  = volRatio;
+          scoreMap[stock.id].instScore = instScore;
+          if(close) scoreMap[stock.id].close = close;
+        } else {
+          scoreMap[stock.id] = {
+            name:stock.name, sector:stock.s||SECTOR_MAP[stock.id]||'—',
+            close, ret5, volRatio, instScore, pe:null, pb:null, market:'FM',
+          };
+        }
+      }catch(e){}
     }));
-
-    // 批次間等待（避免 FinMind 速率限制）
-    if(i+BATCH < pool.length){
-      await new Promise(r=>setTimeout(r, 300));
-    }
+    if(i+BATCH < QUANT_POOL.length)
+      await new Promise(r=>setTimeout(r,200));
   }
 
-  console.log('[FullQuant] done:', Object.keys(scoreMap).length, 'stocks');
-
-  // 資料已在上方批次解析完成
+  console.log('[FullQuant] final:', Object.keys(scoreMap).length, 'stocks',
+    '(TWSE/TPEX:', Object.values(scoreMap).filter(s=>s.market==='TSE'||s.market==='OTC').length,
+    '+ FinMind补強:', Object.values(scoreMap).filter(s=>s.market==='FM').length, ')');
 
   // 存快取
   try{
