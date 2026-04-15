@@ -8062,9 +8062,12 @@ async function buildFullMarketQuant(){
   try{
     const cached = JSON.parse(localStorage.getItem(FULL_QUANT_KEY)||'null');
     const ttl = _isTradingSession() ? 5*60*1000 : _msTillMidnight();
-    if(cached && cached.ts && Date.now()-cached.ts < ttl){
-      console.log('[FullQuant] cache hit:', Object.keys(cached.data).length, 'stocks');
-      return cached.data;
+    if(cached && cached.ts && cached.data && Date.now()-cached.ts < ttl){
+      const keys = Object.keys(cached.data);
+      if(keys.length >= 50){
+        console.log('[FullQuant] cache hit:', keys.length, 'stocks');
+        return cached.data;
+      }
     }
   }catch(e){}
 
@@ -8082,6 +8085,7 @@ async function buildFullMarketQuant(){
   // ── 第一層：TWSE+TPEX 全市場行情（免費，2000+支）────────
   let twseOtcLoaded = false;
   try{
+    if(!API) throw new Error('API not configured');
     const res = await fetchWithTimeout(API.replace(/\/$/,'')+'/market-all', 20000);
     if(res.ok){
       const json = await res.json();
@@ -8191,9 +8195,22 @@ async function buildFullMarketQuant(){
       await new Promise(r=>setTimeout(r,200));
   }
 
-  console.log('[FullQuant] final:', Object.keys(scoreMap).length, 'stocks',
-    '(TWSE/TPEX:', Object.values(scoreMap).filter(s=>s.market==='TSE'||s.market==='OTC').length,
-    '+ FinMind补強:', Object.values(scoreMap).filter(s=>s.market==='FM').length, ')');
+  const finalCount = Object.keys(scoreMap).length;
+  console.log('[FullQuant] final:', finalCount, 'stocks',
+    'TSE/OTC:', Object.values(scoreMap).filter(s=>s.market==='TSE'||s.market==='OTC').length,
+    'FM:', Object.values(scoreMap).filter(s=>s.market==='FM').length);
+
+  // 確保不回傳空物件（至少用 DEFAULT_STOCKS 填充）
+  if(finalCount < 50){
+    console.warn('[FullQuant] too few stocks, adding DEFAULT_STOCKS fallback');
+    DEFAULT_STOCKS.forEach(s=>{
+      if(!scoreMap[s.t]) scoreMap[s.t] = {
+        name:s.n, sector:s.s, close:null,
+        ret5:0, changePct:0, volume:0, volRatio:1,
+        instScore:0, pe:null, pb:null, market:'FB',
+      };
+    });
+  }
 
   // 存快取
   try{
@@ -8559,6 +8576,7 @@ async function runStratAnalysis(){
     try{
       // 優先：全市場批次（只需3次API）
       const fullQuant = await buildFullMarketQuant();
+      if(!fullQuant) throw new Error('full quant returned null');
       const stockCount = Object.keys(fullQuant).length;
 
       if(stockCount >= 100){
@@ -9693,7 +9711,10 @@ async function runCustomStratAnalysis(){
 
     // ── 第一步：全市場量化篩選（程式執行，100% 覆蓋）──────
     showToast('🔢 量化掃描全市場…', 4000);
-    const fullQuant = await buildFullMarketQuant().catch(()=>null);
+    const fullQuant = await buildFullMarketQuant().catch(e=>{
+      console.error('[CustomStrat] buildFullMarketQuant error:', e.message);
+      return null;
+    });
 
     let candidates = []; // 程式篩選後的候選池
 
@@ -9846,7 +9867,7 @@ async function runCustomStratAnalysis(){
 
     // 用程式的 scoreMap 補全 sector / name（確保正確）
     const stocks = aiStocks.slice(0, count).map(s=>{
-      const q = fullQuant[s.id] || {};
+      const q = (fullQuant && fullQuant[s.id]) || {};
       return {
         ...s,
         name:   s.name || q.name || NAME_MAP[s.id] || s.id,
