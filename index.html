@@ -8053,7 +8053,7 @@ function closeAddWatchlist(){}
 // ════════════════════════════════════════════════════
 
 // 全市場量化快取（每日只算一次）
-const FULL_QUANT_KEY = 'stockai_full_quant';
+const FULL_QUANT_KEY = 'stockai_full_quant_v2'; // v2: 使用 changePct+yield
 const FULL_QUANT_TTL = _msTillMidnight;  // 快取到午夜
 
 // 全市場批次量化：3次API取得全部1800支的指標
@@ -8230,19 +8230,59 @@ async function buildFullMarketQuant(){
 
 // 依策略計算單支股票的加權分數
 function calcScoreForStrat(data, stratKey){
-  const {ret5=0, volRatio=1, instScore=0, pe=null} = data;
+  // ret5：5日漲跌（FinMind補強的97支才有，其餘用 changePct 代替）
+  // changePct：今日漲跌（TWSE/TPEX全市場都有）
+  // volRatio：量能比（FinMind有，TWSE無，預設1）
+  // instScore：法人分數（FinMind補強有，其餘為0）
+  // pe/yield/pb：上市股票有PE殖利率（TWSE BWIBBU_ALL）
+  const ret5      = data.ret5      || 0;
+  const changePct = data.changePct || 0;
+  const mom       = ret5 !== 0 ? ret5 : changePct; // 優先5日，無則用今日
+  const volRatio  = data.volRatio  || 1;
+  const instScore = data.instScore || 0;
+  const pe        = data.pe   || null;
+  const yld       = data.yield || null; // 殖利率（%）
+  const pb        = data.pb   || null;
+  const vol       = data.volume || 0;
+  // 成交量分位（TWSE有）：高成交量加分
+  const volPts = vol > 100000000 ? 10 : vol > 50000000 ? 6 : vol > 10000000 ? 3 : 0;
+
   let score = 50;
-  if(stratKey==='A'){ // 極致動能
-    score = 50 + ret5*3 + (volRatio-1)*10 + instScore*5;
-  } else if(stratKey==='B'){ // 穩健成長
-    score = 50 + instScore*10 + ret5*1 + (pe&&pe>0&&pe<25?8:0);
-  } else if(stratKey==='C'){ // 價值發現
-    const valuePts = pe&&pe>0&&pe<15 ? 20 : pe&&pe<20 ? 10 : 0;
-    score = 50 + valuePts - ret5*0.5 + instScore*4;
-  } else if(stratKey==='D'){ // 情緒反轉
-    score = 50 + (ret5<-10?20:ret5<-5?10:0) + instScore*3;
-  } else { // E 風險平權
-    score = 50 + instScore*5 + (Math.abs(ret5)<5?8:0) + (pe&&pe>0&&pe<30?5:0);
+  if(stratKey==='A'){ // 極致動能：漲幅+量能+法人
+    score = 50
+      + mom*3                              // 動能（+/-各方向都計）
+      + (volRatio-1)*8                     // 放量
+      + volPts                             // 絕對成交量
+      + instScore*5;                       // 法人買超
+  } else if(stratKey==='B'){ // 穩健成長：法人+估值+穩定
+    score = 50
+      + instScore*10                       // 法人最重要
+      + mom*1                              // 小幅動能
+      + (pe&&pe>0&&pe<25 ? 8:0)           // 合理PE
+      + (yld&&yld>3 ? 6:0)               // 有殖利率
+      + volPts*0.5;
+  } else if(stratKey==='C'){ // 價值發現：低估值+法人轉買
+    const pePts = pe&&pe>0&&pe<12?20 : pe&&pe<18?12 : pe&&pe<25?5 : 0;
+    const pbPts = pb&&pb>0&&pb<1?15  : pb&&pb<1.5?8 : 0;
+    const yldPts= yld&&yld>5?12 : yld&&yld>3?6 : 0;
+    score = 50
+      + pePts + pbPts + yldPts            // 估值加分
+      - Math.max(0,mom)*0.5               // 漲太多扣分
+      + Math.max(0,-mom)*1               // 超跌加分
+      + instScore*4;                      // 法人轉買
+  } else if(stratKey==='D'){ // 情緒反轉：超跌+法人止跌
+    const dropPts = mom<-10?25 : mom<-5?15 : mom<-2?5 : 0;
+    score = 50
+      + dropPts                           // 跌越多加分越多
+      + instScore*3                       // 法人開始買
+      + volPts*0.5;
+  } else { // E 風險平權：低波動+有殖利率
+    const stabPts = Math.abs(mom)<2?12 : Math.abs(mom)<5?6 : 0;
+    score = 50
+      + instScore*5
+      + stabPts                           // 穩定加分
+      + (yld&&yld>4?10 : yld&&yld>2?5:0) // 殖利率
+      + (pe&&pe>0&&pe<30?5:0);
   }
   return Math.min(99, Math.max(1, Math.round(score)));
 }
@@ -9737,24 +9777,24 @@ async function runCustomStratAnalysis(){
         hardFilter = d => d.pe && d.pe > 0 && d.pe < 20;
       }
 
-      // ── 依策略類型計分排序 ────────────────────────────────
+      // ── 依策略類型計分排序（優先5日漲跌，無則用今日changePct）──
+      const getMom    = d => d.ret5 !== 0 ? (d.ret5||0) : (d.changePct||0);
+      const getVolPts = d => { const v=d.volume||0; return v>100000000?3:v>50000000?2:v>10000000?1:0; };
       let scoreFn;
       if(/動能|突破|強勢|漲幅|放量|量增/.test(up)){
-        scoreFn = d => (d.ret5||0)*3 + (d.volRatio||1)*5 + (d.instScore||0)*2;
+        scoreFn = d => getMom(d)*3 + (d.volRatio||1)*5 + getVolPts(d)*3 + (d.instScore||0)*2;
       } else if(/法人|外資|投信|買超|籌碼/.test(up)){
-        scoreFn = d => (d.instScore||0)*10 + (d.ret5||0)*1;
+        scoreFn = d => (d.instScore||0)*10 + getMom(d)*1 + getVolPts(d);
       } else if(/低估|PE|本益比|PB|淨值|價值|超跌/.test(up)){
-        scoreFn = d => {
-          const peScore = d.pe && d.pe>0 && d.pe<20 ? (20-d.pe)*2 : 0;
-          const pbScore = d.pb && d.pb>0 && d.pb<2  ? (2-d.pb)*5  : 0;
-          return peScore + pbScore + (d.instScore||0)*1;
-        };
+        scoreFn = d => { const pe=(d.pe&&d.pe>0&&d.pe<20?(20-d.pe)*2:0); const pb=(d.pb&&d.pb>0&&d.pb<2?(2-d.pb)*5:0); const yld=(d.yield&&d.yield>3?d.yield*2:0); return pe+pb+yld+(d.instScore||0)*1; };
       } else if(/殖利率|配息|股息|防禦/.test(up)){
-        scoreFn = d => (d.instScore||0)*3 - Math.abs(d.ret5||0)*0.5;
-      } else if(/半導體|AI|科技|晶片|伺服器|HBM|CoWoS/.test(up)){
-        scoreFn = d => (d.ret5||0)*2 + (d.instScore||0)*6 + (d.volRatio||1)*3;
+        scoreFn = d => (d.yield||0)*5 + (d.instScore||0)*3 - Math.abs(getMom(d))*0.5;
+      } else if(/超跌|反彈/.test(up)){
+        scoreFn = d => Math.max(0,-getMom(d))*3 + (d.instScore||0)*3;
+      } else if(/半導體|AI|科技|晶片|伺服器/.test(up)){
+        scoreFn = d => getMom(d)*2 + (d.instScore||0)*6 + getVolPts(d)*3;
       } else {
-        scoreFn = d => (d.instScore||0)*5 + (d.ret5||0)*2 + (d.volRatio||1)*2;
+        scoreFn = d => (d.instScore||0)*5 + getMom(d)*2 + getVolPts(d)*2 + (d.yield||0)*1;
       }
 
       // ── 全市場排序，取前 count*8 支（確保 AI 有足夠選擇）──
