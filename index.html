@@ -8442,7 +8442,7 @@ async function calcQuantScore(stockId, stratKey){
   }catch(e){ return null; }
 }
 
-const JSON_FORMAT = '只輸出以下JSON，不加任何文字說明或markdown：\n{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}\nreason限6字。';
+const JSON_FORMAT = '請輸出恰好10支股票的JSON（不多不少），不加任何說明文字或markdown：{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"法人買超"},{"id":"2317","name":"鴻海","sector":"電子製造","winRate":65,"risk":5,"reason":"動能強"},{"id":"2882","name":"國泰金","sector":"金融","winRate":62,"risk":4,"reason":"殖利率高"},...共10支]}。reason限6字，winRate為0-100整數，risk為1-10整數。';
 
 const STRATEGIES = {
   A:{
@@ -8460,7 +8460,7 @@ const STRATEGIES = {
 - 消息面有正向催化（法說會、新訂單、技術突破）
 - 不限定特定產業，全市場尋找最強動能
 
-【多樣化要求】10支中需包含至少3種不同產業類別
+【多樣化要求】必須選出10支（不多不少），需包含至少3種不同產業類別。
 
 ` + JSON_FORMAT
   },
@@ -8479,7 +8479,7 @@ const STRATEGIES = {
 - 所屬產業景氣上行或復甦初期，非傳統淡季
 - 不限定特定產業，包含金融、電信、民生消費等穩健型均可
 
-【多樣化要求】10支中需包含至少4種不同產業類別
+【多樣化要求】必須選出10支（不多不少），需包含至少4種不同產業類別。
 
 ` + JSON_FORMAT
   },
@@ -8727,8 +8727,25 @@ async function runStratAnalysis(){
       '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
     ].filter(Boolean).join('；');
 
-    const quantContext = top50.length >= 5
-      ? '\n\n【量化預篩結果（真實數據，'+quantScopeLabel+'→篩出'+top50.length+'支）】\n'+quantSummary+'\n請從以上量化篩選結果中，挑出最符合策略條件的10支，不限制只選知名大股票。'
+    // quantContext：只傳前20支（避免 prompt 過長），明確要求10支
+    const top20forCtx = top50.slice(0,20);
+    const summaryShort = top20forCtx.map(s=>{
+      const q = s.quant;
+      const tags=[];
+      if(q.instScore>0)   tags.push('法↑');
+      if(q.instScore<0)   tags.push('法↓');
+      const mom = q.ret5!==0?q.ret5:(q.changePct||0);
+      if(mom>=3)          tags.push('漲'+mom.toFixed(1)+'%');
+      if(mom<=-3)         tags.push('跌'+Math.abs(mom).toFixed(1)+'%');
+      if(q.pe&&q.pe<15)   tags.push('PE'+q.pe);
+      if(q.yield&&q.yield>4) tags.push('殖'+q.yield+'%');
+      const tag=tags.length?'('+tags.join('/')+')'  :'';
+      return s.id+s.name+tag;
+    }).join(' ');
+
+    const quantContext = top20forCtx.length >= 5
+      ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
+        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的10支（可不限於此清單）。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext);
     const WORKER = (typeof API !== 'undefined' && API)
@@ -8783,8 +8800,8 @@ async function runStratAnalysis(){
             if(!q) return '';
             return `<div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
               <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(124,92,252,.15);color:var(--purple)">量化 ${q.score}</span>
-              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text3)">RSI ${q.rsi}</span>
-              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${q.ret5>=0?'rgba(255,76,106,.12)':'rgba(0,212,170,.12)'};color:${q.ret5>=0?'var(--red)':'var(--green)'}">5日${q.ret5>=0?'+':''}${q.ret5}%</span>
+              ${q.pe?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--text3)">PE ${q.pe}</span>`:''}
+              ${(()=>{ const m=q.ret5!==0?q.ret5:(q.changePct||0); return m!==0?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${m>=0?'rgba(255,76,106,.12)':'rgba(0,212,170,.12)'};color:${m>=0?'var(--red)':'var(--green)'}">${q.ret5!==0?'5日':'今日'}${m>=0?'+':''}${m.toFixed?m.toFixed(2):m}%</span>`:'' })()}
               ${q.instScore>0?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(0,212,170,.12);color:var(--green)">法人買</span>`:q.instScore<0?`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,76,106,.1);color:var(--red)">法人賣</span>`:''}
             </div>`;
           })()}
