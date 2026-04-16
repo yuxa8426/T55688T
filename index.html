@@ -8442,7 +8442,21 @@ async function calcQuantScore(stockId, stratKey){
   }catch(e){ return null; }
 }
 
-const JSON_FORMAT = '請輸出恰好10支股票的JSON（不多不少），不加任何說明文字或markdown：{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"法人買超"},{"id":"2317","name":"鴻海","sector":"電子製造","winRate":65,"risk":5,"reason":"動能強"},{"id":"2882","name":"國泰金","sector":"金融","winRate":62,"risk":4,"reason":"殖利率高"},...共10支]}。reason限6字，winRate為0-100整數，risk為1-10整數。';
+const JSON_FORMAT = `
+請直接輸出JSON，不加任何說明文字、不加markdown、不加\`\`\`：
+{"stocks":[
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
+{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"}
+]}
+以上10列每列一支股票，填入真實台股代號與股名，共10支不多不少。`;
 
 const STRATEGIES = {
   A:{
@@ -8460,7 +8474,7 @@ const STRATEGIES = {
 - 消息面有正向催化（法說會、新訂單、技術突破）
 - 不限定特定產業，全市場尋找最強動能
 
-【多樣化要求】必須選出10支（不多不少），需包含至少3種不同產業類別。
+【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少3種不同產業。
 
 ` + JSON_FORMAT
   },
@@ -8479,7 +8493,7 @@ const STRATEGIES = {
 - 所屬產業景氣上行或復甦初期，非傳統淡季
 - 不限定特定產業，包含金融、電信、民生消費等穩健型均可
 
-【多樣化要求】必須選出10支（不多不少），需包含至少4種不同產業類別。
+【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少4種不同產業。
 
 ` + JSON_FORMAT
   },
@@ -8498,7 +8512,7 @@ const STRATEGIES = {
 - 股價在年線（MA250）附近或以下，基本面穩健
 - 特別關注：傳產、金融、中小型股、近期受錯殺的題材股
 
-【多樣化要求】10支需包含至少4種不同產業，避免集中半導體
+【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少4種不同產業，避免集中半導體。
 
 ` + JSON_FORMAT
   },
