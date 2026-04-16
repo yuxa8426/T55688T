@@ -576,6 +576,9 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 .page{padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
 /* 輸入框 focus 時自動捲動 */
 input:focus, textarea:focus{scroll-margin-bottom:80px}
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #stratProgressBar.active { animation: progressPulse 1.5s ease infinite; }
+  @keyframes progressPulse { 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
 </style>
 </head>
 <body>
@@ -1861,6 +1864,21 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
       <!-- 舊版 statsEl 保留（隱藏，供 getBacktestSummary 使用）-->
       <div id="backtestStats" style="display:none"></div>
+    </div>
+
+    <!-- 進度條（分析中顯示）-->
+    <div id="stratProgress" style="display:none;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div id="stratProgressIcon" style="font-size:22px;animation:spin 1.5s linear infinite">⚙️</div>
+        <div style="flex:1">
+          <div id="stratProgressLabel" style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:5px">初始化中…</div>
+          <div style="background:rgba(255,255,255,.08);border-radius:99px;height:6px;overflow:hidden">
+            <div id="stratProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--purple),var(--green));border-radius:99px;transition:width .5s ease"></div>
+          </div>
+        </div>
+        <div id="stratProgressPct" style="font-size:12px;font-weight:700;color:var(--purple);min-width:32px;text-align:right">0%</div>
+      </div>
+      <div id="stratProgressSteps" style="display:flex;gap:6px;flex-wrap:wrap"></div>
     </div>
 
     <!-- 結果區（AI 策略）-->
@@ -8603,6 +8621,43 @@ function updateStratDesc(key){
      </div>${s.desc}`;
 }
 
+// ── 策略分析進度條控制 ───────────────────────────────────
+function _stratProgress(pct, label, icon, stepDone){
+  const bar    = document.getElementById('stratProgressBar');
+  const lbl    = document.getElementById('stratProgressLabel');
+  const pctEl  = document.getElementById('stratProgressPct');
+  const iconEl = document.getElementById('stratProgressIcon');
+  const steps  = document.getElementById('stratProgressSteps');
+  const wrap   = document.getElementById('stratProgress');
+
+  if(!bar) return;
+  wrap.style.display = 'block';
+
+  // 更新進度條
+  bar.style.width = pct + '%';
+  bar.className   = pct < 100 ? 'active' : '';
+  if(lbl) lbl.textContent  = label;
+  if(pctEl) pctEl.textContent = pct + '%';
+  if(iconEl && icon){
+    iconEl.textContent = icon;
+    iconEl.style.animation = pct>=100 ? 'none' : 'spin 1.5s linear infinite';
+  }
+
+  // 步驟標籤
+  if(stepDone && steps){
+    const chip = document.createElement('span');
+    chip.style.cssText = 'font-size:10px;padding:3px 8px;border-radius:99px;background:rgba(0,212,170,.15);color:var(--green);font-weight:600';
+    chip.textContent = '✓ ' + stepDone;
+    steps.appendChild(chip);
+  }
+}
+function _stratProgressHide(){
+  const wrap = document.getElementById('stratProgress');
+  const steps = document.getElementById('stratProgressSteps');
+  if(wrap) wrap.style.display = 'none';
+  if(steps) steps.innerHTML = '';
+}
+
 async function runStratAnalysis(){
   const key  = _currentStrat;
   const strat = STRATEGIES[key];
@@ -8615,14 +8670,15 @@ async function runStratAnalysis(){
   const runningEl = document.getElementById('stratRunning');
 
   runBtn.disabled = true;
-  runBtn.textContent = '⏳ AI 分析中（約15秒）…';
+  runBtn.textContent = '⏳ 分析中…';
   if(runningEl) runningEl.style.display = 'inline';
   resultEl.style.display = 'none';
+  _stratProgressHide();
 
   try{
-    // ══ 第一步：全市場量化篩選（3次API取1800支）══════════
-    runBtn.textContent = '⏳ 全市場量化掃描中（第1/2步）…';
-    showToast('🔢 掃描全市場1800支股票…', 4000);
+    // ══ 第一步：全市場量化篩選 ══════════════════════════
+    _stratProgress(5, '正在取得全市場行情…', '📡', null);
+    showToast('📡 連接 TWSE/TPEX 資料…', 3000);
 
     let scored = [];
     let quantScopeLabel = '';
@@ -8634,6 +8690,7 @@ async function runStratAnalysis(){
       const stockCount = Object.keys(fullQuant).length;
 
       if(stockCount >= 100){
+        _stratProgress(30, `量化計算 ${stockCount} 支分數…`, '🔢', '取得全市場資料');
         // 全市場成功：對所有股票計算策略分數
         const allScored = Object.entries(fullQuant)
           .map(([id, data])=>({
@@ -8656,7 +8713,8 @@ async function runStratAnalysis(){
     }catch(e){
       // 備援：用 DEFAULT_STOCKS 作基礎，不逐一呼叫 API
       console.error('[FullQuant] FAILED, falling back. Error:', e.message);
-      showToast('⚠️ 全市場掃描失敗，使用基礎清單，結果可能不完整', 5000);
+      _stratProgress(25, '使用基礎股票清單…', '⚠️', null);
+      showToast('⚠️ 全市場掃描失敗，使用基礎清單', 4000);
       DEFAULT_STOCKS.forEach(s=>{
         scored.push({
           id: s.t, name: s.n, s: s.s,
@@ -8682,8 +8740,9 @@ async function runStratAnalysis(){
       return s.id+s.name+tag;
     }).join('、');
 
-    runBtn.textContent = '⏳ AI 深度分析中（第2/2步）…';
-    showToast(`🤖 AI 從${quantScopeLabel}篩選${top50.length}支中選出最佳10支…`, 4000);
+    _stratProgress(55, `AI 正在從 ${top50.length} 支候選中選股…`, '🤖', `量化篩選 ${quantScopeLabel}`);
+    runBtn.textContent = '⏳ AI 分析中…';
+    showToast(`🤖 AI 從 ${quantScopeLabel} 篩選 ${top50.length} 支中選股…`, 3000);
 
     // ══ 第二步：收集市場背景 ══════════════════════════════
 
@@ -8731,6 +8790,7 @@ async function runStratAnalysis(){
     // 本機回測修正
     const btSummary = getBacktestSummary(key);
 
+    _stratProgress(65, '收集市場背景資訊…', '📊', '市場數據');
     // 組合完整 market context
     const market = [
       `分析日期：${new Date().toLocaleDateString('zh-TW')}`,
@@ -8766,6 +8826,16 @@ async function runStratAnalysis(){
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
 
+    _stratProgress(75, 'AI 模型分析中，請稍候…', '🧠', '建立分析指令');
+
+    // 進度條假跑（AI 等待期間）
+    let _progTimer = null;
+    let _progVal = 75;
+    _progTimer = setInterval(()=>{
+      _progVal = Math.min(92, _progVal + 1.5);
+      _stratProgress(_progVal, 'AI 模型分析中，請稍候…', '🧠', null);
+    }, 1200);
+
     const resp = await fetchWithTimeout(WORKER, 45000, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -8775,6 +8845,7 @@ async function runStratAnalysis(){
         messages: [{ role:'user', content: prompt }],
       }),
     });
+    clearInterval(_progTimer);
 
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data = await resp.json();
@@ -8782,12 +8853,17 @@ async function runStratAnalysis(){
     const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
     if(!text) throw new Error('AI 無回應，請稍後重試');
 
+    _stratProgress(96, '解析 AI 回應…', '✨', 'AI 分析完成');
     // 使用強健解析（6步容錯）
     const stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
 
     // 記錄到回測系統（背景執行，不阻塞渲染）
     recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
+
+    // 完成
+    _stratProgress(100, '選股完成！', '🎯', '結果就緒');
+    setTimeout(()=>{ _stratProgressHide(); }, 800);
 
     // 渲染結果
     titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選（掃描${quantScopeLabel}）`;
@@ -8854,7 +8930,9 @@ async function runStratAnalysis(){
   }finally{
     runBtn.disabled = false;
     runBtn.textContent = '🤖 AI 策略分析 → 選出10支股票';
+    runBtn.disabled = false;
     if(runningEl) runningEl.style.display = 'none';
+    if(_progTimer) clearInterval(_progTimer);
   }
 }
 
@@ -9909,6 +9987,14 @@ async function runCustomStratAnalysis(){
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
 
+    _stratProgress(60, 'AI 選股中，請稍候…', '🧠', null);
+    let _cProgTimer = null;
+    let _cProgVal = 60;
+    _cProgTimer = setInterval(()=>{
+      _cProgVal = Math.min(90, _cProgVal + 2);
+      _stratProgress(_cProgVal, 'AI 選股中，請稍候…', '🧠', null);
+    }, 1000);
+
     const resp = await fetchWithTimeout(WORKER, 45000, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -9916,6 +10002,8 @@ async function runCustomStratAnalysis(){
         messages:[{role:'user', content:fullPrompt}]
       })
     });
+    clearInterval(_cProgTimer);
+
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data  = await resp.json();
     if(data.error) throw new Error(data.error);
@@ -9982,6 +10070,9 @@ async function runCustomStratAnalysis(){
       +'<div style="font-size:10px;color:var(--text3);margin-top:2px">已記錄回測 · '+period+'日後驗證 · 共'+stocks.length+'支</div>'
       +'</div>'
       + stocksHtml;
+
+    _stratProgress(100, '選股完成！', '🎯', 'AI 分析完成');
+    setTimeout(()=>{ _stratProgressHide(); }, 600);
 
     resultEl.style.display   = 'block';
     resultEl.style.opacity   = '0';
