@@ -1585,9 +1585,30 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
       <h2>🔥 趨勢股</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="trendUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
-        <button onclick="refreshTrendStocks()" style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:2px 6px">↻</button>
+        <button onclick="refreshTrendStocks(true)" style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:2px 6px">↻</button>
       </div>
     </div>
+
+    <!-- 盤中/盤後 切換 -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;background:var(--surface);border-radius:10px;padding:4px">
+      <button id="trendModeIntraday"
+        onclick="setTrendMode('intraday')"
+        style="flex:1;padding:7px 0;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--purple);color:#fff">
+        📡 盤中即時
+      </button>
+      <button id="trendModeEod"
+        onclick="setTrendMode('eod')"
+        style="flex:1;padding:7px 0;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:transparent;color:var(--text3)">
+        📋 盤後法人
+      </button>
+    </div>
+
+    <!-- 模式說明 -->
+    <div id="trendModeDesc" style="font-size:10px;color:var(--text3);margin-bottom:8px;padding:6px 10px;background:rgba(255,255,255,.04);border-radius:8px;line-height:1.6">
+      📡 <strong style="color:var(--purple)">盤中即時</strong>：即時漲跌幅 + 成交量，每15分鐘更新，適合盤中追蹤強勢股
+    </div>
+
+    <!-- 訊號標籤 -->
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       <span style="font-size:10px;background:rgba(255,76,106,.1);color:#ff4c6a;border:1px solid rgba(255,76,106,.25);border-radius:999px;padding:3px 8px">🚀 突破強勢</span>
       <span style="font-size:10px;background:rgba(245,200,66,.1);color:#f5c842;border:1px solid rgba(245,200,66,.25);border-radius:999px;padding:3px 8px">📊 量能放大</span>
@@ -7233,12 +7254,40 @@ async function scoreTrendStock(stock){
   }
 }
 
-async function refreshTrendStocks(manual=false){
-  if(manual) showToast('🔄 更新趨勢股…');
+// ── 趨勢股模式：intraday（盤中即時）| eod（盤後法人）─────
+let _trendMode = localStorage.getItem('trendMode') || 'intraday';
 
-  // 快取檢查
-  const trendTTL = typeof TREND_CACHE_MS === 'function' ? TREND_CACHE_MS() : TREND_CACHE_MS;
-  if(!manual && _trendCache && Date.now()-_trendCacheTime < trendTTL){
+function setTrendMode(mode){
+  _trendMode = mode;
+  localStorage.setItem('trendMode', mode);
+  _trendCache = null; // 清快取，強制重新載入
+
+  // 更新 Tab 樣式
+  const btnI = document.getElementById('trendModeIntraday');
+  const btnE = document.getElementById('trendModeEod');
+  const desc = document.getElementById('trendModeDesc');
+  if(btnI) { btnI.style.background = mode==='intraday'?'var(--purple)':'transparent'; btnI.style.color = mode==='intraday'?'#fff':'var(--text3)'; }
+  if(btnE) { btnE.style.background = mode==='eod'?'var(--gold)':'transparent'; btnE.style.color = mode==='eod'?'#1a1a2e':'var(--text3)'; }
+  if(desc){
+    desc.innerHTML = mode==='intraday'
+      ? '📡 <strong style="color:var(--purple)">盤中即時</strong>：即時漲跌幅 + 成交量，每15分鐘更新，適合盤中追蹤強勢股'
+      : '📋 <strong style="color:var(--gold)">盤後法人</strong>：昨日收盤 + 法人籌碼，Cron 每日盤後更新，適合隔日佈局';
+  }
+  refreshTrendStocks(true);
+}
+
+async function refreshTrendStocks(manual=false){
+  if(manual) showToast('🔄 更新趨勢股（'+((_trendMode==='eod')?'盤後法人':'盤中即時')+'）…');
+
+  // 初始化 Tab 狀態
+  const btnI = document.getElementById('trendModeIntraday');
+  const btnE = document.getElementById('trendModeEod');
+  if(btnI){ btnI.style.background = _trendMode==='intraday'?'var(--purple)':'transparent'; btnI.style.color = _trendMode==='intraday'?'#fff':'var(--text3)'; }
+  if(btnE){ btnE.style.background = _trendMode==='eod'?'var(--gold)':'transparent'; btnE.style.color = _trendMode==='eod'?'#1a1a2e':'var(--text3)'; }
+
+  // 快取檢查（兩種模式各自獨立快取）
+  const trendTTL = _trendMode==='eod' ? 60*60*1000 : (typeof TREND_CACHE_MS==='function' ? TREND_CACHE_MS() : TREND_CACHE_MS);
+  if(!manual && _trendCache && _trendCache._mode===_trendMode && Date.now()-_trendCacheTime < trendTTL){
     renderTrendList(_trendCache);
     return;
   }
@@ -7247,8 +7296,113 @@ async function refreshTrendStocks(manual=false){
   const timeEl = document.getElementById('trendUpdateTime');
   if(listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">⏳ 分析趨勢中…</div>';
 
-  // ① Worker /trend KV（Cron 每日全市場掃描，最動態）
-  if(API){
+  // ══════════════════════════════════════════════════════
+  // 盤後法人模式：優先用 Cron KV（昨收 + 完整法人籌碼）
+  // 盤中即時模式：優先用 TWSE 即時行情（今日漲跌 + 量能）
+  // ══════════════════════════════════════════════════════
+
+  if(_trendMode === 'eod'){
+    // ── 盤後法人模式：Cron KV → fullQuant快取 → 個別API ──
+    if(API){
+      try{
+        const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/trend', 8000);
+        if(r.ok){
+          const kv = await r.json();
+          if(kv.items && kv.items.length >= 3){
+            const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
+            const mapped = kv.items.slice(0,5).map(item=>({
+              id:        item.id,
+              name:      DB[item.id]?.name || NAME_MAP[item.id] || item.id,
+              sector:    DB[item.id]?.sector || SECTOR_MAP[item.id] || '—',
+              score:     item.score,
+              changePct: item.ret1||0,
+              price:     item.close||null,
+              signals:   [item.instNet>0?'foreign':null,(item.instNet||0)>10000?'momentum':null,(item.ret1||0)>2?'breakout':null].filter(Boolean),
+              inst5:     item.instNet||0, gain5:String(item.ret5||0), volRatio:'1',
+              isBreakout:false, ma5:null, ma20:null,
+              _mode: 'eod', _src: 'KV',
+            }));
+            mapped._mode = 'eod';
+            _trendCache = mapped; _trendCacheTime = Date.now();
+            console.log('[Trend/eod] KV:', mapped.length, 'stocks');
+            const timeEl = document.getElementById('trendUpdateTime');
+            if(timeEl) timeEl.textContent = '盤後 ' + (kv.updatedAt||'').slice(11,16) || '昨日';
+            renderTrendList(mapped); return;
+          }
+        }
+      }catch(e){ console.warn('[Trend/eod] KV skip:', e.message); }
+    }
+    // KV 沒資料：提示用戶等 Cron
+    const listEl2 = document.getElementById('trendList');
+    if(listEl2) listEl2.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;line-height:1.8">📋 盤後法人資料由 Cron 每日更新<br>若尚未更新，請切換「盤中即時」模式查看</div>';
+    return;
+
+  } else {
+    // ── 盤中即時模式：TWSE 全市場即時行情 ──────────────────
+    // 直接用 /market-all 取今日漲跌幅，不依賴 Cron KV
+    if(API){
+      try{
+        const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/market-all', 15000);
+        if(r.ok){
+          const json = await r.json();
+          const tse  = json.data?.tse || [];
+          const otc  = json.data?.otc || [];
+          const all  = [...tse, ...otc];
+          const peMap = {};
+          (json.data?.pe||[]).forEach(r=>{ peMap[r.id]=r; });
+
+          // 從全市場中挑出 TREND_POOL 的股票，計算即時分數
+          const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
+          const intradayScored = [];
+
+          for(const row of all){
+            if(!DB[row.id]) continue; // 只保留 TREND_POOL 的股票
+            const chg   = row.changePct || 0;
+            const vol   = row.volume || 0;
+            const pe    = peMap[row.id]?.pe || null;
+            // 盤中評分：漲幅×3 + 成交量加分 + 低PE加分
+            const volPts= vol>2e8?12:vol>1e8?8:vol>5e7?5:vol>1e7?2:0;
+            const pePts = pe&&pe>0&&pe<15?5:0;
+            const score = Math.round(50 + chg*3 + volPts + pePts);
+            intradayScored.push({
+              id:        row.id,
+              name:      NAME_MAP[row.id] || DB[row.id]?.name || row.name,
+              sector:    SECTOR_MAP[row.id] || DB[row.id]?.sector || '—',
+              score,
+              changePct: chg,
+              price:     row.close,
+              signals:   [
+                chg>2?'breakout':null,
+                vol>1e8?'volume':null,
+                chg>1&&vol>5e7?'momentum':null,
+              ].filter(Boolean),
+              inst5:0, gain5:String(chg), volRatio:'1',
+              isBreakout: chg>2,
+              ma5:null, ma20:null,
+              _mode:'intraday', _src:'TWSE',
+            });
+          }
+
+          intradayScored.sort((a,b)=>b.score-a.score);
+          const top5 = intradayScored.slice(0,5);
+          if(top5.length >= 3){
+            top5._mode = 'intraday';
+            _trendCache = top5; _trendCacheTime = Date.now();
+            const timeEl = document.getElementById('trendUpdateTime');
+            const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+            const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+            if(timeEl) timeEl.textContent = ts+' 即時';
+            console.log('[Trend/intraday] TWSE:', top5.length, 'stocks, top:', top5[0]?.id);
+            renderTrendList(top5); return;
+          }
+        }
+      }catch(e){ console.warn('[Trend/intraday] TWSE skip:', e.message); }
+    }
+  }
+
+  // ① 以下為兩種模式的共同備援（fullQuant快取 / 個別API）
+  // ── Fallback: Worker /trend KV（盤中模式也可用作備援）────
+  if(API && _trendMode==='intraday'){
     try{
       const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/trend', 8000);
       if(r.ok){
@@ -7265,13 +7419,15 @@ async function refreshTrendStocks(manual=false){
             signals:   [item.instNet>0?'foreign':null,(item.ret1||0)>2?'breakout':null].filter(Boolean),
             inst5:     item.instNet||0, gain5:'0', volRatio:'1',
             isBreakout:false, ma5:null, ma20:null,
+            _mode: 'intraday', _src: 'KV_fallback',
           }));
+          mapped._mode = 'intraday';
           _trendCache = mapped; _trendCacheTime = Date.now();
-          console.log('[Trend] KV:', mapped.length, 'stocks, top:', mapped[0]?.id);
+          console.log('[Trend/intraday/fallback] KV:', mapped.length, 'stocks');
           renderTrendList(mapped); return;
         }
       }
-    }catch(e){ console.warn('[Trend] KV skip:', e.message); }
+    }catch(e){ console.warn('[Trend] KV fallback skip:', e.message); }
   }
 
   // ② 全市場快取（buildFullMarketQuant 已抓過）
@@ -7333,6 +7489,7 @@ async function refreshTrendStocks(manual=false){
   results.sort((a,b)=>b.score-a.score);
   const top8 = results.slice(0,5); // 只顯示前5支
 
+  top8._mode = _trendMode;
   _trendCache = top8;
   _trendCacheTime = Date.now();
   // 趨勢股資料就緒 → 自動更新族群概覽（零額外 API）
@@ -7388,7 +7545,7 @@ function renderTrendList(stocks){
       <div class="rank-right">
         <div class="rp" style="color:${color}">${fmt(s.price)}</div>
         <div class="rc" style="color:${color}">${pctStr}</div>
-        <div style="font-size:9px;color:var(--text3);margin-top:2px">評分 ${s.score}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">評分 ${s.score}${s._src==='TWSE'?' · 即時':s._src==='KV'?' · 法人':''}</div>
       </div>
     </div>`;
   }).join('');
