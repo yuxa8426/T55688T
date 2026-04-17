@@ -10822,19 +10822,27 @@ async function runBtSwapAnalysis(stratKey){
     +'注意：1. swap 每筆 in 陣列推薦 1~2 支，優先符合'+stratName+'策略邏輯且近期法人買超的台股。'
     +' 2. 【重要】所有 swap.in 推薦的代號不得重複，同一支股票不能出現在兩個不同的替換建議中。'
     +' 3. 推薦標的也不得與 keep 或 watch 清單中的代號相同。'
-    +' 4. 每個 in 代號必須唯一，全局不重複。';
+    +' 4. 每個 in 代號必須唯一，全局不重複。'
+    +' 5. 【代號準確性】所有推薦代號必須是真實存在的台股上市上櫃代號，名稱必須與代號完全對應，'
+    +'禁止捏造不存在的代號或混搭錯誤名稱。例如：2382是廣達（非精英），2317是鴻海（非其他），'
+    +'2303是聯電，2330是台積電。如不確定代號，優先從以下常見代號選擇：'
+    +'2330台積電、2454聯發科、2382廣達、2317鴻海、2603長榮、2881富邦金、2882國泰金、'
+    +'2886兆豐金、2891中信金、2892第一金、2412中華電、4904遠傳、3045台灣大、'
+    +'6669緯穎、3231緯創、2376技嘉、2308台達電、2327國巨、2609陽明、2615萬海。';
 
   try{
     const resp = await fetchWithTimeout(WORKER, 35000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,
+      body: JSON.stringify({model:'gemini-2.5-flash',max_tokens:2000,
         messages:[{role:'user',content:prompt}]})
     });
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const raw  = (await resp.json()).content.map(b=>b.type==='text'?b.text:'').join('').trim();
     const m    = raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/);
     if(!m) throw new Error('AI 回傳格式錯誤，請重試');
-    _renderSwapCards(content, JSON.parse(m[0]), stockList, stratKey);
+    const aiRaw = JSON.parse(m[0]);
+    const aiVerified = _validateSwapResult(aiRaw); // 驗證並修正代號名稱
+    _renderSwapCards(content, aiVerified, stockList, stratKey);
   }catch(e){
     content.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">'
       +'❌ '+e.message
@@ -10843,6 +10851,67 @@ async function runBtSwapAnalysis(stratKey){
       +' style="margin-top:10px;padding:6px 16px;border:1px solid var(--border);border-radius:8px;'
       +'background:var(--card);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">重試</button></div>';
   }
+}
+
+// ── AI 推薦代號驗證與修正 ─────────────────────────────────
+// AI 可能捏造代號或混搭錯誤名稱，用 NAME_MAP + 已知清單修正
+function _verifyAndFixSwapStock(stock){
+  if(!stock || !stock.id) return null;
+  const id = String(stock.id).trim().replace(/\.TW$/i,'');
+
+  // 用 NAME_MAP 查正確名稱
+  const officialName = NAME_MAP[id];
+  if(!officialName){
+    // 代號在 NAME_MAP 找不到：可能是捏造的，但先保留讓 TWSE 資料校正
+    console.warn('[Swap] unknown id:', id, 'AI gave name:', stock.name);
+    return {...stock, id, _unknown: true};
+  }
+
+  // 有官方名稱：強制使用官方名稱覆蓋 AI 給的名稱
+  if(officialName !== stock.name){
+    console.log('[Swap] name corrected:', id, stock.name, '→', officialName);
+  }
+  return {...stock, id, name: officialName};
+}
+
+function _validateSwapResult(ai){
+  if(!ai) return ai;
+
+  // 驗證 swap.in（推薦替代標的）
+  if(ai.swap){
+    ai.swap = ai.swap.map(s=>{
+      // 被替換股的名稱也要驗證
+      if(s.out_id){
+        const correctOut = NAME_MAP[s.out_id];
+        if(correctOut && correctOut !== s.out_name) s.out_name = correctOut;
+      }
+      // 推薦進場股驗證
+      if(s.in){
+        s.in = s.in.map(c => _verifyAndFixSwapStock(c)).filter(Boolean);
+      }
+      return s;
+    });
+  }
+
+  // 驗證 keep
+  if(ai.keep){
+    ai.keep = ai.keep.map(k=>{
+      const correct = NAME_MAP[k.id];
+      if(correct) k.name = correct;
+      return k;
+    });
+  }
+
+  // 驗證 watch
+  if(ai.watch){
+    ai.watch = ai.watch.map(w=>{
+      const correct = NAME_MAP[w.id];
+      if(correct) w.name = correct;
+      return w;
+    });
+  }
+
+  return ai;
 }
 
 function _renderSwapCards(content, ai, stockList, stratKey){
@@ -10890,7 +10959,7 @@ function _renderSwapCards(content, ai, stockList, stratKey){
         +'<div style="display:flex;align-items:center;justify-content:space-between">'
           +'<div>'
             +'<span style="font-size:14px;font-weight:800;color:var(--red)">'+s.out_id+'</span>'
-            +' <span style="font-size:13px;color:var(--text);font-weight:600">'+s.out_name+'</span>'
+            +' <span style="font-size:13px;color:var(--text);font-weight:600">'+(NAME_MAP[s.out_id]||s.out_name)+'</span>'
           +'</div>'
           +'<div style="text-align:right">'
             +'<span style="font-size:11px;color:var(--red)">勝率 '+wrShow+'</span>'
@@ -10912,7 +10981,7 @@ function _renderSwapCards(content, ai, stockList, stratKey){
           +'<div style="flex:1;min-width:0">'
             +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
               +'<span style="font-size:13px;font-weight:800;color:var(--green)">'+c.id+'</span>'
-              +'<span style="font-size:13px;font-weight:600;color:var(--text)">'+c.name+'</span>'
+              +'<span style="font-size:13px;font-weight:600;color:var(--text)">'+(NAME_MAP[c.id]||c.name)+'</span>'
               +'<span style="font-size:9px;padding:1px 5px;border-radius:4px;'
               +'background:rgba(0,212,170,.1);color:var(--green)">'+(c.sector||'')+'</span>'
             +'</div>'
@@ -10944,7 +11013,7 @@ function _renderSwapCards(content, ai, stockList, stratKey){
       html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;'
         +'background:rgba(0,212,170,.05);border-radius:8px;border:1px solid rgba(0,212,170,.15)">'
         +'<span style="font-size:12px;font-weight:700;color:var(--green);flex-shrink:0">'+k.id+'</span>'
-        +'<span style="font-size:12px;color:var(--text);font-weight:600;flex-shrink:0">'+k.name+'</span>'
+        +'<span style="font-size:12px;color:var(--text);font-weight:600;flex-shrink:0">'+(NAME_MAP[k.id]||k.name)+'</span>'
         +(d?'<span style="font-size:10px;color:var(--green);font-weight:600">'+d.wr+'%</span>':'')
         +'<span style="font-size:10px;color:var(--text3);margin-left:auto;text-align:right">'+k.reason+'</span>'
         +'</div>';
