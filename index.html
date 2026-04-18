@@ -3429,110 +3429,25 @@ async function fmShareholder(stockId='2330', days=60){
 // ── 加權指數即時報價 ─────────────────────────────────
 // 來源1：TWSE mis（盤中即時，每5秒）via allorigins proxy
 // 來源2：FinMind TaiwanStockPrice TAIEX（日K收盤，盤後）
-// ── 台指期盤後指數（FinMind TaiwanFuturesDaily TX）────
-// 直接用台灣期交所官方資料，準確可靠
+// ── 台指期即時/盤後資料 ──────────────────────────────────
+// 來源優先順序：
+// 1. Yahoo Finance TXF=F（透過 Worker proxy，避免 CORS）
+// 2. FinMind TaiwanFuturesDaily（若有權限）
+// 3. 顯示 N/A
 async function fetchTxfAfterHours(){
-  // FinMind TaiwanFuturesDaily
-  // data_id: 'TX' = 台指期近月合約（不加數字）
-  // 欄位: date, futures_id, contract_date, open, max, min, close,
-  //       spread, spread_per, volume, settlement_price, trading_session
+  const WORKER_BASE = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'') : '';
+  if(!WORKER_BASE) return null;
+
   try{
-    const today   = todayStr();
-    const weekAgo = nDaysAgo(7);
-
-    // 嘗試 data_id='TX'（近月），若空再試 'TX00'
-    let data = null;
-    for(const did of ['TX','TX00','TXF']){
-      const raw = await fmFetch({
-        dataset:    'TaiwanFuturesDaily',
-        data_id:    did,
-        start_date: weekAgo,
-        end_date:   today,
-        _ttl:       _msTillMidnight(),
-      }, 15000);
-      if(raw?.length){
-        console.log('[TXF] data_id', did, 'returned', raw.length, 'rows');
-        data = raw;
-        break;
-      }
-      console.log('[TXF] data_id', did, 'no data, trying next');
-    }
-
-    if(!data?.length) throw new Error('all data_ids returned empty');
-
-    console.log('[TXF] sample row:', JSON.stringify(data[data.length-1]).slice(0,200));
-
-    // 排序：日期降序（最新在前），取最新一般盤
-    const sorted = [...data].sort((a,b)=> a.date > b.date ? -1 : 1);
-
-    // 優先找最新的一般盤資料（非夜盤）
-    const regular = sorted.find(r=>{
-      const ts = (r.trading_session||'').toLowerCase();
-      return !ts || ts==='' || ts==='一般' || ts==='regular';
-    }) || sorted[0];
-
-    if(!regular) throw new Error('no valid row');
-
-    // 欄位容錯（FinMind 各版本欄位名不同）
-    const price = parseFloat(regular.close ?? regular.Close ?? 0);
-    if(!price || price < 15000) throw new Error('price invalid: ' + price);
-
-    // settlement_price = 昨日結算價（前日收盤），用來計算正確漲跌幅
-    const settle = parseFloat(regular.settlement_price ?? 0);
-    const open_  = parseFloat(regular.open ?? regular.Open ?? price);
-
-    // spread = FinMind 提供的官方漲跌點（收盤 vs 昨結算）
-    const spreadRaw = parseFloat(regular.spread ?? 0);
-    // spread_per = 官方漲跌幅%（有時是 0.40 有時是 40，需判斷）
-    let spreadPerRaw = parseFloat(regular.spread_per ?? regular.change_percent ?? 0);
-    // 若 spread_per 絕對值 < 5 且 price > 15000，通常已是百分比（0.40 = 0.4%）
-    // 若 spread_per 絕對值 > 5，可能是直接寫 40 = 0.40%，需除以100
-    if(Math.abs(spreadPerRaw) > 20) spreadPerRaw = spreadPerRaw / 100;
-
-    // 計算漲跌點：優先用官方 spread，其次用 close - settlement_price
-    const change = spreadRaw !== 0
-      ? Math.round(spreadRaw)
-      : settle > 0 ? Math.round(price - settle) : Math.round(price - open_);
-
-    // 計算漲跌幅：優先官方 spread_per，其次自算
-    const basePx = settle > 0 ? settle : open_ > 0 ? open_ : price;
-    const changePct = spreadPerRaw !== 0
-      ? +spreadPerRaw.toFixed(2)
-      : basePx > 0 ? +((price - basePx) / basePx * 100).toFixed(2) : 0;
-
-    const dateStr = (regular.date||'').slice(5);
-    console.log('[TXF] ✅ price:', price, 'change:', change, 'pct:', changePct, 'date:', dateStr);
-
-    return { price, change, changePct,
-      session: '收盤', date: dateStr,
-      time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'})
-    };
+    // 透過 Worker /txf 路由取得台指期資料（Worker 端已處理 CORS）
+    const r = await fetchWithTimeout(WORKER_BASE+'/txf', 10000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    if(!d || !d.price || d.price < 15000) throw new Error('invalid price: '+d?.price);
+    console.log('[TXF] ✅', d.price, d.change, d.changePct+'%', d.source);
+    return d;
   }catch(e){
-    console.warn('[TXF] FinMind failed:', e.message, '→ trying TWSE OpenAPI');
-    // 備援：TWSE 期交所 OpenAPI（免費）
-    try{
-      // TWSE 期交所：台指期近月契約行情
-      const twseUrl = 'https://openapi.twse.com.tw/v1/futuresAndOptions/pubContractStats_F';
-      const r = await fetchWithTimeout(twseUrl, 8000);
-      if(r.ok){
-        const rows = await r.json();
-        if(Array.isArray(rows) && rows.length){
-          // 找台指期（商品代號 TX）
-          const tx = rows.find(r=>(r['商品代號']||r.ProductCode||r.code||'').includes('TX'));
-          if(tx){
-            const priceStr = tx['收盤價']||tx.ClosingPrice||tx.close||'';
-            const changeStr= tx['漲跌']||tx.Change||tx.change||'';
-            const price    = parseFloat(String(priceStr).replace(/,/g,''));
-            const change   = parseFloat(String(changeStr).replace(/,/g,''));
-            if(price > 15000){
-              const pct = price > 0 && change !== 0 ? +((change/(price-change))*100).toFixed(2) : 0;
-              console.log('[TXF] TWSE fallback OK:', price, change, pct);
-              return { price, change, changePct: pct, session:'盤後', date: todayStr().slice(5) };
-            }
-          }
-        }
-      }
-    }catch(e2){ console.warn('[TXF] TWSE fallback also failed:', e2.message); }
+    console.warn('[TXF] failed:', e.message);
     return null;
   }
 }
