@@ -3434,20 +3434,89 @@ async function fmShareholder(stockId='2330', days=60){
 // 1. Yahoo Finance TXF=F（透過 Worker proxy，避免 CORS）
 // 2. FinMind TaiwanFuturesDaily（若有權限）
 // 3. 顯示 N/A
+// ── 台指期報價（WTXP夜盤 / TX日盤）─────────────────────
+// 夜盤：前端直接抓 WantGoo（瀏覽器IP不被Cloudflare封鎖）
+// 日盤：Worker /txf → TAIFEX CSV
+
+async function _fetchWtxpFromWantgoo(){
+  // WantGoo 玩股網 WTXP 夜盤即時報價
+  // 前端瀏覽器直接呼叫，繞過 Cloudflare Worker IP 封鎖
+  const endpoints = [
+    'https://www.wantgoo.com/investrue/stock/GetFutureRealTimeData?stockNo=WTXP%26',
+    'https://www.wantgoo.com/member/futures/GetFuturesBaseInfo?stockNo=WTXP%26',
+    'https://www.wantgoo.com/futures/GetRealtimeQuote?stockno=WTXP%26',
+    'https://www.wantgoo.com/investrue/stock/GetFutureQuote?stockNo=WTXP%26',
+    // 備援：histock 嗨投資
+    'https://histock.tw/futures/api/quote?symbol=WTXP%26',
+    'https://tw.histock.tw/futures/GetFutureQuote?stockNo=WTXP%26',
+  ];
+
+  for(const url of endpoints){
+    try{
+      const r = await fetchWithTimeout(url, 6000);
+      if(!r.ok) continue;
+      const ct = r.headers.get('content-type')||'';
+      const txt = await r.text();
+      console.log('[WTXP] WantGoo', url.split('/').pop(), 'status:', r.status, 'ct:', ct, 'body:', txt.slice(0,100));
+
+      // 嘗試 JSON 解析
+      let j = null;
+      try{ j = JSON.parse(txt); }catch(e){}
+      if(!j) continue;
+
+      // 各種欄位名稱嘗試
+      const price = parseFloat(
+        j.price ?? j.Price ?? j.Close ?? j.close ??
+        j.LastPrice ?? j.lastPrice ?? j.現價 ?? j.成交價 ??
+        j?.data?.price ?? j?.data?.close ?? 0
+      );
+      if(price < 15000) continue;
+
+      const prevClose = parseFloat(
+        j.prevClose ?? j.PrevClose ?? j.settlement ?? j.Settlement ??
+        j.referencePrice ?? j?.data?.prevClose ?? 0
+      );
+      const change = parseFloat(
+        j.change ?? j.Change ?? j.漲跌 ?? j?.data?.change ?? 0
+      ) || (prevClose > 0 ? Math.round(price - prevClose) : 0);
+      const changePct = parseFloat(
+        j.changeRate ?? j.ChangeRate ?? j.漲跌幅 ?? j?.data?.changeRate ?? 0
+      ) || (prevClose > 0 ? +((price-prevClose)/prevClose*100).toFixed(2) : 0);
+
+      console.log('[WTXP] WantGoo ✅ price:', price, 'change:', change);
+      return { price, change, changePct, session:'夜盤', prevClose, source:'WantGoo', date:'' };
+    }catch(e){
+      console.warn('[WTXP] WantGoo endpoint failed:', e.message);
+    }
+  }
+  return null;
+}
+
 async function fetchTxfAfterHours(){
+  // 判斷目前時段
+  const now_tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const hh = now_tw.getHours(), mm = now_tw.getMinutes();
+  const isNight = (hh >= 15) || (hh < 5); // 夜盤：15:00-05:00
+
+  // ── 夜盤：直接抓 WantGoo（前端瀏覽器直連）──────────────
+  if(isNight){
+    const wtxp = await _fetchWtxpFromWantgoo().catch(()=>null);
+    if(wtxp) return wtxp;
+    console.warn('[TXF] WantGoo WTXP failed, fallback to Worker /txf');
+  }
+
+  // ── 日盤/收盤：透過 Worker /txf → TAIFEX CSV ─────────────
   const WORKER_BASE = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'') : '';
   if(!WORKER_BASE) return null;
-
   try{
-    // 透過 Worker /txf 路由取得台指期資料（Worker 端已處理 CORS）
     const r = await fetchWithTimeout(WORKER_BASE+'/txf', 10000);
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
-    if(!d || !d.price || d.price < 15000) throw new Error('invalid price: '+d?.price);
-    console.log('[TXF] ✅', d.price, d.change, d.changePct+'%', d.source);
+    if(!d?.price || d.price < 15000) throw new Error('invalid: '+d?.price);
+    console.log('[TXF] Worker ✅', d.price, d.change, d.source);
     return d;
   }catch(e){
-    console.warn('[TXF] failed:', e.message);
+    console.warn('[TXF] Worker /txf failed:', e.message);
     return null;
   }
 }
