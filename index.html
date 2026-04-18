@@ -495,7 +495,7 @@ html,body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto
 /* ── 族群底頁 Drawer ── */
 .sector-drawer{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;background:var(--bg);transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1)}
 .sector-drawer.open{transform:translateY(0)}
-.sector-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sector-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:max(16px,env(safe-area-inset-top,16px)) 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sector-drawer-body{flex:1;overflow-y:auto;padding:0 0 80px}
 /* 股票卡 */
 .sstock-card{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;transition:background .15s;gap:10px}
@@ -1875,7 +1875,10 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
           <span style="font-size:14px">🔄</span>
           <span style="font-size:12px;font-weight:700;color:var(--purple);flex:1" id="btSwapTitle">AI 換股建議</span>
           <button onclick="document.getElementById('btSwapPanel').style.display='none'"
-            style="background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:0">✕</button>
+            style="background:rgba(255,255,255,.08);border:none;color:var(--text);
+                   font-size:13px;font-weight:700;cursor:pointer;
+                   padding:6px 12px;border-radius:8px;min-height:32px;
+                   -webkit-tap-highlight-color:transparent">✕</button>
         </div>
         <div id="btSwapContent" style="padding:12px"></div>
       </div>
@@ -13411,13 +13414,19 @@ function initOnboarding(){
 
   <!-- 歷史策略記錄 Modal -->
   <div id="historyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:flex-start;overflow-y:auto">
-    <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;padding-bottom:40px;min-height:100vh">
+    <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;padding-bottom:max(40px,calc(40px + env(safe-area-inset-bottom,0px)));min-height:100vh">
 
-      <!-- 頂部 Header（sticky）-->
-      <div style="position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);padding:14px 16px 10px">
+      <!-- 頂部 Header（sticky + safe area）-->
+      <div style="position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);
+                  padding:max(14px,env(safe-area-inset-top,14px)) 16px 10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div style="font-size:16px;font-weight:800">📋 歷史策略記錄</div>
-          <button onclick="closeHistoryModal()" style="background:rgba(255,255,255,.08);border:none;color:var(--text);font-size:16px;cursor:pointer;padding:4px 10px;border-radius:8px;font-family:inherit">✕ 關閉</button>
+          <button onclick="closeHistoryModal()"
+            style="background:rgba(255,255,255,.08);border:none;color:var(--text);
+                   font-size:15px;font-weight:700;cursor:pointer;
+                   padding:8px 14px;border-radius:10px;font-family:inherit;
+                   min-width:64px;min-height:36px;
+                   -webkit-tap-highlight-color:transparent">✕ 關閉</button>
         </div>
 
         <!-- 搜尋框 -->
