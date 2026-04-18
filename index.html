@@ -3474,19 +3474,31 @@ async function fetchTxfAfterHours(){
     if(!regular) throw new Error('no valid row');
 
     // 欄位容錯（FinMind 各版本欄位名不同）
-    const price = parseFloat(regular.close ?? regular.Close ?? regular.settlement_price ?? 0);
-    if(!price || price < 15000) throw new Error('price invalid: ' + price + ' row:' + JSON.stringify(regular).slice(0,100));
+    const price = parseFloat(regular.close ?? regular.Close ?? 0);
+    if(!price || price < 15000) throw new Error('price invalid: ' + price);
 
-    const prevClose = parseFloat(regular.settlement_price ?? regular.close ?? price);
-    const open_     = parseFloat(regular.open ?? regular.Open ?? price);
+    // settlement_price = 昨日結算價（前日收盤），用來計算正確漲跌幅
+    const settle = parseFloat(regular.settlement_price ?? 0);
+    const open_  = parseFloat(regular.open ?? regular.Open ?? price);
 
-    // spread = 收盤 - 昨結 或 收盤 - 開盤
-    const spread    = parseFloat(regular.spread ?? 0);
-    const change    = spread !== 0 ? +spread.toFixed(0)
-                    : +(price - open_).toFixed(0);
+    // spread = FinMind 提供的官方漲跌點（收盤 vs 昨結算）
+    const spreadRaw = parseFloat(regular.spread ?? 0);
+    // spread_per = 官方漲跌幅%（有時是 0.40 有時是 40，需判斷）
+    let spreadPerRaw = parseFloat(regular.spread_per ?? regular.change_percent ?? 0);
+    // 若 spread_per 絕對值 < 5 且 price > 15000，通常已是百分比（0.40 = 0.4%）
+    // 若 spread_per 絕對值 > 5，可能是直接寫 40 = 0.40%，需除以100
+    if(Math.abs(spreadPerRaw) > 20) spreadPerRaw = spreadPerRaw / 100;
 
-    const changePct = parseFloat(regular.spread_per ?? 0) ||
-                      (open_ > 0 ? +((price - open_)/open_*100).toFixed(2) : 0);
+    // 計算漲跌點：優先用官方 spread，其次用 close - settlement_price
+    const change = spreadRaw !== 0
+      ? Math.round(spreadRaw)
+      : settle > 0 ? Math.round(price - settle) : Math.round(price - open_);
+
+    // 計算漲跌幅：優先官方 spread_per，其次自算
+    const basePx = settle > 0 ? settle : open_ > 0 ? open_ : price;
+    const changePct = spreadPerRaw !== 0
+      ? +spreadPerRaw.toFixed(2)
+      : basePx > 0 ? +((price - basePx) / basePx * 100).toFixed(2) : 0;
 
     const dateStr = (regular.date||'').slice(5);
     console.log('[TXF] ✅ price:', price, 'change:', change, 'pct:', changePct, 'date:', dateStr);
@@ -3496,7 +3508,31 @@ async function fetchTxfAfterHours(){
       time: new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'})
     };
   }catch(e){
-    console.warn('[TXF] ❌ failed:', e.message);
+    console.warn('[TXF] FinMind failed:', e.message, '→ trying TWSE OpenAPI');
+    // 備援：TWSE 期交所 OpenAPI（免費）
+    try{
+      // TWSE 期交所：台指期近月契約行情
+      const twseUrl = 'https://openapi.twse.com.tw/v1/futuresAndOptions/pubContractStats_F';
+      const r = await fetchWithTimeout(twseUrl, 8000);
+      if(r.ok){
+        const rows = await r.json();
+        if(Array.isArray(rows) && rows.length){
+          // 找台指期（商品代號 TX）
+          const tx = rows.find(r=>(r['商品代號']||r.ProductCode||r.code||'').includes('TX'));
+          if(tx){
+            const priceStr = tx['收盤價']||tx.ClosingPrice||tx.close||'';
+            const changeStr= tx['漲跌']||tx.Change||tx.change||'';
+            const price    = parseFloat(String(priceStr).replace(/,/g,''));
+            const change   = parseFloat(String(changeStr).replace(/,/g,''));
+            if(price > 15000){
+              const pct = price > 0 && change !== 0 ? +((change/(price-change))*100).toFixed(2) : 0;
+              console.log('[TXF] TWSE fallback OK:', price, change, pct);
+              return { price, change, changePct: pct, session:'盤後', date: todayStr().slice(5) };
+            }
+          }
+        }
+      }
+    }catch(e2){ console.warn('[TXF] TWSE fallback also failed:', e2.message); }
     return null;
   }
 }
