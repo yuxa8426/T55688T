@@ -9385,9 +9385,9 @@ async function _genFundAINote(stockId){
 // 快取：localStorage 4小時，節省 API 請求
 // ════════════════════════════════════════════════════
 
-const INTL_NEWS_KEY = 'stockai_intl_news';
+const INTL_NEWS_KEY = 'stockai_intl_news_v2'; // v2: 含中文翻譯
 // 快取到隔日（不重複呼叫 AI）
-const INTL_NEWS_TTL = ()=>_msTillMidnight();
+const INTL_NEWS_TTL = ()=> Math.min(4*60*60*1000, _msTillMidnight()); // 最多快取4小時
 
 let _intlNewsData = null;
 
@@ -9588,7 +9588,7 @@ async function loadIntlNews(force=false){
 
   try{
     // 第一步：從 Worker /news 取得真實 RSS 新聞
-    const resp = await fetchWithTimeout(NEWS_URL, 30000);
+    const resp = await fetchWithTimeout(NEWS_URL, 50000);
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const raw = await resp.json();
     if(!raw.items?.length) throw new Error('no items');
