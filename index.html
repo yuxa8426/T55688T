@@ -3466,14 +3466,15 @@ window.testWtxp = async function(){
 console.log('[StockAI] 台指期測試函式已載入，可輸入 testWtxp() 執行');
 
 async function _fetchWtxpFromWantgoo(){
-  // WantGoo 玩股網 WTXP 夜盤即時報價
-  // 前端瀏覽器直接呼叫，繞過 Cloudflare Worker IP 封鎖
+  // WantGoo / histock 等來源均被 CORS 封鎖，直接回傳 null
+  // 夜盤改由 Worker /txf 回傳 TX 日盤收盤（誠實標示）
+  return null;
+  // 以下保留供未來有 CORS 支援時使用
   const endpoints = [
     'https://www.wantgoo.com/investrue/stock/GetFutureRealTimeData?stockNo=WTXP%26',
     'https://www.wantgoo.com/member/futures/GetFuturesBaseInfo?stockNo=WTXP%26',
     'https://www.wantgoo.com/futures/GetRealtimeQuote?stockno=WTXP%26',
     'https://www.wantgoo.com/investrue/stock/GetFutureQuote?stockNo=WTXP%26',
-    // 備援：histock 嗨投資
     'https://histock.tw/futures/api/quote?symbol=WTXP%26',
     'https://tw.histock.tw/futures/GetFutureQuote?stockNo=WTXP%26',
   ];
@@ -7637,8 +7638,18 @@ async function selectStock(el, name, ticker){
   if(quoteData){
     // ── 盤中即時報價覆蓋（intraday 有資料時，用最新分鐘K覆蓋 FinMind 日K）──
     if(intra && intra.pts.length > 2){
-      const livePrice  = intra.pts[intra.pts.length - 1];
-      const prevClose  = quoteData.prevClose || quoteData.price;
+      // 異常值過濾：若最後一筆與倒數第5筆相差超過5%，則往前找最近合理值
+      const rawLast = intra.pts[intra.pts.length - 1];
+      const prevClose = quoteData.prevClose || quoteData.price;
+      // 用倒數2~6筆的平均作為基準，過濾異常跳點
+      const refPts = intra.pts.slice(-6, -1).filter(v=>v>0);
+      const refAvg = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
+      // 若最後一筆偏差超過 8%（盤後異常值），用前一筆
+      const livePrice = refAvg > 0 && Math.abs(rawLast - refAvg) / refAvg > 0.08
+        ? intra.pts.slice(0, -1).filter(v=>v>0).slice(-1)[0] || rawLast
+        : rawLast;
+      if(rawLast !== livePrice)
+        console.warn('[Quote] anomaly filtered', stockId, 'raw:', rawLast, '→ used:', livePrice);
       const liveChange = prevClose > 0 ? (livePrice - prevClose) / prevClose * 100 : 0;
       const liveTime   = intra.times[intra.times.length - 1];
       const twDate     = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei',
@@ -7993,8 +8004,17 @@ function updatePulse(instData, indexData, txfData){
       if(txfNoteEl){
         const priceStr = Number(txfData.price).toLocaleString();
         const pctStr   = `${txfData.changePct>=0?'+':''}${txfData.changePct}%`;
-        // 顯示：點位 漲跌% · 夜盤/收盤
-        txfNoteEl.textContent = `${priceStr} ${pctStr} · ${txfData.session||'收盤'}`;
+        const _h = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'})).getHours();
+        const _isNight = _h>=15||_h<5;
+        let _srcNote = '';
+        if(txfData.source==='WantGoo'||txfData.source==='TAIFEX夜盤'){
+          _srcNote = ' · WTXP夜盤';
+        } else if(_isNight){
+          _srcNote = ' · 日盤收(夜盤未提供)';
+        } else {
+          _srcNote = ' · TX日盤';
+        }
+        txfNoteEl.textContent = `${priceStr} ${pctStr}${_srcNote}`;
       }
     } else {
       txfEl.textContent   = '—';
