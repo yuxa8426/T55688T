@@ -3438,6 +3438,33 @@ async function fmShareholder(stockId='2330', days=60){
 // 夜盤：前端直接抓 WantGoo（瀏覽器IP不被Cloudflare封鎖）
 // 日盤：Worker /txf → TAIFEX CSV
 
+// 全域測試函式（可在瀏覽器 Console 執行：testWtxp()）
+window.testWtxp = async function(){
+  console.log('[WTXP Test] 開始測試所有端點...');
+  const urls = [
+    'https://www.wantgoo.com/investrue/stock/GetFutureRealTimeData?stockNo=WTXP%26',
+    'https://www.wantgoo.com/member/futures/GetFuturesBaseInfo?stockNo=WTXP%26',
+    'https://www.wantgoo.com/futures/GetRealtimeQuote?stockno=WTXP%26',
+    'https://www.wantgoo.com/investrue/stock/GetFutureQuote?stockNo=WTXP%26',
+    'https://www.wantgoo.com/futures/quotation?stockno=WTXP%26',
+    'https://histock.tw/futures/api/quote?symbol=WTXP%26',
+  ];
+  for(const url of urls){
+    try{
+      const r = await fetch(url, {credentials:'omit'});
+      const txt = await r.text();
+      console.log('[WTXP]', url.split('/').pop().slice(0,40),
+        '| status:', r.status,
+        '| ct:', r.headers.get('content-type')||'',
+        '| body:', txt.slice(0,120));
+    }catch(e){
+      console.error('[WTXP]', url.split('/').pop().slice(0,40), '| ERROR:', e.message);
+    }
+  }
+  console.log('[WTXP Test] 完成，請查看以上結果');
+};
+console.log('[StockAI] 台指期測試函式已載入，可輸入 testWtxp() 執行');
+
 async function _fetchWtxpFromWantgoo(){
   // WantGoo 玩股網 WTXP 夜盤即時報價
   // 前端瀏覽器直接呼叫，繞過 Cloudflare Worker IP 封鎖
