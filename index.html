@@ -182,7 +182,7 @@
       </div>
       <!-- PCR 折線圖 -->
       <div style="position:relative;margin-bottom:6px">
-        <svg id="pcrChart" viewBox="0 0 320 80" preserveAspectRatio="none" style="width:100%;height:80px;display:block">
+        <svg id="pcrChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="pcrGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="#7c5cfc" stop-opacity=".3"/>
@@ -232,7 +232,7 @@
       </div>
       <!-- 期貨淨部位折線 -->
       <div style="position:relative;margin-bottom:6px">
-        <svg id="futChart" viewBox="0 0 320 80" preserveAspectRatio="none" style="width:100%;height:80px;display:block">
+        <svg id="futChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="futGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".25" id="futGradStop"/>
@@ -289,7 +289,7 @@
       </div>
       <!-- 雙線圖：融資 + 融券 -->
       <div style="margin-bottom:6px">
-        <svg id="marginChart" viewBox="0 0 320 80" preserveAspectRatio="none" style="width:100%;height:80px;display:block">
+        <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="margGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".2"/>
@@ -4796,7 +4796,8 @@ async function loadLeadingIndicators(manual=false){
 // ── 迷你折線圖 SVG 繪製工具 ──────────────────────────
 function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
   if(!vals||!vals.length) return;
-  const W=320, H=80, padL=36, padR=4, padT=8, padB=6; // padL 留給 Y 軸
+  // W=360 擴大 viewBox，padL=42 給 Y 軸文字空間，折線從 42 開始
+  const W=360, H=90, padL=42, padR=6, padT=10, padB=8;
   const mn = center ? Math.min(...vals, 0) : Math.min(...vals);
   const mx = center ? Math.max(...vals, 0) : Math.max(...vals);
   const rng = mx-mn||Math.abs(mn)*0.1||1;
@@ -4805,7 +4806,7 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
 
   const coords = vals.map((v,i)=>[toX(i), toY(v)]);
   const line   = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
-  const fill   = line+` L${(W-padR).toFixed(1)},${H} L${padL},${H} Z`;
+  const fill   = line+` L${(W-padR).toFixed(1)},${H-padB} L${padL},${H-padB} Z`;
   const last   = coords[coords.length-1];
 
   const svg = document.getElementById(svgId);
@@ -4847,7 +4848,7 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
   yTicks.forEach(({v,y})=>{
     // 刻度線
     const tick = document.createElementNS('http://www.w3.org/2000/svg','line');
-    tick.setAttribute('x1', (padL-3).toString());
+    tick.setAttribute('x1', (padL-2).toString());
     tick.setAttribute('x2', padL.toString());
     tick.setAttribute('y1', y.toFixed(1));
     tick.setAttribute('y2', y.toFixed(1));
@@ -4858,11 +4859,12 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
 
     // 刻度文字
     const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-    text.setAttribute('x', (padL-5).toString());
+    text.setAttribute('x', (padL-4).toString());
     text.setAttribute('y', (y+3).toFixed(1));
     text.setAttribute('text-anchor','end');
-    text.setAttribute('font-size','8');
-    text.setAttribute('fill','rgba(255,255,255,.45)');
+    text.setAttribute('font-size','9');
+    text.setAttribute('fill','rgba(255,255,255,.55)');
+    text.setAttribute('font-weight','500');
     text.classList.add('y-label');
     text.textContent = fmt(v);
     svg.appendChild(text);
@@ -4915,19 +4917,20 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
   tipCirc.setAttribute('stroke-width','1.5');
 
   const tipRect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-  tipRect.setAttribute('rx','4'); tipRect.setAttribute('ry','4');
-  tipRect.setAttribute('fill','rgba(20,20,35,.92)');
-  tipRect.setAttribute('stroke','rgba(255,255,255,.2)');
-  tipRect.setAttribute('stroke-width','1');
+  tipRect.setAttribute('rx','6'); tipRect.setAttribute('ry','6');
+  tipRect.setAttribute('fill','rgba(15,15,28,.96)');
+  tipRect.setAttribute('stroke',color);
+  tipRect.setAttribute('stroke-width','1.5');
+  tipRect.setAttribute('stroke-opacity','0.6');
 
   const tipText = document.createElementNS('http://www.w3.org/2000/svg','text');
-  tipText.setAttribute('font-size','10');
+  tipText.setAttribute('font-size','12');
   tipText.setAttribute('fill','#fff');
-  tipText.setAttribute('font-weight','700');
+  tipText.setAttribute('font-weight','800');
 
   const tipDate = document.createElementNS('http://www.w3.org/2000/svg','text');
-  tipDate.setAttribute('font-size','8');
-  tipDate.setAttribute('fill','rgba(255,255,255,.6)');
+  tipDate.setAttribute('font-size','9');
+  tipDate.setAttribute('fill','rgba(255,255,255,.7)');
 
   tipG.appendChild(tipLine);
   tipG.appendChild(tipRect);
@@ -4964,17 +4967,28 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
     tipDate.textContent = dateStr;
 
     // tooltip 位置（避免超出邊界）
-    const boxW=52, boxH=28, margin=4;
-    let bx = cx+6;
-    if(bx+boxW > W-padR) bx = cx-boxW-6;
-    const by = Math.max(padT, Math.min(H-boxH-padB, cy-boxH/2));
+    // tooltip 放大：boxW=68 boxH=36，顯示在游標上方
+    const boxW=68, boxH=36;
+    let bx = cx - boxW/2; // 水平置中於游標
+    if(bx < padL) bx = padL;
+    if(bx+boxW > W-padR) bx = W-padR-boxW;
+    // 優先顯示在游標上方，若空間不足則在下方
+    let by = cy - boxH - 6;
+    if(by < padT) by = cy + 8;
 
-    tipRect.setAttribute('x',bx.toFixed(1)); tipRect.setAttribute('y',by.toFixed(1));
-    tipRect.setAttribute('width',boxW); tipRect.setAttribute('height',boxH);
-    tipText.setAttribute('x',(bx+boxW/2).toFixed(1)); tipText.setAttribute('y',(by+16).toFixed(1));
-    tipText.setAttribute('text-anchor','middle');
-    tipDate.setAttribute('x',(bx+boxW/2).toFixed(1)); tipDate.setAttribute('y',(by+8).toFixed(1));
+    tipRect.setAttribute('x', bx.toFixed(1));
+    tipRect.setAttribute('y', by.toFixed(1));
+    tipRect.setAttribute('width', boxW);
+    tipRect.setAttribute('height', boxH);
+    // 日期（小字，上排）
+    tipDate.setAttribute('x', (bx+boxW/2).toFixed(1));
+    tipDate.setAttribute('y', (by+13).toFixed(1));
     tipDate.setAttribute('text-anchor','middle');
+    // 數值（大字，下排）
+    tipText.setAttribute('x', (bx+boxW/2).toFixed(1));
+    tipText.setAttribute('y', (by+27).toFixed(1));
+    tipText.setAttribute('text-anchor','middle');
+    tipText.setAttribute('font-size','12');
 
     tipG.style.display='';
   }
