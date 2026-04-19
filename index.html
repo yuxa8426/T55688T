@@ -582,6 +582,35 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 </style>
 </head>
 <body>
+
+<!-- Android PWA 安裝提示橫幅 -->
+<div id="pwaInstallBanner" style="
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
+  background:linear-gradient(135deg,#1a1a2e,#16213e);
+  border-top:2px solid rgba(0,212,170,.5);
+  padding:12px 16px;
+  padding-bottom:max(12px,env(safe-area-inset-bottom,12px));
+  box-shadow:0 -4px 24px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;gap:12px;max-width:480px;margin:0 auto">
+    <div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#00d4aa,#7c5cfc);
+                display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📊</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:800;color:#fff">安裝 股析 StockAI</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">加入主畫面，像 App 一樣使用・完全免費</div>
+    </div>
+    <button id="pwaInstallBtn"
+      style="background:linear-gradient(135deg,#00d4aa,#00b894);border:none;color:#fff;
+             font-size:12px;font-weight:800;padding:10px 16px;border-radius:10px;
+             cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;
+             -webkit-tap-highlight-color:transparent;box-shadow:0 2px 8px rgba(0,212,170,.4)">
+      ➕ 安裝
+    </button>
+    <button id="pwaInstallDismiss"
+      style="background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;
+             cursor:pointer;padding:4px 2px;flex-shrink:0;line-height:1;
+             -webkit-tap-highlight-color:transparent">×</button>
+  </div>
+</div>
 <div id="app">
 
 <!-- 全域錯誤橫幅（跨頁面顯示）-->
@@ -13264,6 +13293,62 @@ window.addEventListener('load', async ()=>{
 });
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+// ── PWA 安裝提示（Android Chrome）────────────────────────
+(function(){
+  let _deferredPrompt = null;
+  const BANNER_KEY = 'pwaBannerDismissed';
+  const INSTALL_KEY = 'pwaInstalled';
+
+  // 捕獲安裝提示事件（Android Chrome 自動觸發）
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredPrompt = e;
+
+    // 若用戶未曾關閉橫幅且未安裝，顯示橫幅
+    const dismissed = localStorage.getItem(BANNER_KEY);
+    const installed = localStorage.getItem(INSTALL_KEY);
+    if(!dismissed && !installed){
+      setTimeout(()=>{
+        const banner = document.getElementById('pwaInstallBanner');
+        if(banner) banner.style.display = 'block';
+      }, 3000); // 3秒後顯示，不打擾初次載入
+    }
+  });
+
+  // 安裝按鈕點擊
+  document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+    if(!_deferredPrompt) return;
+    _deferredPrompt.prompt();
+    const { outcome } = await _deferredPrompt.userChoice;
+    if(outcome === 'accepted'){
+      localStorage.setItem(INSTALL_KEY, '1');
+      showToast('✅ 已加入主畫面！');
+    }
+    _deferredPrompt = null;
+    document.getElementById('pwaInstallBanner').style.display = 'none';
+  });
+
+  // 關閉按鈕
+  document.getElementById('pwaInstallDismiss')?.addEventListener('click', () => {
+    document.getElementById('pwaInstallBanner').style.display = 'none';
+    localStorage.setItem(BANNER_KEY, '1');
+  });
+
+  // 已安裝時隱藏橫幅
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem(INSTALL_KEY, '1');
+    const banner = document.getElementById('pwaInstallBanner');
+    if(banner) banner.style.display = 'none';
+    showToast('🎉 股析 StockAI 安裝成功！');
+  });
+
+  // 偵測是否已在 standalone 模式（已安裝）
+  if(window.matchMedia('(display-mode: standalone)').matches ||
+     window.navigator.standalone === true){
+    localStorage.setItem(INSTALL_KEY, '1');
+  }
+})();
 // 等 Google GSI SDK 載入後初始化 One Tap
 window.addEventListener('load', ()=>{
   // GSI 可能還未載入，稍等後重試
