@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
-<meta name="description" content="結合 AI 與真實市場數據的台股分析平台。智能選股、法人籌碼、策略回測、趨勢股排行，讓你的投資決策更有依據。">
+<meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
 
 <!-- Open Graph（LINE / Facebook / 通訊軟體預覽）-->
 <meta property="og:type"        content="website">
@@ -25,6 +25,7 @@
 
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="股析">
 <meta name="theme-color" content="#0a0a0f">
@@ -580,6 +581,12 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
   #stratProgressBar.active { animation: progressPulse 1.5s ease infinite; }
   @keyframes progressPulse { 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
 </style>
+  <!-- DNS 預取：加速 API 連線 -->
+  <link rel="dns-prefetch" href="//api.finmindtrade.com">
+  <link rel="dns-prefetch" href="//openapi.twse.com.tw">
+  <link rel="dns-prefetch" href="//query1.finance.yahoo.com">
+  <link rel="dns-prefetch" href="//stockai-proxy.yuxa8426.workers.dev">
+  <link rel="preconnect" href="https://stockai-proxy.yuxa8426.workers.dev" crossorigin>
 </head>
 <body>
 
@@ -860,7 +867,6 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     </div>
   </div>
 
-
   <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
   <div class="index-row">
     <div class="idx"><div class="n">加權指數</div><div class="v">20,847</div><div class="c up">+0.74%</div></div>
@@ -869,7 +875,6 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
     <div class="idx"><div class="n">費城半導</div><div class="v">4,451</div><div class="c up">+1.12%</div></div>
     <div class="idx"><div class="n">VIX</div><div class="v">18.42</div><div class="c dn">+7.2%</div></div>
   </div>
-
 
   <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
   <div class="chart-card">
@@ -1142,8 +1147,6 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
 
     <!-- 操作參考建議框（動態注入）-->
     <div id="aiActionBox" style="margin-top:14px"></div>
-
-
 
     <!-- ═══ 基本面摘要 ═══ -->
     <div id="fundamentalCard" style="margin-top:0;border-top:1px solid var(--border);padding-top:16px;display:none">
@@ -2205,7 +2208,6 @@ input:focus, textarea:focus{scroll-margin-bottom:80px}
   </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
 
-
   <!-- 刪除選單 Modal -->
   <div id="clearMenuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end;justify-content:center">
     <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 16px 32px">
@@ -2526,7 +2528,6 @@ async function kvSyncDown(){
     if(backtest) localStorage.setItem('stockai_backtest', JSON.stringify(backtest));
     if(fmtoken && typeof fmtoken === 'string' && fmtoken.length > 50)
       localStorage.setItem(FM_TOKEN_KEY, fmtoken);
-    console.log('[KV] synced down:', profile?'profile':'', backtest?'backtest':'', fmtoken?'fmtoken':'');
   }catch(e){ console.warn('[KV sync]', e.message); }
 }
 
@@ -2742,7 +2743,8 @@ function switchPage(n){
       });
     }
     // 載入國際財經新聞（快取4小時，不重複請求）
-    loadIntlNews(false);
+    // 國際新聞：延遲 2 秒（讓核心先載入）
+  setTimeout(()=>loadIntlNews(false), 2000);
   }
 }
 
@@ -2946,7 +2948,6 @@ setInterval(()=>{
 
   // ── 跨日偵測：清除所有股價 & 法人快取，確保資料是當日最新 ──
   if(today !== _lastCacheDate){
-    console.log('[Cache] 跨日清除，強制重新抓取最新股價');
     _fmCache.clear();          // 清除所有 FinMind 快取
     _intradayCache.clear();    // 清除所有盤中資料
     _lastCacheDate = today;
@@ -3019,7 +3020,7 @@ function _incQuota(){
   const q = _getQuota();
   q.count++;
   // 每50次輸出一次統計（幫助診斷）
-  if(q.count % 50 === 0) console.log('[Quota] used:', q.count, '/', QUOTA_LIMIT);
+  if(q.count % 50 === 0);
   // 達到警告門檻
   if(q.count === QUOTA_WARN){
     showToast('⚠️ API 今日已用 '+QUOTA_WARN+' 次，非必要資料自動節流', 4000);
@@ -3226,7 +3227,6 @@ async function fetchIntraday(stockId){
         const body = await res.json();
         const data = parseYahoo(body);
         if(data){
-          console.log('[Intraday] Worker OK', data.pts.length, 'pts');
           _intradayCache.set(stockId, {data, ts: Date.now()});
           return data;
         }
@@ -3242,7 +3242,6 @@ async function fetchIntraday(stockId){
     const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
     const data = parseYahoo(body);
     if(data){
-      console.log('[Intraday] allorigins OK', data.pts.length, 'pts');
       _intradayCache.set(stockId, {data, ts: Date.now()});
       return data;
     }
@@ -3472,7 +3471,6 @@ async function fmShareholder(stockId='2330', days=60){
 
 // 全域測試函式（可在瀏覽器 Console 執行：testWtxp()）
 window.testWtxp = async function(){
-  console.log('[WTXP Test] 開始測試所有端點...');
   const urls = [
     'https://www.wantgoo.com/investrue/stock/GetFutureRealTimeData?stockNo=WTXP%26',
     'https://www.wantgoo.com/member/futures/GetFuturesBaseInfo?stockNo=WTXP%26',
@@ -3485,17 +3483,11 @@ window.testWtxp = async function(){
     try{
       const r = await fetch(url, {credentials:'omit'});
       const txt = await r.text();
-      console.log('[WTXP]', url.split('/').pop().slice(0,40),
-        '| status:', r.status,
-        '| ct:', r.headers.get('content-type')||'',
-        '| body:', txt.slice(0,120));
     }catch(e){
       console.error('[WTXP]', url.split('/').pop().slice(0,40), '| ERROR:', e.message);
     }
   }
-  console.log('[WTXP Test] 完成，請查看以上結果');
 };
-console.log('[StockAI] 台指期測試函式已載入，可輸入 testWtxp() 執行');
 
 async function _fetchWtxpFromWantgoo(){
   // WantGoo / histock 等來源均被 CORS 封鎖，直接回傳 null
@@ -3517,7 +3509,6 @@ async function _fetchWtxpFromWantgoo(){
       if(!r.ok) continue;
       const ct = r.headers.get('content-type')||'';
       const txt = await r.text();
-      console.log('[WTXP] WantGoo', url.split('/').pop(), 'status:', r.status, 'ct:', ct, 'body:', txt.slice(0,100));
 
       // 嘗試 JSON 解析
       let j = null;
@@ -3542,8 +3533,6 @@ async function _fetchWtxpFromWantgoo(){
       const changePct = parseFloat(
         j.changeRate ?? j.ChangeRate ?? j.漲跌幅 ?? j?.data?.changeRate ?? 0
       ) || (prevClose > 0 ? +((price-prevClose)/prevClose*100).toFixed(2) : 0);
-
-      console.log('[WTXP] WantGoo ✅ price:', price, 'change:', change);
       return { price, change, changePct, session:'夜盤', prevClose, source:'WantGoo', date:'' };
     }catch(e){
       console.warn('[WTXP] WantGoo endpoint failed:', e.message);
@@ -3573,7 +3562,6 @@ async function fetchTxfAfterHours(){
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
     if(!d?.price || d.price < 15000) throw new Error('invalid: '+d?.price);
-    console.log('[TXF] Worker ✅', d.price, d.change, d.source);
     return d;
   }catch(e){
     console.warn('[TXF] Worker /txf failed:', e.message);
@@ -3606,7 +3594,7 @@ async function fmTWSEIndex(){
       if(res.ok){
         const body = await res.json();
         const d = parseMis(body);
-        if(d){ console.log('[TWSE] Worker OK', d.price); return d; }
+        if(d){; return d; }
       }
     }catch(e){ console.warn('[TWSE] Worker:', e.message); }
   }
@@ -3618,7 +3606,7 @@ async function fmTWSEIndex(){
     const wrap = await res.json();
     const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
     const d = parseMis(body);
-    if(d){ console.log('[TWSE] allorigins OK', d.price); return d; }
+    if(d){; return d; }
   }catch(e){ console.warn('[TWSE] allorigins:', e.message); }
 
   // 來源3：FinMind 日K 盤後備援
@@ -4043,7 +4031,6 @@ async function loadLongTermData(){
       if(loadEl) loadEl.style.display='none';
       return;
     }
-    console.log('[LongTerm]', stockId, 'got', raw.length, 'rows');
 
     const hist = _parseHistory(raw);
     const q    = _parseQuote(raw, stockId);
@@ -4059,8 +4046,6 @@ async function loadLongTermData(){
     if(loadEl) loadEl.style.display = 'none';
   }
 }
-
-
 
 // ════════════════════════════════════════════════════════
 // 四大深度分析模組（Claude AI 驅動）
@@ -4177,7 +4162,6 @@ async function runDeepModule(module){
       : 'https://api.anthropic.com/v1/messages';  // 直連（需 CORS 支援）
 
     const callAI = async (endpoint) => {
-      console.log('[DeepModule] calling:', endpoint.slice(0,60));
       const r = await fetchWithTimeout(endpoint, 30000, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4188,7 +4172,6 @@ async function runDeepModule(module){
         }),
       });
       const rawText = await r.text();
-      console.log('[DeepModule] status:', r.status, 'body:', rawText.slice(0,200));
       if(!r.ok) throw new Error(`HTTP ${r.status}: ${rawText.slice(0,100)}`);
       const j = JSON.parse(rawText);
       // 支援 Anthropic 格式 {content:[{type,text}]} 和直接 {text} 格式
@@ -4523,9 +4506,6 @@ function updateAI(name, q){
   const changePct = q.changePct ?? 0;
   const isUp   = changePct >= 0;
   // 診斷 log（確認資料是否正確傳入）
-  console.log('[updateAI] closes.length=', closes.length, 'price=', price,
-    'raw closes sample=', (q.closes||[]).slice(-3),
-    'filtered=', closes.slice(-3));
 
   const scoreColor = v => v>=7?'var(--red)':v>=4?'var(--gold)':'var(--green)';
 
@@ -5402,8 +5382,6 @@ async function loadOptionData(){
     start_date: nDaysAgo(45),
     end_date:   nDaysAgo(0),   // 用今日真實日期（非週末修正版），確保取到最新資料
   }, 15000);
-
-  console.log('[Option] raw rows:', data ? data.length : 'null', data && data[0]);
   if(!data||!data.length){ renderOptionFallback(); return; }
 
   // 整理：三大法人 Call/Put 未平倉淨部位 by date
@@ -5424,7 +5402,6 @@ async function loadOptionData(){
   }
 
   const dates   = Object.keys(byDate).sort().slice(-20);
-  console.log('[Option] byDate keys:', dates.length, 'last:', dates[dates.length-1], 'sample:', byDate[dates[dates.length-1]]);
   if(!dates.length){ renderOptionFallback(); return; }
 
   // PCR = Put淨未平倉 / Call淨未平倉（用絕對值，避免負數干擾）
@@ -5494,8 +5471,6 @@ async function loadFuturesData(){
     start_date: nDaysAgo(45),
     end_date:   nDaysAgo(0),   // 用今日真實日期，確保取到最新資料
   }, 15000);
-
-  console.log('[Futures] raw rows:', data ? data.length : 'null', data && data[0]);
   if(!data||!data.length){ renderFuturesFallback(); return; }
 
   // 整理 by date × 法人，淨部位 = long - short
@@ -5591,8 +5566,6 @@ async function loadMarginData(){
     start_date: nDaysAgo(50),
     end_date:   nDaysAgo(0),   // 用今日真實日期，確保取到最新資料
   }, 15000);
-
-  console.log('[Margin] raw rows:', data ? data.length : 'null', data && data[0]);
   if(!data||!data.length){ renderMarginFallback(); return; }
 
   // 依 date + name 整理 { date: { margin, marginYes, short, shortYes } }
@@ -5706,7 +5679,7 @@ async function loadVix(manual=false){
       if(resp.ok){
         const j = await resp.json();
         const d = parseYahooVix(j);
-        if(d){ console.log('[VIX] Yahoo via Worker OK:', d.vix); _applyVix(d.vix,d.chg,d.date,d.hist,'Yahoo'); return; }
+        if(d){; _applyVix(d.vix,d.chg,d.date,d.hist,'Yahoo'); return; }
       }
     }catch(e){ console.warn('[VIX] Yahoo Worker:', e.message); }
 
@@ -5715,7 +5688,7 @@ async function loadVix(manual=false){
       const resp = await fetchWithTimeout(`${API}/vix`, 10000);
       if(resp.ok){
         const d = await resp.json();
-        if(d?.vix > 5){ console.log('[VIX] Worker /vix OK:', d.vix, d.src); _applyVix(d.vix,d.chg||0,d.date||'',d.hist||[],d.src||'Worker'); return; }
+        if(d?.vix > 5){; _applyVix(d.vix,d.chg||0,d.date||'',d.hist||[],d.src||'Worker'); return; }
       }
     }catch(e){ console.warn('[VIX] Worker /vix:', e.message); }
   }
@@ -5756,9 +5729,6 @@ function _applyVix(vix, chg, date, hist, src){
   const nowMin = now.getHours()*60+now.getMinutes();
   _vixTimer = setTimeout(()=>loadVix(), (nowMin>=210&&nowMin<=570)?90000:300000);
 }
-
-
-
 
 function renderVix(vix, changePct, dataDate, history, srcLabel=''){
   // 數字
@@ -5901,7 +5871,6 @@ async function loadInstitutional(){
       const latest = dates[dates.length-1];
       const rows = mkt.filter(r=>r.date===latest);
       let foreign=0, trust=0, dealer=0;
-      console.log('[Inst] sample row:', JSON.stringify(rows[0]||{}).slice(0,150));
       for(const r of rows){
         // FinMind TaiwanStockTotalInstitutionalInvestors 欄位多種可能
         const nm  = (r.name||r.institutional_investors||r.investor_type||'').toLowerCase();
@@ -5912,9 +5881,7 @@ async function loadInstitutional(){
         else if(nm.includes('投信')||nm.includes('trust')||nm.includes('site')) trust  += net;
         else if(nm.includes('自營')||nm.includes('dealer')||nm.includes('siti')) dealer += net;
       }
-      console.log('[Inst] 全市場', {foreign, trust, dealer});
       const total = foreign + trust + dealer;
-      console.log('[Inst] 全市場法人', latest, '外資', foreign, '投信', trust, '自營', dealer);
       return { foreignShares:foreign, trustShares:trust, dealerShares:dealer,
                totalShares:total, total, date:latest };
     }
@@ -6081,8 +6048,6 @@ function renderChips(data, label='近60日'){
     renderChipTrendChart(data.foreignNetArr||[], data.trustNetArr||[], data.sortedDates20||[]);
   }, 100);
 }
-
-
 
 // ════════════════════════════════════════════════════
 // 大戶籌碼 20日趨勢折線圖
@@ -6328,7 +6293,6 @@ async function loadStockList(){
       .map(r => ({ t: r.stock_id, n: r.stock_name, s: r.industry_category || '—' }));
     if(full.length > 50){
       STOCKS = full;
-      console.log('[StockList] loaded', full.length, 'stocks from FinMind');
     }
   } catch(e) {
     console.warn('[StockList] FinMind failed, using DEFAULT_STOCKS:', e.message);
@@ -7102,7 +7066,6 @@ function updateSectorBtn(key, stocks){
   }
 }
 
-
 // ── 族群概覽預載：啟動後背景批次填入漲跌+資金流 ──────
 // 每族群取 leader 前2支報價+法人，足夠計算平均漲幅+流向
 const _sectorPreviewCache = {}; // key → ts（防重複載入）
@@ -7404,7 +7367,6 @@ async function refreshTrendStocks(manual=false){
             }));
             mapped._mode = 'eod';
             _trendCache = mapped; _trendCacheTime = Date.now();
-            console.log('[Trend/eod] KV:', mapped.length, 'stocks');
             const timeEl = document.getElementById('trendUpdateTime');
             if(timeEl) timeEl.textContent = '盤後 ' + (kv.updatedAt||'').slice(11,16) || '昨日';
             renderTrendList(mapped); return;
@@ -7472,7 +7434,6 @@ async function refreshTrendStocks(manual=false){
             const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
             const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
             if(timeEl) timeEl.textContent = ts+' 即時';
-            console.log('[Trend/intraday] TWSE:', top5.length, 'stocks, top:', top5[0]?.id);
             renderTrendList(top5); return;
           }
         }
@@ -7503,7 +7464,6 @@ async function refreshTrendStocks(manual=false){
           }));
           mapped._mode = 'intraday';
           _trendCache = mapped; _trendCacheTime = Date.now();
-          console.log('[Trend/intraday/fallback] KV:', mapped.length, 'stocks');
           renderTrendList(mapped); return;
         }
       }
@@ -7522,7 +7482,6 @@ async function refreshTrendStocks(manual=false){
 
   if(fullQuant && Object.keys(fullQuant).length >= 50){
     // 全市場快取命中：直接從快取計算，零額外 API 請求
-    console.log('[Trend] using full quant cache, 0 API requests');
     for(const stock of TREND_POOL){
       const q = fullQuant[stock.id];
       if(!q) continue;
@@ -7554,7 +7513,6 @@ async function refreshTrendStocks(manual=false){
 
   if(results.length < 5){
     // 快取不可用：分批個別請求（最多15支節省配額）
-    console.log('[Trend] individual API requests for', Math.min(TREND_POOL.length,15), 'stocks');
     const BATCH = 5;
     const limitedPool = TREND_POOL.slice(0, 15); // 最多15支
     for(let i=0; i<limitedPool.length; i+=BATCH){
@@ -7690,7 +7648,6 @@ async function selectStock(el, name, ticker){
       quoteData.changePct = liveChange;
       quoteData.change    = livePrice - prevClose;
       quoteData.date      = twDate + ' ' + liveTime + '（即時）';
-      console.log('[Quote] live override', stockId, livePrice, liveChange.toFixed(2)+'%');
     }
 
     const isUp = quoteData.changePct >= 0;
@@ -7709,8 +7666,6 @@ async function selectStock(el, name, ticker){
       else drawFallbackChart(isUp);
     }
     updateInstCard(instData, name);
-    console.log('[selectStock] histData.close length=', histData?.close?.length,
-      'sample=', histData?.close?.slice(-3));
     updateAI(name, {...quoteData, closes: histData?.close||[], dates: histData?.dates||[], inst: instData});
     updateStockTrendBar(stockId, histData, instData);
     showToast('✅ '+name+' 資料：'+quoteData.date);
@@ -8276,13 +8231,10 @@ async function buildFullMarketQuant(){
     if(cached && cached.ts && cached.data && Date.now()-cached.ts < ttl){
       const keys = Object.keys(cached.data);
       if(keys.length >= 50){
-        console.log('[FullQuant] cache hit:', keys.length, 'stocks');
         return cached.data;
       }
     }
   }catch(e){}
-
-  console.log('[FullQuant] fetching full market via TWSE+TPEX+FinMind...');
 
   // ══════════════════════════════════════════════════════
   // 三層並行抓取：
@@ -8345,7 +8297,6 @@ async function buildFullMarketQuant(){
       });
 
       twseOtcLoaded = Object.keys(scoreMap).length > 100;
-      console.log('[FullQuant] TWSE+TPEX loaded:', Object.keys(scoreMap).length, 'stocks');
     }
   }catch(e){ console.warn('[FullQuant] market-all failed:', e.message); }
 
@@ -8410,9 +8361,6 @@ async function buildFullMarketQuant(){
   }
 
   const finalCount = Object.keys(scoreMap).length;
-  console.log('[FullQuant] final:', finalCount, 'stocks',
-    'TSE/OTC:', Object.values(scoreMap).filter(s=>s.market==='TSE'||s.market==='OTC').length,
-    'FM:', Object.values(scoreMap).filter(s=>s.market==='FM').length);
 
   // 確保不回傳空物件（至少用 DEFAULT_STOCKS 填充）
   if(finalCount < 50){
@@ -8435,10 +8383,6 @@ async function buildFullMarketQuant(){
 
   const total = Object.keys(scoreMap).length;
   const withName = Object.values(scoreMap).filter(d=>d.name && d.name.length>=2).length;
-  console.log('[FullQuant] total:', total, 'with name:', withName,
-    'dayTrading:', dayTradingData?.length||0,
-    'inst:', instData?.length||0,
-    'per:', priceToday?.length||0);
   return scoreMap;
 }
 
@@ -8900,8 +8844,6 @@ async function runStratAnalysis(){
         allScored.sort((a,b)=>b.quant.score-a.quant.score);
         scored = allScored.slice(0,30); // 取前30名給AI
         quantScopeLabel = `全市場${stockCount}支`;
-        console.log('[FullQuant] scope:', stockCount, 'top30 score range:',
-          scored[0]?.quant.score, '~', scored[29]?.quant.score);
       } else {
         console.error('[FullQuant] insufficient stocks:', stockCount, 'keys:', Object.keys(fullQuant).slice(0,5));
         throw new Error('full quant insufficient: only '+stockCount+' stocks');
@@ -9210,8 +9152,8 @@ async function loadFundamentals(stockId){
       if(alias[r.type]) byQ[key][alias[r.type]] = v;
     });
 
-    // console.log('[Fund debug] quarter keys:', Object.keys(byQ).slice(-4));
-    // console.log('[Fund debug] last Q fields:', Object.keys(byQ[Object.keys(byQ).sort().slice(-1)[0]]||{}));
+    //.slice(-4));
+    //.sort().slice(-1)[0]]||{}));
 
     const quarters = Object.keys(byQ).sort();
     const last   = byQ[quarters[quarters.length-1]] || {};
@@ -9983,7 +9925,6 @@ function _parseStocksFromAI(raw){
     try{
       const p = JSON.parse(fixed);
       if(p?.stocks?.length){
-        console.log('[AI] fixed JSON, stocks:', p.stocks.length);
         return p.stocks.filter(s=>s.id&&s.name);
       }
     }catch(e2){}
@@ -10000,7 +9941,6 @@ function _parseStocksFromAI(raw){
       try{
         const p = JSON.parse(truncated);
         if(p?.stocks?.length){
-          console.log('[AI] truncation fixed, stocks:', p.stocks.length);
           return p.stocks.filter(s=>s.id&&s.name);
         }
       }catch(e3){}
@@ -10025,7 +9965,6 @@ function _extractStocksManually(text){
       stocks.push({ id:m[1], name:m[2], sector:'—', winRate:60, risk:5, reason:'AI推薦' });
     }
   }
-  console.log('[AI] manual extract:', stocks.length, 'stocks');
   return stocks;
 }
 
@@ -10142,9 +10081,6 @@ async function runCustomStratAnalysis(){
         })
         .sort((a,b) => b.score - a.score)
         .slice(0, pickCount);
-
-      console.log('[CustomStrat] candidates:', candidates.length, '/', totalCount,
-        'top:', candidates.slice(0,3).map(s=>s.id+s.name).join(','));
     }
 
     // 若 candidates 仍為空（API 全部失敗），降級用 DEFAULT_STOCKS
@@ -10447,7 +10383,6 @@ async function recordStratRecommend(stratKey, stocks){
   // 只保留最近 50 筆
   if(records.length > 50) records.splice(0, records.length - 50);
   saveBtRecords(records);
-  console.log('[Backtest] recorded', record.stocks.length, 'stocks for strat', stratKey);
 }
 
 // 日期工具
@@ -10687,8 +10622,6 @@ async function checkBacktestNow(){
     const d90 = !r.verifiedQ  && (r.checkDateQ||'9999')  <= today;
     return d7 || d14 || d30 || d90;
   });
-
-  console.log('[Verify] pending records:', pendingRecords.length, '/', records.length);
 
   if(!pendingRecords.length){
     showToast('ℹ️ 尚無到期記錄');
@@ -10968,7 +10901,6 @@ function _verifyAndFixSwapStock(stock){
 
   // 有官方名稱：強制使用官方名稱覆蓋 AI 給的名稱
   if(officialName !== stock.name){
-    console.log('[Swap] name corrected:', id, stock.name, '→', officialName);
   }
   return {...stock, id, name: officialName};
 }
@@ -12005,8 +11937,6 @@ async function autoRunBacktest(){
   const lastRun = parseInt(localStorage.getItem(AUTO_BT_KEY)||'0');
   const now     = Date.now();
   if(now - lastRun < AUTO_BT_INTERVAL) return; // 7天內不重複執行
-
-  console.log('[AutoBT] Starting auto backtest run...');
   localStorage.setItem(AUTO_BT_KEY, String(now));
 
   // 依序跑策略 A 和 B（靜默模式，不顯示結果UI）
@@ -12031,7 +11961,6 @@ async function autoRunBacktest(){
       const stocks = json.stocks||[];
       if(stocks.length >= 3){
         await recordStratRecommend(key, stocks);
-        console.log('[AutoBT] Recorded strat', key, stocks.length, 'stocks');
       }
       await new Promise(r=>setTimeout(r, 3000)); // 避免 rate limit
     }catch(e){ console.warn('[AutoBT] strat', key, e.message); }
@@ -12050,7 +11979,6 @@ function autoCheckBacktest(){
     (!r.verifiedQ && (r.checkDateQ||'9999') <= today)
   );
   if(hasExpired){
-    console.log('[Backtest] auto-checking expired records...');
     checkBacktestNow().then(()=>{ renderBattleBanner(); });
   } else {
     renderBacktestPanel();
@@ -12323,9 +12251,6 @@ async function fetchOfficialDisposeList(){
     const data = await resp.json();
 
     // debug log：讓開發者看到哪個來源成功
-    console.log('[Official] dispose:', data.dispose?.length||0,
-                'notice:', data.notice?.length||0,
-                'debug:', JSON.stringify(data.debug||{}).slice(0,300));
 
     _officialDisposeCache   = data;
     _officialDisposeCacheTs = Date.now();
@@ -12350,7 +12275,6 @@ async function fetchOfficialDisposeList(){
         });
         const ids = [...new Set(active.map(r=>String(r.stock_id||r.StockID||'').trim()))];
         ids.filter(id=>/^\d{4}$/.test(id)).forEach(id=>result.notice.push({id}));
-        console.log('[Official] fallback suspension:', ids.length, 'stocks');
       }
       _officialDisposeCache   = result;
       _officialDisposeCacheTs = Date.now();
@@ -12391,7 +12315,6 @@ async function fetchAlertStocksFromFinMind(){
     }
     if(i+BATCH < pool.length) await new Promise(r=>setTimeout(r, DELAY));
   }
-  console.log('[Alert FinMind] total found:', results.length, 'from', pool.length, 'stocks');
   return results;
 }
 
@@ -12480,10 +12403,6 @@ async function refreshAlertStocks(manual=false){
       });
     }
   }
-
-  console.log('[Alert] notice:', noticeList.length, 'dispose:', disposeList.length,
-              'release:', releaseList.length,
-              '| official dispose:', officialDisposeSet.size, 'notice:', officialNoticeSet.size);
 
   // ── 風險股：處置 + 注意次數多 ───────────────────────
   const riskList = [
@@ -12734,7 +12653,6 @@ function editProfile(){
   if(document.getElementById('pCapital')) document.getElementById('pCapital').value = p.capital||'mid';
   document.getElementById('profileModal').style.display='flex';
 }
-
 
 // 取得使用者完整 profile（含風險偏好）
 function getUserProfile(){
@@ -13150,7 +13068,6 @@ async function checkWatchlistAlerts(){
             pushUrl: '/',
           }),
         }).catch(()=>{});
-        console.log('[PushAlert]', stock.name, data.changePct);
         break; // 一次最多推一支，避免洗版
       }
     }catch(e){}
@@ -13283,7 +13200,8 @@ window.addEventListener('load', async ()=>{
   loadIndices();
 
   // 第 5 波：趨勢股（錯開 1.5s，讓主圖表先完成渲染）
-  setTimeout(()=>refreshTrendStocks(), 1500);
+  // 趨勢股：延遲 3 秒
+  setTimeout(()=>refreshTrendStocks(), 3000);
 
   // 第 6 波：累積戰績橫幅（資料有才顯示）
   setTimeout(()=>renderBattleBanner(), 2000);
