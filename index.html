@@ -321,11 +321,11 @@
 
   <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
   <div class="index-row">
-    <div class="idx"><div class="n">加權指數</div><div class="v">20,847</div><div class="c up">+0.74%</div></div>
-    <div class="idx"><div class="n">S&amp;P 500</div><div class="v">5,693</div><div class="c dn">-0.21%</div></div>
-    <div class="idx"><div class="n">那斯達克</div><div class="v">18,124</div><div class="c dn">-0.35%</div></div>
-    <div class="idx"><div class="n">費城半導</div><div class="v">4,451</div><div class="c up">+1.12%</div></div>
-    <div class="idx"><div class="n">VIX</div><div class="v">18.42</div><div class="c dn">+7.2%</div></div>
+    <div class="idx"><div class="n">加權指數</div><div class="v" id="idx-taiex">—</div><div class="c" id="idx-taiex-c">—</div></div>
+    <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
+    <div class="idx"><div class="n">那斯達克</div><div class="v" id="idx-nasdaq">—</div><div class="c" id="idx-nasdaq-c">—</div></div>
+    <div class="idx"><div class="n">費城半導</div><div class="v" id="idx-sox">—</div><div class="c" id="idx-sox-c">—</div></div>
+    <div class="idx"><div class="n">VIX</div><div class="v" id="idx-vix">—</div><div class="c" id="idx-vix-c">—</div></div>
   </div>
 
   <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
@@ -2153,18 +2153,24 @@ const NAME_MAP = {
 };
 
 // ── 靜態備援數據（API 失敗時使用）────────────────────
+// ⚠️ 注意：以下數據為舊參考值，API 失敗時才使用，並會顯示警告
+// 台積電實際股價需查詢：https://www.twse.com.tw
+// 美股指數需查詢：https://finance.yahoo.com
 const FALLBACK = {
-  '2330.TW': { price:1045, change:24.0, changePct:2.35, name:'台積電' },
-  '2317.TW': { price:182.5, change:-1.5, changePct:-0.82, name:'鴻海' },
-  '2454.TW': { price:1280, change:47.5, changePct:3.87, name:'聯發科' },
-  '2002.TW': { price:26.3, change:0.1, changePct:0.38, name:'中鋼' },
-  '^VIX':    { price:18.42, change:1.24, changePct:7.2, name:'VIX' },
-  '^GSPC':   { price:5693, change:-12.1, changePct:-0.21, name:'S&P 500' },
-  '^IXIC':   { price:18124, change:-63.8, changePct:-0.35, name:'那斯達克' },
-  '^SOX':    { price:4451, change:49.2, changePct:1.12, name:'費城半導' },
+  // 個股：API 失敗時不顯示假價格，改顯示 N/A
+  '2330.TW': { price:null, change:null, changePct:null, name:'台積電', _stale:true },
+  '2317.TW': { price:null, change:null, changePct:null, name:'鴻海',   _stale:true },
+  '2454.TW': { price:null, change:null, changePct:null, name:'聯發科', _stale:true },
+  '2002.TW': { price:null, change:null, changePct:null, name:'中鋼',   _stale:true },
+  // 美股指數：API 失敗時顯示提示，不顯示舊數字
+  '^VIX':    { price:null, change:null, changePct:null, name:'VIX',      _stale:true },
+  '^GSPC':   { price:null, change:null, changePct:null, name:'S&P 500',  _stale:true },
+  '^IXIC':   { price:null, change:null, changePct:null, name:'那斯達克', _stale:true },
+  '^SOX':    { price:null, change:null, changePct:null, name:'費城半導', _stale:true },
 };
-const FB_INST = { foreign:185.3, trust:23.6, dealer:-8.4, total:200.5 };
-const FB_CHIPS = { bigHolder:{pct:67}, midHolder:{pct:18}, retail:{pct:15} };
+// 法人數據不提供 fallback（舊數字誤導性更強）
+const FB_INST  = null;
+const FB_CHIPS = null;
 
 // ── 載入狀態追蹤 ──────────────────────────────────────
 let currentTicker = '2330.TW';
@@ -5653,7 +5659,11 @@ async function loadIndices(){
     // 延遲 300ms 每個請求，避免 proxy 連速限制
     await new Promise(r=>setTimeout(r, 300));
     const data = await yahooDirectQuote(sym);
-    const d    = data || FALLBACK[sym] || {};
+    const d = data || FALLBACK[sym] || {};
+    // FALLBACK 的 price=null 代表 API 失敗，顯示 N/A 而非舊數字
+    if(d._stale && d.price===null){
+      return null; // 讓呼叫方顯示 N/A
+    }
     if(d.price != null){
       const isUp = (d.changePct??0)>=0;
       el.querySelector('.v').textContent = fmt(d.price, d.price>100?0:2);
