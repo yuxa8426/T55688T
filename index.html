@@ -4796,26 +4796,194 @@ async function loadLeadingIndicators(manual=false){
 // ── 迷你折線圖 SVG 繪製工具 ──────────────────────────
 function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
   if(!vals||!vals.length) return;
-  const W=320, H=80, pad=6;
+  const W=320, H=80, padL=36, padR=4, padT=8, padB=6; // padL 留給 Y 軸
   const mn = center ? Math.min(...vals, 0) : Math.min(...vals);
   const mx = center ? Math.max(...vals, 0) : Math.max(...vals);
   const rng = mx-mn||Math.abs(mn)*0.1||1;
-  const toY  = v => H-pad - ((v-mn)/rng)*(H-pad*2);
-  const coords = vals.map((v,i)=>[i/(vals.length-1)*(W),toY(v)]);
+  const toX = i => padL + i/(Math.max(vals.length-1,1))*(W-padL-padR);
+  const toY = v => H-padB - ((v-mn)/rng)*(H-padT-padB);
+
+  const coords = vals.map((v,i)=>[toX(i), toY(v)]);
   const line   = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
-  const fill   = line+` L${W},${H} L0,${H} Z`;
+  const fill   = line+` L${(W-padR).toFixed(1)},${H} L${padL},${H} Z`;
   const last   = coords[coords.length-1];
-  const svg    = document.getElementById(svgId);
+
+  const svg = document.getElementById(svgId);
   if(!svg) return;
-  const lEl = document.getElementById(lineId); if(lEl){lEl.setAttribute('d',line);lEl.setAttribute('stroke',color);}
-  const fEl = document.getElementById(fillId); if(fEl) fEl.setAttribute('d',fill);
-  const dEl = document.getElementById(dotId);  if(dEl){dEl.setAttribute('cx',last[0].toFixed(1));dEl.setAttribute('cy',last[1].toFixed(1));dEl.setAttribute('fill',color);}
-  // 若有中心線，重新定位
+
+  // ── 折線 + 填充 ──────────────────────────────────────
+  const lEl = document.getElementById(lineId);
+  if(lEl){ lEl.setAttribute('d',line); lEl.setAttribute('stroke',color); }
+  const fEl = document.getElementById(fillId);
+  if(fEl) fEl.setAttribute('d',fill);
+  const dEl = document.getElementById(dotId);
+  if(dEl){ dEl.setAttribute('cx',last[0].toFixed(1)); dEl.setAttribute('cy',last[1].toFixed(1)); dEl.setAttribute('fill',color); }
+
+  // ── 中心線重定位 ────────────────────────────────────
   if(center){
     const zeroY = toY(0);
     const bl = svg.querySelector('[id$="BaseLine"]')||svg.querySelector('line');
     if(bl){ bl.setAttribute('y1',zeroY.toFixed(1)); bl.setAttribute('y2',zeroY.toFixed(1)); }
   }
+
+  // ── Y 軸刻度（3個：最大/中間/最小）────────────────────
+  // 移除舊的 Y 軸元素
+  svg.querySelectorAll('.y-tick,.y-label').forEach(e=>e.remove());
+
+  const fmt = v => {
+    const av = Math.abs(v);
+    if(av>=100000) return (v/1000).toFixed(0)+'K';
+    if(av>=1000)   return v.toLocaleString('zh-TW',{maximumFractionDigits:0});
+    if(av>=10)     return v.toFixed(1);
+    return v.toFixed(2);
+  };
+
+  const yTicks = [
+    { v: mx,          y: toY(mx) },
+    { v: (mx+mn)/2,   y: toY((mx+mn)/2) },
+    { v: mn,          y: toY(mn) },
+  ];
+
+  yTicks.forEach(({v,y})=>{
+    // 刻度線
+    const tick = document.createElementNS('http://www.w3.org/2000/svg','line');
+    tick.setAttribute('x1', (padL-3).toString());
+    tick.setAttribute('x2', padL.toString());
+    tick.setAttribute('y1', y.toFixed(1));
+    tick.setAttribute('y2', y.toFixed(1));
+    tick.setAttribute('stroke','rgba(255,255,255,.2)');
+    tick.setAttribute('stroke-width','1');
+    tick.classList.add('y-tick');
+    svg.appendChild(tick);
+
+    // 刻度文字
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', (padL-5).toString());
+    text.setAttribute('y', (y+3).toFixed(1));
+    text.setAttribute('text-anchor','end');
+    text.setAttribute('font-size','8');
+    text.setAttribute('fill','rgba(255,255,255,.45)');
+    text.classList.add('y-label');
+    text.textContent = fmt(v);
+    svg.appendChild(text);
+  });
+
+  // ── 格線（水平虛線對應刻度）────────────────────────────
+  svg.querySelectorAll('.y-grid').forEach(e=>e.remove());
+  [mx, mn].forEach(v=>{
+    const grid = document.createElementNS('http://www.w3.org/2000/svg','line');
+    grid.setAttribute('x1', padL.toString());
+    grid.setAttribute('x2', (W-padR).toString());
+    grid.setAttribute('y1', toY(v).toFixed(1));
+    grid.setAttribute('y2', toY(v).toFixed(1));
+    grid.setAttribute('stroke','rgba(255,255,255,.05)');
+    grid.setAttribute('stroke-width','1');
+    grid.setAttribute('stroke-dasharray','3,3');
+    grid.classList.add('y-grid');
+    svg.insertBefore(grid, svg.firstChild);
+  });
+
+  // ── Touch/Click tooltip ─────────────────────────────
+  // 移除舊的 tooltip 和 overlay
+  svg.querySelectorAll('.chart-tooltip,.chart-overlay').forEach(e=>e.remove());
+
+  // 透明觸控覆蓋層
+  const overlay = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  overlay.setAttribute('x', padL.toString());
+  overlay.setAttribute('y', '0');
+  overlay.setAttribute('width', (W-padL-padR).toString());
+  overlay.setAttribute('height', H.toString());
+  overlay.setAttribute('fill','transparent');
+  overlay.classList.add('chart-overlay');
+  overlay.style.cursor = 'crosshair';
+  svg.appendChild(overlay);
+
+  // Tooltip group
+  const tipG = document.createElementNS('http://www.w3.org/2000/svg','g');
+  tipG.classList.add('chart-tooltip');
+  tipG.style.display = 'none';
+
+  const tipLine = document.createElementNS('http://www.w3.org/2000/svg','line');
+  tipLine.setAttribute('y1','0'); tipLine.setAttribute('y2',H.toString());
+  tipLine.setAttribute('stroke','rgba(255,255,255,.3)'); tipLine.setAttribute('stroke-width','1');
+  tipLine.setAttribute('stroke-dasharray','3,3');
+
+  const tipCirc = document.createElementNS('http://www.w3.org/2000/svg','circle');
+  tipCirc.setAttribute('r','4');
+  tipCirc.setAttribute('fill',color);
+  tipCirc.setAttribute('stroke','#fff');
+  tipCirc.setAttribute('stroke-width','1.5');
+
+  const tipRect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  tipRect.setAttribute('rx','4'); tipRect.setAttribute('ry','4');
+  tipRect.setAttribute('fill','rgba(20,20,35,.92)');
+  tipRect.setAttribute('stroke','rgba(255,255,255,.2)');
+  tipRect.setAttribute('stroke-width','1');
+
+  const tipText = document.createElementNS('http://www.w3.org/2000/svg','text');
+  tipText.setAttribute('font-size','10');
+  tipText.setAttribute('fill','#fff');
+  tipText.setAttribute('font-weight','700');
+
+  const tipDate = document.createElementNS('http://www.w3.org/2000/svg','text');
+  tipDate.setAttribute('font-size','8');
+  tipDate.setAttribute('fill','rgba(255,255,255,.6)');
+
+  tipG.appendChild(tipLine);
+  tipG.appendChild(tipRect);
+  tipG.appendChild(tipDate);
+  tipG.appendChild(tipText);
+  tipG.appendChild(tipCirc);
+  svg.appendChild(tipG);
+
+  // 取得 dates（存在 SVG dataset 上）
+  const getDates = () => {
+    try{ return JSON.parse(svg.dataset.dates||'[]'); }catch(e){ return []; }
+  };
+
+  function showTip(clientX, clientY){
+    const rect = svg.getBoundingClientRect();
+    const svgX = (clientX - rect.left) / rect.width * W;
+    if(svgX < padL || svgX > W-padR){ tipG.style.display='none'; return; }
+
+    // 找最近的資料點
+    const ratio  = (svgX - padL) / (W - padL - padR);
+    const idx    = Math.max(0, Math.min(vals.length-1, Math.round(ratio*(vals.length-1))));
+    const val    = vals[idx];
+    const cx     = coords[idx][0];
+    const cy     = coords[idx][1];
+    const dates  = getDates();
+    const dateStr= dates[idx] ? dates[idx].slice(5) : '';
+
+    tipLine.setAttribute('x1',cx.toFixed(1)); tipLine.setAttribute('x2',cx.toFixed(1));
+    tipCirc.setAttribute('cx',cx.toFixed(1)); tipCirc.setAttribute('cy',cy.toFixed(1));
+    tipCirc.setAttribute('fill',color);
+
+    const valStr = fmt(val);
+    tipText.textContent = valStr;
+    tipDate.textContent = dateStr;
+
+    // tooltip 位置（避免超出邊界）
+    const boxW=52, boxH=28, margin=4;
+    let bx = cx+6;
+    if(bx+boxW > W-padR) bx = cx-boxW-6;
+    const by = Math.max(padT, Math.min(H-boxH-padB, cy-boxH/2));
+
+    tipRect.setAttribute('x',bx.toFixed(1)); tipRect.setAttribute('y',by.toFixed(1));
+    tipRect.setAttribute('width',boxW); tipRect.setAttribute('height',boxH);
+    tipText.setAttribute('x',(bx+boxW/2).toFixed(1)); tipText.setAttribute('y',(by+16).toFixed(1));
+    tipText.setAttribute('text-anchor','middle');
+    tipDate.setAttribute('x',(bx+boxW/2).toFixed(1)); tipDate.setAttribute('y',(by+8).toFixed(1));
+    tipDate.setAttribute('text-anchor','middle');
+
+    tipG.style.display='';
+  }
+
+  overlay.addEventListener('mousemove', e=>showTip(e.clientX, e.clientY));
+  overlay.addEventListener('mouseleave', ()=>{ tipG.style.display='none'; });
+  overlay.addEventListener('touchstart', e=>{ e.preventDefault(); showTip(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+  overlay.addEventListener('touchmove',  e=>{ e.preventDefault(); showTip(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+  overlay.addEventListener('touchend',   ()=>{ setTimeout(()=>{ tipG.style.display='none'; }, 1500); });
 }
 
 function setTimeAxis(axisId, dates){
@@ -4890,6 +5058,8 @@ async function loadOptionData(){
   setEl('putChg',  '日變化 '+(putOI-prevPut>=0?'+':'')+Math.round(putOI-prevPut).toLocaleString(),   (putOI-prevPut)>=0?'var(--green)':'var(--red)');
 
   // 圖
+  const _pcrSvg = document.getElementById('pcrChart');
+  if(_pcrSvg) _pcrSvg.dataset.dates = JSON.stringify(dates);
   drawMiniLine('pcrChart','pcrLine','pcrFill','pcrDot', pcrSeries, pcr<1?'#ff4c6a':'#00d4aa');
   setTimeAxis('pcrTimeAxis', dates);
 
@@ -4978,6 +5148,8 @@ async function loadFuturesData(){
   document.getElementById('futDot')?.setAttribute('fill',lColor);
   document.getElementById('futGradStop')?.setAttribute('stop-color',lColor);
 
+  const _futSvg = document.getElementById('futChart');
+  if(_futSvg) _futSvg.dataset.dates = JSON.stringify(dates);
   drawMiniLine('futChart','futLine','futFill','futDot', foreignNet, lColor, true);
   setTimeAxis('futTimeAxis', dates);
 
@@ -5063,6 +5235,8 @@ async function loadMarginData(){
   setEl('shortChg',   '日變化 '+(shortChg>=0?'+':'')+shortChg.toFixed(0)+'千張', shortChg>=0?'var(--green)':'var(--red)');
   setEl('marginRatio',typeof ratio==='string'?ratio+'%':ratio+'%', parseFloat(ratio)>15?'var(--green)':parseFloat(ratio)<8?'var(--red)':'var(--gold)');
 
+  const _margSvg = document.getElementById('marginChart');
+  if(_margSvg) _margSvg.dataset.dates = JSON.stringify(dates);
   drawMiniLine('marginChart','marginLine','marginFill','marginDot', margVals, '#ff4c6a');
   // 融券用 secondary line（不用 drawMiniLine，手動畫在同 SVG）
   const W=320,H=80,pad=6;
