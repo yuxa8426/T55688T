@@ -30,17 +30,7 @@
 <meta name="apple-mobile-web-app-title" content="股析">
 <meta name="theme-color" content="#0a0a0f">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<style>
-/* Critical CSS：首屏最小必要樣式 */
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0f;color:#e8e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;overflow-x:hidden}
-#loadingScreen{position:fixed;inset:0;background:#0a0a0f;display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:16px}
-.spin{animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.nav-bar{position:fixed;bottom:0;left:0;right:0;z-index:1000;background:rgba(10,10,15,.95);border-top:1px solid rgba(255,255,255,.08);display:flex;padding:8px 0;padding-bottom:max(8px,env(safe-area-inset-bottom,8px))}
-</style>
-<link rel="stylesheet" href="style.css" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="style.css"></noscript>
+<link rel="stylesheet" href="style.css">
   <!-- 資源預載 -->
   <link rel="preload" href="style.css" as="style">
   <link rel="preload" href="manifest.json" as="fetch" crossorigin>
