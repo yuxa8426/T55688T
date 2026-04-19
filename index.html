@@ -163,25 +163,25 @@
   <div id="li-option" class="li-panel">
     <div class="leading-card">
       <!-- 數值列 -->
-      <div style="display:flex;gap:0;margin-bottom:14px">
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">Put/Call 未平倉比</div>
-          <div style="font-size:22px;font-weight:800" id="pcrVal">—</div>
-          <div style="font-size:11px;margin-top:2px" id="pcrChg">—</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="background:rgba(124,92,252,.06);border:1px solid rgba(124,92,252,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">Put/Call 比</div>
+          <div style="font-size:22px;font-weight:800;line-height:1.1" id="pcrVal">—</div>
+          <div style="font-size:9px;margin-top:3px" id="pcrChg">—</div>
         </div>
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資Call未平倉</div>
-          <div style="font-size:16px;font-weight:700;color:var(--red)" id="callOI">—</div>
-          <div style="font-size:10px;color:var(--text3)" id="callChg">日變化 —</div>
+        <div style="background:rgba(255,76,106,.06);border:1px solid rgba(255,76,106,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資 Call</div>
+          <div style="font-size:15px;font-weight:700;color:var(--red);line-height:1.1" id="callOI">—</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px" id="callChg">日變化 —</div>
         </div>
-        <div style="flex:1;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資Put未平倉</div>
-          <div style="font-size:16px;font-weight:700;color:var(--green)" id="putOI">—</div>
-          <div style="font-size:10px;color:var(--text3)" id="putChg">日變化 —</div>
+        <div style="background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資 Put</div>
+          <div style="font-size:15px;font-weight:700;color:var(--green);line-height:1.1" id="putOI">—</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px" id="putChg">日變化 —</div>
         </div>
       </div>
       <!-- PCR 折線圖 -->
-      <div style="position:relative;margin-bottom:6px">
+      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
         <svg id="pcrChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="pcrGrad" x1="0" y1="0" x2="0" y2="1">
@@ -195,7 +195,7 @@
           <path id="pcrLine" fill="none" stroke="#7c5cfc" stroke-width="2" stroke-linejoin="round"/>
           <circle id="pcrDot" r="4" fill="#7c5cfc"/>
         </svg>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px" id="pcrTimeAxis"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px" id="pcrTimeAxis"></div>
       </div>
       <!-- 多空區域標籤 -->
       <div style="display:flex;gap:6px;margin-bottom:12px">
@@ -213,25 +213,25 @@
   <!-- ② 期貨籌碼 -->
   <div id="li-futures" class="li-panel" style="display:none">
     <div class="leading-card">
-      <div style="display:flex;gap:0;margin-bottom:14px">
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資期貨淨部位</div>
-          <div style="font-size:20px;font-weight:800" id="futNetPos">—</div>
-          <div style="font-size:11px;margin-top:2px" id="futNetChg">日變化 —</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        <div style="background:rgba(124,92,252,.06);border:1px solid rgba(124,92,252,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資淨部位</div>
+          <div style="font-size:18px;font-weight:800;line-height:1.1" id="futNetPos">—</div>
+          <div style="font-size:9px;margin-top:3px" id="futNetChg">日變化 —</div>
         </div>
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資多單</div>
-          <div style="font-size:16px;font-weight:700;color:var(--red)" id="futLong">—</div>
-          <div style="font-size:10px;color:var(--text3)" id="futLongChg">—</div>
+        <div style="background:rgba(255,76,106,.06);border:1px solid rgba(255,76,106,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資多單</div>
+          <div style="font-size:15px;font-weight:700;color:var(--red);line-height:1.1" id="futLong">—</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px" id="futLongChg">—</div>
         </div>
-        <div style="flex:1;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資空單</div>
-          <div style="font-size:16px;font-weight:700;color:var(--green)" id="futShort">—</div>
-          <div style="font-size:10px;color:var(--text3)" id="futShortChg">—</div>
+        <div style="background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資空單</div>
+          <div style="font-size:15px;font-weight:700;color:var(--green);line-height:1.1" id="futShort">—</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:3px" id="futShortChg">—</div>
         </div>
       </div>
       <!-- 期貨淨部位折線 -->
-      <div style="position:relative;margin-bottom:6px">
+      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
         <svg id="futChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="futGrad" x1="0" y1="0" x2="0" y2="1">
@@ -244,7 +244,7 @@
           <path id="futLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
           <circle id="futDot" r="4" fill="#ff4c6a"/>
         </svg>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px" id="futTimeAxis"></div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px" id="futTimeAxis"></div>
       </div>
       <!-- 投信/自營商列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -270,49 +270,59 @@
   <!-- ③ 融資融券 -->
   <div id="li-margin" class="li-panel" style="display:none">
     <div class="leading-card">
-      <div style="display:flex;gap:0;margin-bottom:14px">
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">融資餘額（億）</div>
-          <div style="font-size:20px;font-weight:800" id="marginBal">—</div>
-          <div style="font-size:11px;margin-top:2px" id="marginChg">日變化 —</div>
+
+      <!-- 數值卡片列 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        <!-- 融資餘額 -->
+        <div style="background:rgba(255,76,106,.06);border:1px solid rgba(255,76,106,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:4px">
+            <span style="width:10px;height:2px;background:var(--red);border-radius:1px;display:inline-block"></span>
+            <span style="font-size:9px;color:var(--text3);font-weight:600">融資餘額</span>
+          </div>
+          <div style="font-size:18px;font-weight:800;color:var(--red);line-height:1.1" id="marginBal">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="marginChg">日變化 —</div>
         </div>
-        <div style="flex:1;text-align:center;border-right:1px solid var(--border)">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">融券餘額（張）</div>
-          <div style="font-size:16px;font-weight:700" id="shortBal">—</div>
-          <div style="font-size:10px;color:var(--text3)" id="shortChg">日變化 —</div>
+        <!-- 融券餘額 -->
+        <div style="background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:4px">
+            <span style="width:10px;height:0;border-top:2px dashed var(--green);display:inline-block"></span>
+            <span style="font-size:9px;color:var(--text3);font-weight:600">融券餘額</span>
+          </div>
+          <div style="font-size:18px;font-weight:800;color:var(--green);line-height:1.1" id="shortBal">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="shortChg">日變化 —</div>
         </div>
-        <div style="flex:1;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:3px">券資比</div>
-          <div style="font-size:20px;font-weight:800" id="marginRatio">—</div>
-          <div style="font-size:10px;color:var(--text3)">空頭力道指標</div>
+        <!-- 券資比 -->
+        <div style="background:rgba(124,92,252,.06);border:1px solid rgba(124,92,252,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">券資比</div>
+          <div style="font-size:18px;font-weight:800;color:var(--purple);line-height:1.1" id="marginRatio">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)">空頭力道指標</div>
         </div>
       </div>
-      <!-- 雙線圖：融資 + 融券 -->
-      <div style="margin-bottom:6px">
-        <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
+
+      <!-- 雙線圖 -->
+      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
+        <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none"
+             style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="margGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".2"/>
+              <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".15"/>
               <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="shortGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#00d4aa" stop-opacity=".2"/>
-              <stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/>
             </linearGradient>
           </defs>
           <path id="marginFill" fill="url(#margGrad)"/>
-          <path id="marginLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
-          <path id="shortLine"  fill="none" stroke="#00d4aa" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="5,3"/>
-          <circle id="marginDot" r="4" fill="#ff4c6a"/>
-          <circle id="shortDot"  r="3" fill="#00d4aa"/>
+          <path id="marginLine" fill="none" stroke="#ff4c6a" stroke-width="2.2" stroke-linejoin="round"/>
+          <path id="shortLine"  fill="none" stroke="#00d4aa" stroke-width="1.8"
+                stroke-linejoin="round" stroke-dasharray="5,3"/>
+          <circle id="marginDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
+          <circle id="shortDot"  r="3.5" fill="#00d4aa" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
         </svg>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px" id="marginTimeAxis"></div>
+        <!-- X 軸時間 -->
+        <div style="display:flex;justify-content:space-between;font-size:9px;
+                    color:var(--text3);margin-top:2px;padding:0 2px"
+             id="marginTimeAxis"></div>
       </div>
-      <!-- 圖例 -->
-      <div style="display:flex;gap:12px;margin-bottom:12px;font-size:10px">
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:2px;background:var(--red);display:inline-block"></span>融資餘額</span>
-        <span style="display:flex;align-items:center;gap:4px"><span style="width:16px;height:2px;background:var(--green);display:inline-block;border-top:1px dashed var(--green)"></span>融券餘額</span>
-      </div>
+
+      <!-- AI 解讀 -->
       <div class="li-analysis" id="marginAnalysis">
         <span class="purple">🤖 AI 解讀：</span>資料載入中…
       </div>
@@ -5252,13 +5262,22 @@ async function loadMarginData(){
   const _margSvg = document.getElementById('marginChart');
   if(_margSvg) _margSvg.dataset.dates = JSON.stringify(dates);
   drawMiniLine('marginChart','marginLine','marginFill','marginDot', margVals, '#ff4c6a');
-  // 融券用 secondary line（不用 drawMiniLine，手動畫在同 SVG）
-  const W=320,H=80,pad=6;
-  const mn2=Math.min(...shortVals),mx2=Math.max(...shortVals)||mn2+1,rng2=mx2-mn2||1;
-  const coords2=shortVals.map((v,i)=>[i/(shortVals.length-1)*W, H-pad-((v-mn2)/rng2)*(H-pad*2)]);
-  const path2=coords2.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
-  const sl=document.getElementById('shortLine'); if(sl) sl.setAttribute('d',path2);
-  const sd=document.getElementById('shortDot');  if(sd){sd.setAttribute('cx',coords2[coords2.length-1][0].toFixed(1));sd.setAttribute('cy',coords2[coords2.length-1][1].toFixed(1));}
+  // 融券第二條線：使用與 drawMiniLine 相同的座標系（W=360,H=90,padL=42,padR=6,padT=10,padB=8）
+  {
+    const W2=360,H2=90,padL2=42,padR2=6,padT2=10,padB2=8;
+    const mn2=Math.min(...shortVals),mx2=Math.max(...shortVals)||mn2+1,rng2=mx2-mn2||1;
+    const toX2=i=>padL2+i/(Math.max(shortVals.length-1,1))*(W2-padL2-padR2);
+    const toY2=v=>H2-padB2-((v-mn2)/rng2)*(H2-padT2-padB2);
+    const coords2=shortVals.map((v,i)=>[toX2(i),toY2(v)]);
+    const path2=coords2.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+    const sl=document.getElementById('shortLine'); if(sl) sl.setAttribute('d',path2);
+    const sd=document.getElementById('shortDot');
+    if(sd){
+      const last2=coords2[coords2.length-1];
+      sd.setAttribute('cx',last2[0].toFixed(1));
+      sd.setAttribute('cy',last2[1].toFixed(1));
+    }
+  }
   setTimeAxis('marginTimeAxis', dates);
 
   // AI 解讀
