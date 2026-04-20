@@ -4894,11 +4894,71 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
     svg.insertBefore(grid, svg.firstChild);
   });
 
-  // ── Touch/Click tooltip ─────────────────────────────
-  // 移除舊的 tooltip 和 overlay
-  svg.querySelectorAll('.chart-tooltip,.chart-overlay').forEach(e=>e.remove());
+  // ── Touch/Click tooltip（HTML div，避免 SVG overflow 遮擋）─
+  svg.querySelectorAll('.chart-overlay').forEach(e=>e.remove());
 
-  // 透明觸控覆蓋層
+  // SVG 內只保留準線和圓點（不會超出邊界）
+  let tipLineEl = svg.querySelector('.chart-tip-line');
+  let tipDotEl  = svg.querySelector('.chart-tip-dot');
+  if(!tipLineEl){
+    tipLineEl = document.createElementNS('http://www.w3.org/2000/svg','line');
+    tipLineEl.setAttribute('y1','0'); tipLineEl.setAttribute('y2',H.toString());
+    tipLineEl.setAttribute('stroke','rgba(255,255,255,.35)');
+    tipLineEl.setAttribute('stroke-width','1');
+    tipLineEl.setAttribute('stroke-dasharray','3,3');
+    tipLineEl.classList.add('chart-tip-line');
+    tipLineEl.style.display='none';
+    svg.appendChild(tipLineEl);
+  }
+  if(!tipDotEl){
+    tipDotEl = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    tipDotEl.setAttribute('r','4');
+    tipDotEl.setAttribute('stroke','#fff');
+    tipDotEl.setAttribute('stroke-width','1.5');
+    tipDotEl.classList.add('chart-tip-dot');
+    tipDotEl.style.display='none';
+    svg.appendChild(tipDotEl);
+  }
+
+  // HTML tooltip div（掛在 svg 的 parent 上，z-index 蓋過 SVG）
+  const svgParent = svg.parentElement;
+  if(svgParent.style.position !== 'relative') svgParent.style.position = 'relative';
+  let htmlTip = svgParent.querySelector('.html-chart-tip');
+  if(!htmlTip){
+    htmlTip = document.createElement('div');
+    htmlTip.className = 'html-chart-tip';
+    htmlTip.style.cssText = `
+      position:absolute;
+      display:none;
+      pointer-events:none;
+      z-index:200;
+      background:rgba(12,12,24,.97);
+      border-radius:8px;
+      padding:6px 10px;
+      font-size:12px;
+      color:#fff;
+      font-weight:700;
+      white-space:nowrap;
+      box-shadow:0 2px 12px rgba(0,0,0,.5);
+      border:1.5px solid ${color};
+      font-family:inherit;
+      min-width:72px;
+      text-align:center;
+      line-height:1.5;
+    `;
+    svgParent.appendChild(htmlTip);
+  }
+
+  // 取得 dates（存在 SVG dataset 上）
+  const getDates = () => {
+    try{ return JSON.parse(svg.dataset.dates||'[]'); }catch(e){ return []; }
+  };
+  const getSecondary = () => {
+    try{ return JSON.parse(svg.dataset.secondary||'null'); }catch(e){ return null; }
+  };
+  const getSecondaryLabel = () => svg.dataset.secondaryLabel || '';
+
+  // 透明觸控覆蓋層（SVG 內）
   const overlay = document.createElementNS('http://www.w3.org/2000/svg','rect');
   overlay.setAttribute('x', padL.toString());
   overlay.setAttribute('y', '0');
@@ -4909,152 +4969,82 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
   overlay.style.cursor = 'crosshair';
   svg.appendChild(overlay);
 
-  // Tooltip group
-  const tipG = document.createElementNS('http://www.w3.org/2000/svg','g');
-  tipG.classList.add('chart-tooltip');
-  tipG.style.display = 'none';
-
-  const tipLine = document.createElementNS('http://www.w3.org/2000/svg','line');
-  tipLine.setAttribute('y1','0'); tipLine.setAttribute('y2',H.toString());
-  tipLine.setAttribute('stroke','rgba(255,255,255,.3)'); tipLine.setAttribute('stroke-width','1');
-  tipLine.setAttribute('stroke-dasharray','3,3');
-
-  const tipCirc = document.createElementNS('http://www.w3.org/2000/svg','circle');
-  tipCirc.setAttribute('r','4');
-  tipCirc.setAttribute('fill',color);
-  tipCirc.setAttribute('stroke','#fff');
-  tipCirc.setAttribute('stroke-width','1.5');
-
-  const tipRect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-  tipRect.setAttribute('rx','6'); tipRect.setAttribute('ry','6');
-  tipRect.setAttribute('fill','rgba(15,15,28,.96)');
-  tipRect.setAttribute('stroke',color);
-  tipRect.setAttribute('stroke-width','1.5');
-  tipRect.setAttribute('stroke-opacity','0.6');
-
-  const tipText = document.createElementNS('http://www.w3.org/2000/svg','text');
-  tipText.setAttribute('font-size','12');
-  tipText.setAttribute('fill','#fff');
-  tipText.setAttribute('font-weight','800');
-
-  const tipDate = document.createElementNS('http://www.w3.org/2000/svg','text');
-  tipDate.setAttribute('font-size','9');
-  tipDate.setAttribute('fill','rgba(255,255,255,.7)');
-
-  tipG.appendChild(tipLine);
-  tipG.appendChild(tipRect);
-  tipG.appendChild(tipDate);
-  tipG.appendChild(tipText);
-  tipG.appendChild(tipCirc);
-  svg.appendChild(tipG);
-
-  // 取得 dates（存在 SVG dataset 上）
-  const getDates = () => {
-    try{ return JSON.parse(svg.dataset.dates||'[]'); }catch(e){ return []; }
-  };
-
-  // 取得第二條線資料（融券等）
-  const getSecondary = () => {
-    try{ return JSON.parse(svg.dataset.secondary||'null'); }catch(e){ return null; }
-  };
-  const getSecondaryLabel = () => svg.dataset.secondaryLabel || '';
-
   function showTip(clientX, clientY){
-    const rect = svg.getBoundingClientRect();
-    const svgX = (clientX - rect.left) / rect.width * W;
-    if(svgX < padL || svgX > W-padR){ tipG.style.display='none'; return; }
-
-    const ratio  = (svgX - padL) / (W - padL - padR);
-    const idx    = Math.max(0, Math.min(vals.length-1, Math.round(ratio*(vals.length-1))));
-    const val    = vals[idx];
-    const cx     = coords[idx][0];
-    const cy     = coords[idx][1];
-    const dates  = getDates();
-    const dateStr= dates[idx] ? dates[idx].slice(5) : '';
-
-    // 第二條線數值
-    const secondary = getSecondary();
-    const secLabel  = getSecondaryLabel();
-    const secVal    = secondary ? secondary[idx] : null;
-
-    tipLine.setAttribute('x1',cx.toFixed(1)); tipLine.setAttribute('x2',cx.toFixed(1));
-    tipCirc.setAttribute('cx',cx.toFixed(1)); tipCirc.setAttribute('cy',cy.toFixed(1));
-    tipCirc.setAttribute('fill',color);
-
-    // ── 動態計算 tooltip 高度（有無第二條線）──────────────
-    const hasTwo  = secVal !== null && secVal !== undefined;
-    const boxW    = hasTwo ? 88 : 68;
-    const boxH    = hasTwo ? 52 : 36;
-
-    let bx = cx - boxW/2;
-    if(bx < padL)      bx = padL;
-    if(bx+boxW > W-padR) bx = W-padR-boxW;
-    let by = cy - boxH - 8;
-    if(by < padT) by = cy + 8;
-
-    tipRect.setAttribute('x', bx.toFixed(1));
-    tipRect.setAttribute('y', by.toFixed(1));
-    tipRect.setAttribute('width', boxW);
-    tipRect.setAttribute('height', boxH);
-
-    // 日期（頂部）
-    tipDate.setAttribute('x', (bx+boxW/2).toFixed(1));
-    tipDate.setAttribute('y', (by+11).toFixed(1));
-    tipDate.setAttribute('text-anchor','middle');
-    tipDate.setAttribute('font-size','9');
-    tipDate.textContent = dateStr;
-
-    // 第一條線數值
-    tipText.setAttribute('x', (bx+boxW/2).toFixed(1));
-    tipText.setAttribute('y', (by+(hasTwo?23:25)).toFixed(1));
-    tipText.setAttribute('text-anchor','middle');
-    tipText.setAttribute('font-size','11');
-    tipText.setAttribute('fill',color);
-    tipText.textContent = fmt(val);
-
-    // ── 第二條線文字（動態新增）──────────────────────────
-    svg.querySelectorAll('.tip-secondary').forEach(e=>e.remove());
-    if(hasTwo){
-      // 分隔線
-      const sep = document.createElementNS('http://www.w3.org/2000/svg','line');
-      sep.setAttribute('x1',(bx+6).toFixed(1)); sep.setAttribute('x2',(bx+boxW-6).toFixed(1));
-      sep.setAttribute('y1',(by+30).toFixed(1)); sep.setAttribute('y2',(by+30).toFixed(1));
-      sep.setAttribute('stroke','rgba(255,255,255,.15)'); sep.setAttribute('stroke-width','1');
-      sep.classList.add('tip-secondary');
-      tipG.appendChild(sep);
-
-      // 第二條線標籤
-      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-      lbl.setAttribute('x',(bx+boxW/2).toFixed(1));
-      lbl.setAttribute('y',(by+39).toFixed(1));
-      lbl.setAttribute('text-anchor','middle');
-      lbl.setAttribute('font-size','9');
-      lbl.setAttribute('fill','rgba(255,255,255,.5)');
-      lbl.textContent = secLabel;
-      lbl.classList.add('tip-secondary');
-      tipG.appendChild(lbl);
-
-      // 第二條線數值
-      const sv = document.createElementNS('http://www.w3.org/2000/svg','text');
-      sv.setAttribute('x',(bx+boxW/2).toFixed(1));
-      sv.setAttribute('y',(by+49).toFixed(1));
-      sv.setAttribute('text-anchor','middle');
-      sv.setAttribute('font-size','11');
-      sv.setAttribute('font-weight','700');
-      sv.setAttribute('fill','#00d4aa');
-      sv.textContent = fmt(secVal);
-      sv.classList.add('tip-secondary');
-      tipG.appendChild(sv);
+    const svgRect = svg.getBoundingClientRect();
+    const svgX    = (clientX - svgRect.left) / svgRect.width * W;
+    if(svgX < padL || svgX > W-padR){
+      htmlTip.style.display='none';
+      tipLineEl.style.display='none';
+      tipDotEl.style.display='none';
+      return;
     }
 
-    tipG.style.display='';
+    const ratio   = (svgX - padL) / (W - padL - padR);
+    const idx     = Math.max(0, Math.min(vals.length-1, Math.round(ratio*(vals.length-1))));
+    const val     = vals[idx];
+    const cx      = coords[idx][0];
+    const cy      = coords[idx][1];
+    const dates   = getDates();
+    const dateStr = dates[idx] ? dates[idx].slice(5) : '';
+    const secondary   = getSecondary();
+    const secLabel    = getSecondaryLabel();
+    const secVal      = secondary ? secondary[idx] : null;
+    const hasTwo      = secVal !== null && secVal !== undefined;
+
+    // 準線 + 圓點（SVG 內，不會超出）
+    tipLineEl.setAttribute('x1',cx.toFixed(1)); tipLineEl.setAttribute('x2',cx.toFixed(1));
+    tipLineEl.style.display='';
+    tipDotEl.setAttribute('cx',cx.toFixed(1)); tipDotEl.setAttribute('cy',cy.toFixed(1));
+    tipDotEl.setAttribute('fill',color);
+    tipDotEl.style.display='';
+
+    // HTML tooltip 內容
+    const secLine = hasTwo
+      ? `<div style="margin-top:3px;padding-top:3px;border-top:1px solid rgba(255,255,255,.15);
+                     font-size:10px;color:rgba(255,255,255,.6)">${secLabel}</div>
+         <div style="font-size:12px;font-weight:800;color:#00d4aa">${fmt(secVal)}</div>`
+      : '';
+    htmlTip.style.borderColor = color;
+    htmlTip.innerHTML = `
+      <div style="font-size:9px;color:rgba(255,255,255,.6);font-weight:500">${dateStr}</div>
+      <div style="font-size:13px;font-weight:800;color:${color}">${fmt(val)}</div>
+      ${secLine}
+    `;
+
+    // 定位：轉換 SVG 座標 → parent div 座標
+    const parentRect = svgParent.getBoundingClientRect();
+    // cx 在 SVG 中的比例 → 實際像素
+    const pxX = (cx / W) * svgRect.width + (svgRect.left - parentRect.left);
+    const pxY = (cy / H) * svgRect.height + (svgRect.top  - parentRect.top);
+
+    const tipW = htmlTip.offsetWidth  || (hasTwo ? 88 : 80);
+    const tipH = htmlTip.offsetHeight || (hasTwo ? 68 : 48);
+    const parentW = parentRect.width;
+
+    let left = pxX - tipW/2;
+    let top  = pxY - tipH - 8;
+
+    // 邊界保護
+    if(left < 2)           left = 2;
+    if(left+tipW > parentW-2) left = parentW - tipW - 2;
+    if(top < 2)            top  = pxY + 10;
+
+    htmlTip.style.left    = left.toFixed(0)+'px';
+    htmlTip.style.top     = top.toFixed(0)+'px';
+    htmlTip.style.display = 'block';
   }
 
-  overlay.addEventListener('mousemove', e=>showTip(e.clientX, e.clientY));
-  overlay.addEventListener('mouseleave', ()=>{ tipG.style.display='none'; });
+  function hideTip(){
+    htmlTip.style.display='none';
+    tipLineEl.style.display='none';
+    tipDotEl.style.display='none';
+  }
+
+  overlay.addEventListener('mousemove',  e=>showTip(e.clientX, e.clientY));
+  overlay.addEventListener('mouseleave', ()=>hideTip());
   overlay.addEventListener('touchstart', e=>{ e.preventDefault(); showTip(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
   overlay.addEventListener('touchmove',  e=>{ e.preventDefault(); showTip(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-  overlay.addEventListener('touchend',   ()=>{ setTimeout(()=>{ tipG.style.display='none'; }, 1500); });
+  overlay.addEventListener('touchend',   ()=>{ setTimeout(hideTip, 1800); });
 }
 
 function setTimeAxis(axisId, dates){
