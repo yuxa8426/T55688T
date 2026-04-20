@@ -195,7 +195,7 @@
           <path id="pcrLine" fill="none" stroke="#7c5cfc" stroke-width="2" stroke-linejoin="round"/>
           <circle id="pcrDot" r="4" fill="#7c5cfc"/>
         </svg>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px" id="pcrTimeAxis"></div>
+        <div style="position:relative;height:14px;margin-top:2px" id="pcrTimeAxis"></div>
       </div>
       <!-- 多空區域標籤 -->
       <div style="display:flex;gap:6px;margin-bottom:12px">
@@ -244,7 +244,7 @@
           <path id="futLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
           <circle id="futDot" r="4" fill="#ff4c6a"/>
         </svg>
-        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px;padding:0 2px" id="futTimeAxis"></div>
+        <div style="position:relative;height:14px;margin-top:2px" id="futTimeAxis"></div>
       </div>
       <!-- 投信/自營商列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -317,8 +317,7 @@
           <circle id="shortDot"  r="3.5" fill="#00d4aa" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
         </svg>
         <!-- X 軸時間 -->
-        <div style="display:flex;justify-content:space-between;font-size:9px;
-                    color:var(--text3);margin-top:2px;padding:0 2px"
+        <div style="position:relative;height:14px;margin-top:2px"
              id="marginTimeAxis"></div>
       </div>
 
@@ -5013,11 +5012,45 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
 function setTimeAxis(axisId, dates){
   const el = document.getElementById(axisId);
   if(!el||!dates||!dates.length) return;
-  const picks = [0, Math.floor(dates.length*0.33), Math.floor(dates.length*0.66), dates.length-1];
-  el.innerHTML = picks.map(i=>{
-    const d = dates[Math.min(i,dates.length-1)]||'';
-    return `<span>${d.slice(5)||d}</span>`;
-  }).join('');
+
+  // SVG 座標系（與 drawMiniLine 相同）
+  const W=360, padL=42, padR=6;
+  const chartW = W - padL - padR; // 折線區域寬度
+
+  // 4個日期點（首/33%/66%/末）
+  const n = dates.length;
+  const picks = [0, Math.floor(n*0.33), Math.floor(n*0.66), n-1];
+
+  // 計算每個日期在折線區域中的 X 位置百分比
+  el.style.position = 'relative';
+  el.style.height   = '14px';
+  el.innerHTML = '';
+
+  picks.forEach(i => {
+    const d   = dates[Math.min(i, n-1)] || '';
+    const txt = d.slice(5) || d; // MM-DD
+    // 在折線區域中的比例
+    const ratio  = n > 1 ? i / (n-1) : 0;
+    // 換算為整個容器（含 padL）的百分比
+    const leftPct = (padL + ratio * chartW) / W * 100;
+
+    const span = document.createElement('span');
+    span.textContent = txt;
+    span.style.cssText = `
+      position:absolute;
+      left:${leftPct.toFixed(1)}%;
+      transform:translateX(-50%);
+      font-size:9px;
+      color:var(--text3);
+      white-space:nowrap;
+    `;
+    // 首個日期靠左對齊（避免超出左邊）
+    if(i === 0)   span.style.transform = 'translateX(0)';
+    // 末個日期靠右對齊（避免超出右邊）
+    if(i === n-1) span.style.transform = 'translateX(-100%)';
+
+    el.appendChild(span);
+  });
 }
 
 // ── ① 選擇權 PCR ─────────────────────────────────────
