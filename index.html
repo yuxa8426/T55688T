@@ -181,7 +181,7 @@
         </div>
       </div>
       <!-- PCR 折線圖 -->
-      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
+      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
         <svg id="pcrChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="pcrGrad" x1="0" y1="0" x2="0" y2="1">
@@ -231,7 +231,7 @@
         </div>
       </div>
       <!-- 期貨淨部位折線 -->
-      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
+      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
         <svg id="futChart" viewBox="0 0 360 90" preserveAspectRatio="none" style="width:100%;height:90px;display:block">
           <defs>
             <linearGradient id="futGrad" x1="0" y1="0" x2="0" y2="1">
@@ -300,7 +300,7 @@
       </div>
 
       <!-- 雙線圖 -->
-      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;border:1px solid var(--border);margin-bottom:8px">
+      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
         <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none"
              style="width:100%;height:90px;display:block">
           <defs>
@@ -4953,12 +4953,17 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
     try{ return JSON.parse(svg.dataset.dates||'[]'); }catch(e){ return []; }
   };
 
+  // 取得第二條線資料（融券等）
+  const getSecondary = () => {
+    try{ return JSON.parse(svg.dataset.secondary||'null'); }catch(e){ return null; }
+  };
+  const getSecondaryLabel = () => svg.dataset.secondaryLabel || '';
+
   function showTip(clientX, clientY){
     const rect = svg.getBoundingClientRect();
     const svgX = (clientX - rect.left) / rect.width * W;
     if(svgX < padL || svgX > W-padR){ tipG.style.display='none'; return; }
 
-    // 找最近的資料點
     const ratio  = (svgX - padL) / (W - padL - padR);
     const idx    = Math.max(0, Math.min(vals.length-1, Math.round(ratio*(vals.length-1))));
     const val    = vals[idx];
@@ -4967,37 +4972,80 @@ function drawMiniLine(svgId, lineId, fillId, dotId, vals, color, center=false){
     const dates  = getDates();
     const dateStr= dates[idx] ? dates[idx].slice(5) : '';
 
+    // 第二條線數值
+    const secondary = getSecondary();
+    const secLabel  = getSecondaryLabel();
+    const secVal    = secondary ? secondary[idx] : null;
+
     tipLine.setAttribute('x1',cx.toFixed(1)); tipLine.setAttribute('x2',cx.toFixed(1));
     tipCirc.setAttribute('cx',cx.toFixed(1)); tipCirc.setAttribute('cy',cy.toFixed(1));
     tipCirc.setAttribute('fill',color);
 
-    const valStr = fmt(val);
-    tipText.textContent = valStr;
-    tipDate.textContent = dateStr;
+    // ── 動態計算 tooltip 高度（有無第二條線）──────────────
+    const hasTwo  = secVal !== null && secVal !== undefined;
+    const boxW    = hasTwo ? 88 : 68;
+    const boxH    = hasTwo ? 52 : 36;
 
-    // tooltip 位置（避免超出邊界）
-    // tooltip 放大：boxW=68 boxH=36，顯示在游標上方
-    const boxW=68, boxH=36;
-    let bx = cx - boxW/2; // 水平置中於游標
-    if(bx < padL) bx = padL;
+    let bx = cx - boxW/2;
+    if(bx < padL)      bx = padL;
     if(bx+boxW > W-padR) bx = W-padR-boxW;
-    // 優先顯示在游標上方，若空間不足則在下方
-    let by = cy - boxH - 6;
+    let by = cy - boxH - 8;
     if(by < padT) by = cy + 8;
 
     tipRect.setAttribute('x', bx.toFixed(1));
     tipRect.setAttribute('y', by.toFixed(1));
     tipRect.setAttribute('width', boxW);
     tipRect.setAttribute('height', boxH);
-    // 日期（小字，上排）
+
+    // 日期（頂部）
     tipDate.setAttribute('x', (bx+boxW/2).toFixed(1));
-    tipDate.setAttribute('y', (by+13).toFixed(1));
+    tipDate.setAttribute('y', (by+11).toFixed(1));
     tipDate.setAttribute('text-anchor','middle');
-    // 數值（大字，下排）
+    tipDate.setAttribute('font-size','9');
+    tipDate.textContent = dateStr;
+
+    // 第一條線數值
     tipText.setAttribute('x', (bx+boxW/2).toFixed(1));
-    tipText.setAttribute('y', (by+27).toFixed(1));
+    tipText.setAttribute('y', (by+(hasTwo?23:25)).toFixed(1));
     tipText.setAttribute('text-anchor','middle');
-    tipText.setAttribute('font-size','12');
+    tipText.setAttribute('font-size','11');
+    tipText.setAttribute('fill',color);
+    tipText.textContent = fmt(val);
+
+    // ── 第二條線文字（動態新增）──────────────────────────
+    svg.querySelectorAll('.tip-secondary').forEach(e=>e.remove());
+    if(hasTwo){
+      // 分隔線
+      const sep = document.createElementNS('http://www.w3.org/2000/svg','line');
+      sep.setAttribute('x1',(bx+6).toFixed(1)); sep.setAttribute('x2',(bx+boxW-6).toFixed(1));
+      sep.setAttribute('y1',(by+30).toFixed(1)); sep.setAttribute('y2',(by+30).toFixed(1));
+      sep.setAttribute('stroke','rgba(255,255,255,.15)'); sep.setAttribute('stroke-width','1');
+      sep.classList.add('tip-secondary');
+      tipG.appendChild(sep);
+
+      // 第二條線標籤
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x',(bx+boxW/2).toFixed(1));
+      lbl.setAttribute('y',(by+39).toFixed(1));
+      lbl.setAttribute('text-anchor','middle');
+      lbl.setAttribute('font-size','9');
+      lbl.setAttribute('fill','rgba(255,255,255,.5)');
+      lbl.textContent = secLabel;
+      lbl.classList.add('tip-secondary');
+      tipG.appendChild(lbl);
+
+      // 第二條線數值
+      const sv = document.createElementNS('http://www.w3.org/2000/svg','text');
+      sv.setAttribute('x',(bx+boxW/2).toFixed(1));
+      sv.setAttribute('y',(by+49).toFixed(1));
+      sv.setAttribute('text-anchor','middle');
+      sv.setAttribute('font-size','11');
+      sv.setAttribute('font-weight','700');
+      sv.setAttribute('fill','#00d4aa');
+      sv.textContent = fmt(secVal);
+      sv.classList.add('tip-secondary');
+      tipG.appendChild(sv);
+    }
 
     tipG.style.display='';
   }
@@ -5293,7 +5341,11 @@ async function loadMarginData(){
   setEl('marginRatio',typeof ratio==='string'?ratio+'%':ratio+'%', parseFloat(ratio)>15?'var(--green)':parseFloat(ratio)<8?'var(--red)':'var(--gold)');
 
   const _margSvg = document.getElementById('marginChart');
-  if(_margSvg) _margSvg.dataset.dates = JSON.stringify(dates);
+  if(_margSvg){
+    _margSvg.dataset.dates         = JSON.stringify(dates);
+    _margSvg.dataset.secondary      = JSON.stringify(shortVals);    // 融券數值→tooltip用
+    _margSvg.dataset.secondaryLabel = '融券';                        // tooltip標籤
+  }
   drawMiniLine('marginChart','marginLine','marginFill','marginDot', margVals, '#ff4c6a');
   // 融券第二條線：使用與 drawMiniLine 相同的座標系（W=360,H=90,padL=42,padR=6,padT=10,padB=8）
   {
