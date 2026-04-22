@@ -1186,33 +1186,28 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="stratBtns">
       <button class="strat-btn active" onclick="selectStrat('A',this)" id="strat-A">
         <div class="strat-icon">🚀</div>
-        <div class="strat-name">策略 A</div>
-        <div class="strat-desc">極致動能</div>
+        <div class="strat-name" style="font-size:13px;font-weight:800;color:var(--red)">🚀 強勢動能</div>
         <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:4px">金流+消息面爆發</div>
       </button>
       <button class="strat-btn" onclick="selectStrat('B',this)" id="strat-B">
         <div class="strat-icon">📈</div>
-        <div class="strat-name">策略 B</div>
-        <div class="strat-desc">穩健成長</div>
+        <div class="strat-name" style="font-size:13px;font-weight:800;color:var(--green)">📈 穩健成長</div>
         <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:4px">獲利成長+避淡季</div>
       </button>
       <button class="strat-btn" onclick="selectStrat('C',this)" id="strat-C">
         <div class="strat-icon">💎</div>
-        <div class="strat-name">策略 C</div>
-        <div class="strat-desc">價值發現</div>
+        <div class="strat-name" style="font-size:13px;font-weight:800;color:var(--gold)">💎 低估價值</div>
         <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:4px">低PE+大戶建倉</div>
       </button>
       <button class="strat-btn" onclick="selectStrat('D',this)" id="strat-D">
         <div class="strat-icon">🔄</div>
-        <div class="strat-name">策略 D</div>
-        <div class="strat-desc">情緒反轉</div>
+        <div class="strat-name" style="font-size:13px;font-weight:800;color:var(--purple)">🌊 情緒反轉</div>
         <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:4px">恐慌底部+金流止跌</div>
       </button>
       <button class="strat-btn" onclick="selectStrat('E',this)" id="strat-E" style="grid-column:1/-1;display:flex;align-items:center;gap:14px;text-align:left;padding:16px 20px">
         <div class="strat-icon" style="margin-bottom:0;font-size:32px">⚖️</div>
         <div>
-          <div class="strat-name">策略 E</div>
-          <div class="strat-desc">風險平權</div>
+          <div class="strat-name" style="font-size:15px;font-weight:800">⚖️ 綜合平衡</div>
           <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:3px">整合前四策略・最小波動</div>
         </div>
       </button>
@@ -1239,7 +1234,7 @@
     <div style="margin-bottom:16px">
       <button onclick="toggleCustomStrat()" id="customStratToggle"
         style="width:100%;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:12px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:space-between">
-        <span>🛠️ 自訂策略指令（設計者模式）</span>
+        <span>✏️ 自訂選股條件</span>
         <span id="customStratArrow" style="font-size:14px;transition:transform .2s">▾</span>
       </button>
       <div id="customStratPanel" style="display:none;margin-top:6px;background:var(--card);border:1px solid rgba(245,200,66,.3);border-radius:12px;padding:14px;overflow:hidden">
@@ -1327,7 +1322,7 @@
         <!-- 執行按鈕 -->
         <button onclick="runCustomStratAnalysis()" id="customStratRunBtn"
           style="width:100%;padding:12px;background:linear-gradient(135deg,var(--gold),#c8960a);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit">
-          ⚡ 執行自訂策略回測
+          🔍 開始 AI 選股
         </button>
 
         <!-- 結果區 -->
@@ -1337,6 +1332,13 @@
 
     <!-- 本機回測統計 -->
     <div id="backtestPanel" style="display:none;margin-bottom:16px">
+      <!-- 最佳策略 Banner -->
+      <div id="bestStratBanner" style="display:none;margin-bottom:10px;padding:10px 14px;
+           background:linear-gradient(135deg,rgba(212,160,0,.12),rgba(124,92,252,.08));
+           border:1px solid rgba(212,160,0,.3);border-radius:10px">
+        <div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:2px">🏆 目前最佳策略</div>
+        <div id="bestStratText" style="font-size:13px;font-weight:800;color:var(--text)">—</div>
+      </div>
       <!-- 標題列 -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 策略評測比較</div>
@@ -1855,7 +1857,7 @@
 <nav class="nav">
   <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>分析</span></button>
   <button class="nav-btn" id="nb-explore" onclick="switchPage('explore')"><span>🔍</span><span>探索</span></button>
-  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>策略回測</span></button>
+  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>AI 選股</span></button>
   <button class="nav-btn" id="nb-portfolio" onclick="switchPage('portfolio')"><span>⚠️</span><span>警示</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
@@ -3148,11 +3150,9 @@ async function fetchTxfAfterHours(){
   const hh = now_tw.getHours(), mm = now_tw.getMinutes();
   const isNight = (hh >= 15) || (hh < 5); // 夜盤：15:00-05:00
 
-  // ── 夜盤：直接抓 WantGoo（前端瀏覽器直連）──────────────
+  // ── 夜盤：WTXP 開發中，暫停更新 ─────────────────────────
   if(isNight){
-    const wtxp = await _fetchWtxpFromWantgoo().catch(()=>null);
-    if(wtxp) return wtxp;
-    console.warn('[TXF] WantGoo WTXP failed, fallback to Worker /txf');
+    return { price:null, change:null, changePct:null, session:'夜盤', source:'DEV', date:'' };
   }
 
   // ── 日盤/收盤：透過 Worker /txf → TAIFEX CSV ─────────────
@@ -7861,7 +7861,13 @@ function updatePulse(instData, indexData, txfData){
   const txfEl    = document.getElementById('pmTxf');
   const txfNoteEl= document.getElementById('pmTxfNote');
   if(txfEl){
-    if(txfData?.price && txfData?.change!=null){
+    if(txfData?.source==='DEV'){
+      // 夜盤開發中：顯示佔位
+      if(txfEl){ txfEl.textContent='—'; txfEl.style.color='var(--text3)'; }
+      if(txfNoteEl) txfNoteEl.innerHTML='<span style="color:var(--gold);font-size:9px">🚧 夜盤行情開發中</span>';
+      const txfLabelEl2 = document.getElementById('pmTxfLabel');
+      if(txfLabelEl2) txfLabelEl2.textContent='台指期';
+    } else if(txfData?.price && txfData?.change!=null){
       const txfChg = txfData.change;
       // 主數字顯示漲跌點數
       txfEl.textContent = `${txfChg>=0?'▲':'▼'}${Math.abs(txfChg).toLocaleString()}pt`;
@@ -7875,7 +7881,7 @@ function updatePulse(instData, indexData, txfData){
         if(txfData.source==='WantGoo'||txfData.source==='TAIFEX夜盤'){
           _srcNote = ' · WTXP夜盤';
         } else if(_isNight){
-          _srcNote = ' · 日盤收(夜盤未提供)';
+          _srcNote = ' · 夜盤開發中';
         } else {
           _srcNote = ' · TX日盤';
         }
@@ -8080,6 +8086,32 @@ async function renderWLPanel(){
 function getWatchlist(){ return []; }
 function saveWatchlist(){}
 function addToWatchlist(){}
+
+// 個別加入自選股（AI 選股結果）
+function _addOneToWatchlist(id, name){
+  if(!id) return;
+  const key   = 'stockai_watchlist';
+  let wl      = [];
+  try{ wl = JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){}
+  const exists = wl.some(s=>(s.id||s.t||s)=== id);
+  if(exists){
+    showToast(`${name} 已在自選股`);
+    return;
+  }
+  wl.push({ id, t:id, n:name, addedAt: Date.now() });
+  localStorage.setItem(key, JSON.stringify(wl));
+  showToast(`✅ ${name} 已加入自選股`);
+  // 更新按鈕狀態
+  const btn = document.getElementById('wl-btn-'+id);
+  if(btn){
+    btn.textContent = '✓';
+    btn.style.background = 'rgba(0,212,170,.25)';
+    btn.style.borderColor = 'var(--green)';
+    btn.disabled = true;
+  }
+  // 同步到 KV
+  if(typeof kvSet==='function') kvSet('watchlist', wl).catch(()=>{});
+}
 function removeFromWatchlist(){}
 function renderWatchlist(){}
 async function renderHomeWatchlist(){
@@ -8695,7 +8727,7 @@ async function runStratAnalysis(){
 
   try{
     // ══ 第一步：全市場量化篩選 ══════════════════════════
-    _stratProgress(5, '正在取得全市場行情…', '📡', null);
+    _stratProgress(5, '步驟 1/4　正在取得全市場行情資料…', '📡', null);
     showToast('📡 連接 TWSE/TPEX 資料…', 3000);
 
     let scored = [];
@@ -8708,7 +8740,7 @@ async function runStratAnalysis(){
       const stockCount = Object.keys(fullQuant).length;
 
       if(stockCount >= 100){
-        _stratProgress(30, `量化計算 ${stockCount} 支分數…`, '🔢', '取得全市場資料');
+        _stratProgress(30, `步驟 2/4　量化計算 ${stockCount} 支候選股評分…`, '🔢', '✅ 取得全市場行情');
         // 全市場成功：對所有股票計算策略分數
         const allScored = Object.entries(fullQuant)
           .map(([id, data])=>({
@@ -8756,7 +8788,7 @@ async function runStratAnalysis(){
       return s.id+s.name+tag;
     }).join('、');
 
-    _stratProgress(55, `AI 正在從 ${top50.length} 支候選中選股…`, '🤖', `量化篩選 ${quantScopeLabel}`);
+    _stratProgress(55, `步驟 3/4　AI 從 ${top50.length} 支候選中精選…`, '🤖', `✅ 量化篩選完成`);
     runBtn.textContent = '⏳ AI 分析中…';
     showToast(`🤖 AI 從 ${quantScopeLabel} 篩選 ${top50.length} 支中選股…`, 3000);
 
@@ -8806,7 +8838,7 @@ async function runStratAnalysis(){
     // 本機回測修正
     const btSummary = getBacktestSummary(key);
 
-    _stratProgress(65, '收集市場背景資訊…', '📊', '市場數據');
+    _stratProgress(65, '步驟 3/4　收集市場背景資訊…', '📊', '✅ 候選股評分完成');
     // 組合完整 market context
     const market = [
       `分析日期：${new Date().toLocaleDateString('zh-TW')}`,
@@ -8842,7 +8874,7 @@ async function runStratAnalysis(){
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
 
-    _stratProgress(75, 'AI 模型分析中，請稍候…', '🧠', '建立分析指令');
+    _stratProgress(75, '步驟 3/4　AI 模型深度分析中…', '🧠', '✅ 市場背景資訊就緒');
 
     // 進度條假跑（AI 等待期間）
     let _progTimer = null;
@@ -8869,7 +8901,7 @@ async function runStratAnalysis(){
     const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
     if(!text) throw new Error('AI 無回應，請稍後重試');
 
-    _stratProgress(96, '解析 AI 回應…', '✨', 'AI 分析完成');
+    _stratProgress(96, '步驟 4/4　整理選股結果…', '✨', '✅ AI 分析完成');
     // 使用強健解析（6步容錯）
     const stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
@@ -8896,7 +8928,18 @@ async function runStratAnalysis(){
       const realWin  = btForStrat.winRate;   // null = 尚無實測
       const realTotal = btForStrat.total || 0;
 
-      return `<div class="sstock-card" onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
+      return `<div class="sstock-card" style="position:relative">
+        <!-- 個別加入自選 -->
+        <button onclick="event.stopPropagation();_addOneToWatchlist('${safeId}','${safe}')"
+          class="_add-wl-btn"
+          style="position:absolute;top:8px;right:8px;z-index:2;
+                 background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);
+                 border-radius:6px;color:var(--green);font-size:10px;font-weight:700;
+                 padding:3px 7px;cursor:pointer;font-family:inherit;
+                 -webkit-tap-highlight-color:transparent"
+          id="wl-btn-${safeId}">＋</button>
+        <div style="cursor:pointer;display:flex;align-items:center;gap:10px;flex:1;padding-right:36px"
+             onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
         <div class="sstock-rank">${i+1}</div>
         <div class="sstock-info">
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
@@ -8929,6 +8972,7 @@ async function runStratAnalysis(){
               <div style="width:${risk*10}%;height:100%;background:${riskColor};border-radius:2px"></div>
             </div>
           </div>
+        </div>
         </div>
       </div>`;
     }).join('');
@@ -9437,6 +9481,21 @@ function renderStratShowcase(){
   });
   const bestStrat = Object.values(byStrat).filter(s=>s.total>=3)
     .sort((a,b)=>(b.wins/b.total)-(a.wins/a.total))[0];
+
+  // 更新最佳策略 Banner
+  const banner   = document.getElementById('bestStratBanner');
+  const bannerTxt= document.getElementById('bestStratText');
+  if(banner && bannerTxt){
+    if(bestStrat && bestStrat.total >= 3){
+      const bwr = Math.round(bestStrat.wins/bestStrat.total*100);
+      const STRAT_NAMES = {A:'🚀 強勢動能',B:'📈 穩健成長',C:'💎 低估價值',D:'🌊 情緒反轉',E:'⚖️ 綜合平衡',WL:'⭐ 自選股追蹤'};
+      const nm = STRAT_NAMES[bestStrat.name] || bestStrat.name;
+      bannerTxt.textContent = `${nm}　勝率 ${bwr}%（${bestStrat.total} 筆記錄）`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
 
   const pcts   = verified.flatMap(r=>r.stocks.map(s=>s.pct7??s.pctM??null).filter(v=>v!=null));
   const avgPct = pcts.length>0 ? (pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1) : null;
@@ -10126,7 +10185,7 @@ async function runCustomStratAnalysis(){
     }
   }finally{
     runBtn.disabled=false;
-    runBtn.textContent='⚡ 執行自訂策略回測';
+    runBtn.textContent='🔍 開始 AI 選股';
   }
 }
 
