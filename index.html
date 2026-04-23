@@ -853,7 +853,7 @@
     <!-- ═══ 四大深度分析模組 ═══ -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:1px">🧬 深度分析模組</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:1px">🔬 進階 AI 深度分析</div>
         <div id="deepModuleProfileBadge" style="display:none;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(124,92,252,.12);color:#a080ff;border:1px solid rgba(124,92,252,.3)"></div>
       </div>
 
@@ -861,21 +861,21 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
         <button onclick="runDeepModule('causal')" class="deep-btn" id="btn-causal">
           <span style="font-size:16px">🔗</span>
-          <div><div style="font-size:12px;font-weight:700">因果鏈分析</div><div style="font-size:10px;color:var(--text3)">找出漲跌真正原因</div></div>
+          <div><div style="font-size:12px;font-weight:700">推測漲跌原因</div><div style="font-size:10px;color:var(--text3)">AI 推測可能的漲跌因素</div></div>
         </button>
         <button onclick="runDeepModule('stress')" class="deep-btn" id="btn-stress">
           <span style="font-size:16px">🧠</span>
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:5px">
-              <div style="font-size:12px;font-weight:700">心理壓力模擬</div>
+              <div style="font-size:12px;font-weight:700">風險承受模擬</div>
               <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(124,92,252,.15);color:#a080ff;font-weight:700">個人化</span>
             </div>
-            <div style="font-size:10px;color:var(--text3)">依風險偏好個性化分析</div>
+            <div style="font-size:10px;color:var(--text3)">依你的風險偏好量身分析</div>
           </div>
         </button>
         <button onclick="runDeepModule('altdata')" class="deep-btn" id="btn-altdata">
           <span style="font-size:16px">🛰️</span>
-          <div><div style="font-size:12px;font-weight:700">另類數據訊號</div><div style="font-size:10px;color:var(--text3)">供應鏈/產業另類指標</div></div>
+          <div><div style="font-size:12px;font-weight:700">推測法人關注指標</div><div style="font-size:10px;color:var(--text3)">推測法人關注的供應鏈指標</div></div>
         </button>
         <button onclick="runDeepModule('dynrisk')" class="deep-btn" id="btn-dynrisk">
           <span style="font-size:16px">⚡</span>
@@ -884,7 +884,7 @@
               <div style="font-size:12px;font-weight:700">動態倉位管理</div>
               <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(124,92,252,.15);color:#a080ff;font-weight:700">個人化</span>
             </div>
-            <div style="font-size:10px;color:var(--text3)">依資金規模計算部位</div>
+            <div style="font-size:10px;color:var(--text3)">依資金算出建議部位</div>
           </div>
         </button>
       </div>
@@ -1655,7 +1655,7 @@
       <span id="profCapitalTag" style="display:none;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid rgba(0,212,170,.35);background:rgba(0,212,170,.08);color:var(--green)"></span>
     </div>
     <div id="profLinkedHint" style="display:none;margin-top:8px;font-size:11px;color:var(--text3)">
-      ⚡ 此設定已連動 AI 深度分析模組
+      ⚡ 此設定已連動 AI 進階深度分析
     </div>
 
     <!-- ══ 帳號卡片（登入前/登入後兩種狀態）══ -->
@@ -3839,9 +3839,9 @@ async function loadLongTermData(){
 
 // 模組標題
 const DEEP_MODULE_META = {
-  causal:  { icon:'🔗', title:'因果鏈分析', color:'#f5c842' },
-  stress:  { icon:'🧠', title:'心理壓力模擬', color:'#a080ff' },
-  altdata: { icon:'🛰️', title:'另類數據訊號', color:'#4fc3f7' },
+  causal:  { icon:'🔗', title:'推測漲跌原因', color:'#f5c842' },
+  stress:  { icon:'🧠', title:'風險承受模擬', color:'#a080ff' },
+  altdata: { icon:'🛰️', title:'推測法人關注指標', color:'#4fc3f7' },
   dynrisk: { icon:'⚡', title:'動態倉位管理', color:'#ff7043' },
 };
 
@@ -4053,7 +4053,7 @@ RSI(14)：${ctx.rsi||'—'}
 
 ${stockInfo}
 
-## 🔗 因果鏈分析
+## 🔗 推測漲跌原因
 
 ### 技術面
 RSI與均線現況的直接觸發因素為何？用一句話說明。
@@ -4072,7 +4072,7 @@ RSI與均線現況的直接觸發因素為何？用一句話說明。
 ${stockInfo}
 ${userInfo}
 
-## 🧠 心理壓力模擬
+## 🧠 風險承受模擬
 
 ### 急跌-15%情境
 最可能犯的錯誤：==？==，對策：==？==
@@ -4089,7 +4089,7 @@ ${userInfo}
 
 ${stockInfo}
 
-## 🛰️ 另類數據訊號
+## 🛰️ 推測法人關注指標
 
 ### 3個最關鍵的供應鏈先行指標
 逐一列出：指標名稱、觀察方式、免費取得方法
