@@ -154,9 +154,10 @@
 
   <!-- Tab 切換列 -->
   <div style="display:flex;gap:0;margin:0 16px 12px;background:var(--card);border-radius:12px;padding:4px;border:1px solid var(--border)">
-    <button class="li-tab active" onclick="switchLeadingTab(this,'option')"  style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--purple);color:#fff">📊 選擇權</button>
-    <button class="li-tab"       onclick="switchLeadingTab(this,'futures')" style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:none;color:var(--text3)">📈 期貨籌碼</button>
-    <button class="li-tab"       onclick="switchLeadingTab(this,'margin')"  style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:none;color:var(--text3)">💳 融資融券</button>
+    <button class="li-tab active" onclick="switchLeadingTab(this,'option')"  style="flex:1;padding:7px 2px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--purple);color:#fff">📊 選擇權</button>
+    <button class="li-tab"       onclick="switchLeadingTab(this,'futures')" style="flex:1;padding:7px 2px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:none;color:var(--text3)">📈 期貨籌碼</button>
+    <button class="li-tab"       onclick="switchLeadingTab(this,'margin')"  style="flex:1;padding:7px 2px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:none;color:var(--text3)">💳 融資融券</button>
+    <button class="li-tab"       onclick="switchLeadingTab(this,'mxf')"    style="flex:1;padding:7px 2px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:none;color:var(--text3)">🎯 小台散戶</button>
   </div>
 
   <!-- ① 選擇權 PCR -->
@@ -298,6 +299,55 @@
           <div style="font-size:9px;margin-top:3px;color:var(--text3)">空頭力道指標</div>
         </div>
       </div>
+  <!-- ④ 小台散戶多空比 -->
+  <div id="li-mxf" class="li-panel" style="display:none">
+    <div class="leading-card">
+
+      <!-- 數值卡片列 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+        <!-- 散戶情緒 -->
+        <div style="background:rgba(245,200,66,.06);border:1px solid rgba(245,200,66,.25);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">散戶情緒</div>
+          <div style="font-size:22px;font-weight:800;line-height:1.1" id="mxfRetailSentiment">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="mxfRetailLabel">—</div>
+        </div>
+        <!-- 法人淨多口 -->
+        <div style="background:rgba(124,92,252,.06);border:1px solid rgba(124,92,252,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">法人淨多口</div>
+          <div style="font-size:18px;font-weight:800;color:var(--purple);line-height:1.1" id="mxfInstNet">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="mxfInstNetChg">日變化 —</div>
+        </div>
+        <!-- 趨勢方向 -->
+        <div style="background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">法人趨勢</div>
+          <div style="font-size:18px;font-weight:800;line-height:1.1" id="mxfTrend">—</div>
+          <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="mxfDate">—</div>
+        </div>
+      </div>
+
+      <!-- 說明文字 -->
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:6px 10px;
+                  background:rgba(255,255,255,.03);border-radius:8px;line-height:1.6">
+        💡 小台（MTX）法人淨多口為正 → 法人偏多，散戶慣與法人反向，偏空居多<br>
+        法人淨多口為負 → 法人偏空，散戶可能偏多方
+      </div>
+
+      <!-- 近20日棒狀圖 -->
+      <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;
+                  border:1px solid var(--border);margin-bottom:8px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">法人淨多口 近20日（千口）</div>
+        <div id="mxfBars" style="display:flex;align-items:flex-end;gap:3px;height:56px"></div>
+        <div id="mxfBarDates" style="position:relative;height:14px;margin-top:2px"></div>
+      </div>
+
+      <!-- AI 解讀 -->
+      <div class="li-analysis" id="mxfAnalysis">
+        <span class="purple">🤖 AI 解讀：</span>資料載入中…
+      </div>
+    </div>
+  </div>
+
+
 
       <!-- 雙線圖 -->
       <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
@@ -5031,6 +5081,7 @@ async function loadLeadingIndicators(manual=false){
     loadOptionData().catch(()=>renderOptionFallback()),
     loadFuturesData().catch(()=>renderFuturesFallback()),
     loadMarginData().catch(()=>renderMarginFallback()),
+    loadMxfData().catch(()=>{}),
   ]);
 }
 
@@ -5517,6 +5568,80 @@ function renderFuturesFallback(){
 // FinMind TaiwanStockTotalMarginPurchaseShortSale（全市場整體彙總）
 // 真實欄位: date, name('MarginPurchase'/'ShortSale'/'MarginPurchaseMoney'), TodayBalance, YesBalance
 // 每個日期有三筆資料，以 name 欄位區分種類
+// ── ④ 小台散戶多空比 ─────────────────────────────────────
+async function loadMxfData(){
+  const WORKER_BASE = (typeof API!=='undefined'&&API)?API.replace(/\/$/,''):'';
+  if(!WORKER_BASE) return;
+  try{
+    const r = await fetchWithTimeout(WORKER_BASE+'/mxf', 12000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    if(!d||!d.history?.length) throw new Error('no data');
+    const hist = d.history||[];
+
+    // 散戶情緒
+    const sentEl = document.getElementById('mxfRetailSentiment');
+    const lblEl  = document.getElementById('mxfRetailLabel');
+    if(sentEl){ sentEl.textContent=d.retailBull?'偏多':'偏空'; sentEl.style.color=d.retailBull?'var(--red)':'var(--green)'; }
+    if(lblEl)  lblEl.textContent = d.retailBull?'散戶多方居多':'散戶空方居多';
+
+    // 法人淨多口
+    const instEl = document.getElementById('mxfInstNet');
+    const chgEl  = document.getElementById('mxfInstNetChg');
+    if(instEl){ const k=d.instNetK; instEl.textContent=(k>=0?'+':'')+k+'K'; instEl.style.color=k>0?'var(--red)':k<0?'var(--green)':'var(--text2)'; }
+    if(chgEl && hist.length>=2){ const diff=hist[hist.length-1].instNetK-hist[hist.length-2].instNetK; chgEl.textContent='日變化 '+(diff>=0?'+':'')+diff.toFixed(1)+'K'; }
+
+    // 趨勢
+    const trendEl = document.getElementById('mxfTrend');
+    const dateEl  = document.getElementById('mxfDate');
+    const tMap = {bull:'🔺 增多',bear:'🔻 減多',neutral:'➡️ 持平'};
+    if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
+    if(dateEl) dateEl.textContent = d.date||'—';
+
+    // 棒狀圖（近20日法人淨多口）
+    const barsEl = document.getElementById('mxfBars');
+    if(barsEl && hist.length){
+      const vals   = hist.map(h=>h.instNetK);
+      const absMax = Math.max(...vals.map(Math.abs),1);
+      const H=56, midY=H/2;
+      barsEl.innerHTML = vals.map((v,i)=>{
+        const barH=Math.max(2,Math.abs(v)/absMax*(midY-2));
+        const isPos=v>=0;
+        const col=isPos?'var(--red)':'var(--green)';
+        return '<div style="flex:1;position:relative;height:'+H+'px">'
+          +'<div style="position:absolute;'+(isPos?'bottom:'+midY:'bottom:0')+'px;left:1px;right:1px;height:'+barH+'px;background:'+col+';border-radius:2px;opacity:.85"></div>'
+          +'</div>';
+      }).join('');
+      // 零軸
+      barsEl.style.borderBottom = '1px solid rgba(255,255,255,.15)';
+    }
+
+    // 日期軸
+    const dates = hist.map(h=>h.date);
+    setTimeAxis('mxfBarDates', dates);
+
+    // AI 解讀
+    const anaEl = document.getElementById('mxfAnalysis');
+    if(anaEl){
+      const sentStr  = d.retailBull?'偏多':'偏空';
+      const instStr  = (d.instNetK>=0?'+':'')+d.instNetK+'K口';
+      const trendStr = d.trend==='bull'?'持續增加多單':'減少多單';
+      const risk = d.retailBull&&d.trend==='bear'
+        ? '⚠️ 法人減多但散戶仍偏多，需留意反轉風險。'
+        : !d.retailBull&&d.trend==='bull'
+        ? '📌 法人增加多單、散戶偏空，多空分歧，留意突破方向。' : '';
+      anaEl.innerHTML = '<span class="purple">🤖 AI 解讀：</span>'
+        +'小台法人淨多 <strong>'+instStr+'</strong>，'+trendStr+'。'
+        +'散戶情緒判斷 <strong style="color:'+(d.retailBull?'var(--red)':'var(--green)')+'">'+sentStr+'</strong>。'
+        +(risk?'<br>'+risk:'')
+        +'<br><span style="font-size:10px;color:var(--text3)">資料：FinMind MXF法人 · '+d.date+'</span>';
+    }
+  }catch(e){
+    const anaEl = document.getElementById('mxfAnalysis');
+    if(anaEl) anaEl.innerHTML = '<span class="purple">🤖</span> 載入失敗：'+e.message;
+  }
+}
+
 async function loadMarginData(){
   const data = await fmFetch({
     dataset:    'TaiwanStockTotalMarginPurchaseShortSale',
