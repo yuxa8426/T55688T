@@ -391,10 +391,17 @@
   <!-- 警示股摘要（收納，點選才展開載入）-->
   <div class="sec" style="padding-bottom:6px">
     <h2>⚠️ 警示股</h2>
-    <button onclick="_toggleAlertSummary(this)"
-      style="font-size:12px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:600">
-      展開 ›
-    </button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="switchPage('portfolio')"
+        style="font-size:12px;color:var(--text3);background:none;border:none;cursor:pointer;font-family:inherit">
+        查看全部 →
+      </button>
+      <button onclick="_toggleAlertSummary(this)"
+        id="alertToggleBtn"
+        style="font-size:12px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:600">
+        展開 ›
+      </button>
+    </div>
   </div>
   <div id="alertSummaryPanel" style="display:none;margin-bottom:8px">
     <div id="alertSummaryContent" style="padding:0 16px">
@@ -407,6 +414,21 @@
 </div>
 </div>
 <div class="page" id="page-stock">
+  <!-- 個股搜尋欄（個股頁專用）-->
+  <div class="search" style="margin-top:12px">
+    <span style="color:var(--text3);font-size:18px">🔍</span>
+    <input type="text" id="stockSearchInput" placeholder="搜尋股票、ETF、指數…"
+           oninput="handleStockSearch(this.value)"
+           onfocus="this.parentElement.style.borderColor='var(--purple)'"
+           onblur="this.parentElement.style.borderColor='var(--border)'">
+    <button id="stockSearchClear" onclick="clearStockSearch()"
+      style="display:none;background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0">✕</button>
+  </div>
+  <!-- 個股搜尋結果 -->
+  <div id="stockSearchResults" style="display:none;margin:0 16px;background:var(--card);border-radius:12px;
+       border:1px solid var(--border);overflow:hidden;margin-top:-10px;margin-bottom:14px;z-index:100;position:relative">
+  </div>
+
   <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
   <div class="chart-card">
     <div class="chart-top">
@@ -2031,8 +2053,18 @@ function getUID(){
 function _parseJwt(token){
   try{
     const b64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-    return JSON.parse(atob(b64));
-  }catch(e){ return null; }
+    // 修正：用 decodeURIComponent 處理 UTF-8 中文名稱（atob 只支援 ASCII）
+    const json = decodeURIComponent(
+      atob(b64).split('').map(c=>
+        '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)
+      ).join('')
+    );
+    return JSON.parse(json);
+  }catch(e){
+    // fallback: 直接 atob
+    try{ return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    catch(e2){ return null; }
+  }
 }
 
 // Google One Tap callback（GSI 呼叫此函式）
@@ -6479,6 +6511,72 @@ function searchStocks(v, limit=8){
 
 // ── 主搜尋框（首頁）────────────────────────────────
 let searchTimer;
+// 個股頁搜尋（共用 searchStocks 邏輯，結果顯示在 stockSearchResults）
+let stockSearchTimer = null;
+function handleStockSearch(v){
+  clearTimeout(stockSearchTimer);
+  const el = document.getElementById('stockSearchResults');
+  const clearBtn = document.getElementById('stockSearchClear');
+  if(clearBtn) clearBtn.style.display = v ? 'block' : 'none';
+  if(!v.trim()){ el.style.display='none'; el.innerHTML=''; return; }
+
+  const m = searchStocks(v, 8);
+  if(!m.length){
+    const looksLikeCode = /^\d{4,6}$/.test(v.trim());
+    el.style.display='block';
+    if(looksLikeCode){
+      el.innerHTML = '<div onclick="pickStockPage(\''+v.trim()+'\',\''+v.trim()+'\')"'
+        +' style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;background:var(--card)">'
+        +'<div><div style="font-size:14px;font-weight:600">'+v.trim()+'</div>'
+        +'<div style="font-size:11px;color:var(--text3)">點擊直接查詢此代號</div></div>'
+        +'<div style="font-size:18px">→</div></div>';
+    } else {
+      el.innerHTML = '<div style="padding:14px 16px;color:var(--text2);font-size:13px">查無「'+v+'」，請確認代號或名稱</div>';
+    }
+    return;
+  }
+
+  el.style.display='block';
+  el.innerHTML = m.map(s=>
+    '<div onclick="pickStockPage(\''+s.n+'\',\''+s.t+'\')" id="ssr-'+s.t+'"'
+    +' style="display:flex;justify-content:space-between;align-items:center;'
+    +'padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:var(--card)">'
+    +'<div><div style="font-size:14px;font-weight:600">'+s.n+'</div>'
+    +'<div style="font-size:11px;color:var(--text2)">'+s.t+' · '+(s.s||'—')+'</div></div>'
+    +'<div id="ssrp-'+s.t+'" style="text-align:right;color:var(--text3);font-size:12px">—</div>'
+    +'</div>'
+  ).join('');
+
+  // 即時價格
+  stockSearchTimer = setTimeout(async ()=>{
+    for(const s of m){
+      const d = await fmQuote(s.t);
+      const el2 = document.getElementById('ssrp-'+s.t);
+      if(!el2||!d) continue;
+      const isUp = d.changePct >= 0;
+      el2.innerHTML = '<div style="font-size:14px;font-weight:700">'+fmt(d.price)+'</div>'
+        +'<div style="font-size:12px;font-weight:600;color:'+(isUp?'var(--red)':'var(--green)')+'">'+fmtPct(d.changePct)+'</div>';
+    }
+  }, 500);
+}
+
+function clearStockSearch(){
+  const inp = document.getElementById('stockSearchInput');
+  const el  = document.getElementById('stockSearchResults');
+  const btn = document.getElementById('stockSearchClear');
+  if(inp) inp.value = '';
+  if(el)  { el.style.display='none'; el.innerHTML=''; }
+  if(btn) btn.style.display = 'none';
+}
+
+async function pickStockPage(n, ticker){
+  // 清空搜尋欄
+  clearStockSearch();
+  const id = String(ticker).replace(/\.TW$/i,'');
+  const realName = (n&&n!==id) ? n : NAME_MAP[id]||STOCKS.find(s=>s.t===id)?.n||id;
+  await selectStock(null, realName, id+'.TW');
+}
+
 function onSearch(v){
   clearTimeout(searchTimer);
   const el = document.getElementById('searchResults');
