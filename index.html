@@ -5579,62 +5579,104 @@ async function loadMxfData(){
     if(!d||!d.history?.length) throw new Error('no data');
     const hist = d.history||[];
 
-    // 散戶情緒
+    // ── 散戶情緒 ────────────────────────────────────────────
     const sentEl = document.getElementById('mxfRetailSentiment');
     const lblEl  = document.getElementById('mxfRetailLabel');
     if(sentEl){ sentEl.textContent=d.retailBull?'偏多':'偏空'; sentEl.style.color=d.retailBull?'var(--red)':'var(--green)'; }
     if(lblEl)  lblEl.textContent = d.retailBull?'散戶多方居多':'散戶空方居多';
 
-    // 法人淨多口
+    // ── 法人淨多口 ───────────────────────────────────────────
     const instEl = document.getElementById('mxfInstNet');
     const chgEl  = document.getElementById('mxfInstNetChg');
     if(instEl){ const k=d.instNetK; instEl.textContent=(k>=0?'+':'')+k+'K'; instEl.style.color=k>0?'var(--red)':k<0?'var(--green)':'var(--text2)'; }
-    if(chgEl && hist.length>=2){ const diff=hist[hist.length-1].instNetK-hist[hist.length-2].instNetK; chgEl.textContent='日變化 '+(diff>=0?'+':'')+diff.toFixed(1)+'K'; }
+    if(chgEl && hist.length>=2){
+      const diff = hist[hist.length-1].instNetK - hist[hist.length-2].instNetK;
+      chgEl.textContent = '日變化 '+(diff>=0?'+':'')+diff.toFixed(1)+'K';
+      chgEl.style.color  = diff>0?'var(--red)':diff<0?'var(--green)':'var(--text3)';
+    }
 
-    // 趨勢
+    // ── 趨勢 ────────────────────────────────────────────────
     const trendEl = document.getElementById('mxfTrend');
     const dateEl  = document.getElementById('mxfDate');
     const tMap = {bull:'🔺 增多',bear:'🔻 減多',neutral:'➡️ 持平'};
     if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
     if(dateEl) dateEl.textContent = d.date||'—';
 
-    // 棒狀圖（近20日法人淨多口）
+    // ── 棒狀圖（近20日法人淨多口，紅=淨多/空方偏空，綠=淨空/散戶偏多）──
     const barsEl = document.getElementById('mxfBars');
     if(barsEl && hist.length){
       const vals   = hist.map(h=>h.instNetK);
-      const absMax = Math.max(...vals.map(Math.abs),1);
+      const absMax = Math.max(...vals.map(Math.abs), 1);
       const H=56, midY=H/2;
-      barsEl.innerHTML = vals.map((v,i)=>{
-        const barH=Math.max(2,Math.abs(v)/absMax*(midY-2));
-        const isPos=v>=0;
-        const col=isPos?'var(--red)':'var(--green)';
+      barsEl.style.cssText = 'display:flex;align-items:flex-end;gap:2px;height:'+H+'px;position:relative;border-bottom:1px solid rgba(255,255,255,.15)';
+      barsEl.innerHTML = vals.map(v=>{
+        const barH  = Math.max(2, Math.abs(v)/absMax*(midY-3));
+        const isPos = v >= 0;
+        const col   = isPos ? 'rgba(255,76,106,.85)' : 'rgba(0,212,170,.85)';
+        // 正值從中線往上，負值從中線往下
+        const bottom = isPos ? midY : (midY - barH);
         return '<div style="flex:1;position:relative;height:'+H+'px">'
-          +'<div style="position:absolute;'+(isPos?'bottom:'+midY:'bottom:0')+'px;left:1px;right:1px;height:'+barH+'px;background:'+col+';border-radius:2px;opacity:.85"></div>'
-          +'</div>';
+          + '<div style="position:absolute;left:1px;right:1px;'
+          + 'bottom:'+bottom+'px;height:'+barH+'px;'
+          + 'background:'+col+';border-radius:2px"></div>'
+          + '</div>';
       }).join('');
-      // 零軸
-      barsEl.style.borderBottom = '1px solid rgba(255,255,255,.15)';
+      // 零軸線
+      const zeroLine = document.createElement('div');
+      zeroLine.style.cssText = 'position:absolute;left:0;right:0;bottom:'+midY+'px;height:1px;background:rgba(255,255,255,.25);pointer-events:none';
+      barsEl.style.position = 'relative';
+      barsEl.appendChild(zeroLine);
     }
 
-    // 日期軸
-    const dates = hist.map(h=>h.date);
-    setTimeAxis('mxfBarDates', dates);
+    // ── 日期軸 ───────────────────────────────────────────────
+    setTimeAxis('mxfBarDates', hist.map(h=>h.date));
 
-    // AI 解讀
+    // ── 深度 AI 解讀（用真實數值分析）──────────────────────────
     const anaEl = document.getElementById('mxfAnalysis');
     if(anaEl){
-      const sentStr  = d.retailBull?'偏多':'偏空';
-      const instStr  = (d.instNetK>=0?'+':'')+d.instNetK+'K口';
-      const trendStr = d.trend==='bull'?'持續增加多單':'減少多單';
-      const risk = d.retailBull&&d.trend==='bear'
-        ? '⚠️ 法人減多但散戶仍偏多，需留意反轉風險。'
-        : !d.retailBull&&d.trend==='bull'
-        ? '📌 法人增加多單、散戶偏空，多空分歧，留意突破方向。' : '';
-      anaEl.innerHTML = '<span class="purple">🤖 AI 解讀：</span>'
-        +'小台法人淨多 <strong>'+instStr+'</strong>，'+trendStr+'。'
-        +'散戶情緒判斷 <strong style="color:'+(d.retailBull?'var(--red)':'var(--green)')+'">'+sentStr+'</strong>。'
-        +(risk?'<br>'+risk:'')
-        +'<br><span style="font-size:10px;color:var(--text3)">資料：FinMind MXF法人 · '+d.date+'</span>';
+      // 計算連續偏空/偏多天數
+      let bearDays=0, bullDays=0;
+      for(let i=hist.length-1;i>=0;i--){
+        if(hist[i].instNet<0) bearDays++; else break;
+      }
+      for(let i=hist.length-1;i>=0;i--){
+        if(hist[i].instNet>0) bullDays++; else break;
+      }
+
+      // 近5日平均淨多口
+      const last5avg = hist.slice(-5).reduce((s,h)=>s+h.instNet,0)/Math.min(5,hist.length);
+      const avgStr   = (last5avg>=0?'+':'')+Math.round(last5avg)+'口';
+
+      // 最大/最小值（近20日）
+      const netArr = hist.map(h=>h.instNet);
+      const maxNet = Math.max(...netArr), minNet = Math.min(...netArr);
+
+      // 判斷強弱：目前淨多口相對近20日範圍的位置（0~100%）
+      const range   = maxNet - minNet || 1;
+      const posScore= Math.round((d.instNet - minNet) / range * 100); // 0=最空, 100=最多
+      const posLabel= posScore >= 70 ? '法人偏多強勢'
+                    : posScore >= 50 ? '法人略偏多'
+                    : posScore >= 30 ? '法人略偏空'
+                    : '法人偏空強勢';
+
+      // 風險訊號
+      let riskMsg = '';
+      if(d.retailBull && bearDays >= 3)
+        riskMsg = '⚠️ 法人已連續 '+bearDays+' 日減多/偏空，但散戶仍偏多，歷史上此分歧往往預告下行風險。';
+      else if(!d.retailBull && bullDays >= 3)
+        riskMsg = '📌 法人已連續 '+bullDays+' 日增多，散戶偏空，法人持續買入，可關注多方機會。';
+      else if(Math.abs(d.instNet) > absMax*0.8)
+        riskMsg = '🔔 目前法人部位達近期極端值（'+(d.instNetK>=0?'+':'')+d.instNetK+'K），籌碼集中，留意反轉可能。';
+
+      anaEl.innerHTML =
+        '<span class="purple">🤖 AI 解讀：</span>'
+        +'小台（MTX）法人淨多 <strong style="color:'+(d.instNet>=0?'var(--red)':'var(--green)')+'">'+
+          (d.instNetK>=0?'+':'')+d.instNetK+'K口</strong>，'
+        +posLabel+'。'
+        +'近5日平均淨多 <strong>'+avgStr+'</strong>，'
+        +'散戶情緒 <strong style="color:'+(d.retailBull?'var(--red)':'var(--green)')+'">'+(d.retailBull?'偏多':'偏空')+'</strong>。'
+        +(riskMsg?'<br><span style="margin-top:4px;display:inline-block">'+riskMsg+'</span>':'')
+        +'<br><span style="font-size:10px;color:var(--text3)">資料：FinMind MTX小型臺指三大法人 · '+d.date+' · 散戶情緒為反向推算</span>';
     }
   }catch(e){
     const anaEl = document.getElementById('mxfAnalysis');
