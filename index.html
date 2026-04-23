@@ -387,8 +387,26 @@
     <div class="idx"><div class="n">那斯達克</div><div class="v" id="idx-nasdaq">—</div><div class="c" id="idx-nasdaq-c">—</div></div>
     <div class="idx"><div class="n">費城半導</div><div class="v" id="idx-sox">—</div><div class="c" id="idx-sox-c">—</div></div>
     <div class="idx"><div class="n">VIX</div><div class="v" id="idx-vix">—</div><div class="c" id="idx-vix-c">—</div></div>
+  
+  <!-- 警示股摘要（收納，點選才展開載入）-->
+  <div class="sec" style="padding-bottom:6px">
+    <h2>⚠️ 警示股</h2>
+    <button onclick="_toggleAlertSummary(this)"
+      style="font-size:12px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit;font-weight:600">
+      展開 ›
+    </button>
+  </div>
+  <div id="alertSummaryPanel" style="display:none;margin-bottom:8px">
+    <div id="alertSummaryContent" style="padding:0 16px">
+      <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">
+        點擊「展開」載入警示股資料
+      </div>
+    </div>
   </div>
 
+</div>
+</div>
+<div class="page" id="page-stock">
   <div class="sec"><h2 id="chartTitle">台積電 走勢圖</h2></div>
   <div class="chart-card">
     <div class="chart-top">
@@ -1074,6 +1092,8 @@
 </div>
 
 <!-- ═══ PAGE: 探索 ═══ -->
+</div>
+
 <div class="page" id="page-explore">
   <div class="header"><div><h1>探索</h1><p>市場全覽與族群分析</p></div></div>
   <div style="padding:0 16px">
@@ -1953,7 +1973,7 @@
   <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>分析</span></button>
   <button class="nav-btn" id="nb-explore" onclick="switchPage('explore')"><span>🔍</span><span>探索</span></button>
   <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>AI 選股</span></button>
-  <button class="nav-btn" id="nb-portfolio" onclick="switchPage('portfolio')"><span>⚠️</span><span>警示</span></button>
+  <button class="nav-btn" id="nb-stock" onclick="switchPage('stock')"><span>📈</span><span>個股</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
 <div class="toast" id="toast"></div>
@@ -2421,6 +2441,8 @@ let currentPeriod = '1D';
 function switchPage(n){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  // 個股頁特殊處理：用同一個 nav-btn nb-stock 對應
+  const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
   document.getElementById('page-'+n).classList.add('active');
   document.getElementById('nb-'+n).classList.add('active');
   window.scrollTo(0,0);
@@ -8404,6 +8426,64 @@ function getWatchlist(){ return []; }
 function saveWatchlist(){}
 function addToWatchlist(){}
 
+// ── 警示股摘要（大盤頁收納，點選才載入）─────────────────
+let _alertSummaryLoaded = false;
+function _toggleAlertSummary(btn){
+  const panel = document.getElementById('alertSummaryPanel');
+  if(!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  btn.textContent = isOpen ? '展開 ›' : '收起 ‹';
+  if(!isOpen && !_alertSummaryLoaded){
+    _alertSummaryLoaded = true;
+    _loadAlertSummary();
+  }
+}
+
+async function _loadAlertSummary(){
+  const el = document.getElementById('alertSummaryContent');
+  if(!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">載入中…</div>';
+  try{
+    // 直接呼叫既有的警示頁資料函式（若已有快取則立即渲染）
+    if(typeof loadPortfolioData === 'function'){
+      await loadPortfolioData(true);
+    }
+    // 從 portfolio 頁擷取已渲染的結果顯示簡要
+    const alertItems = document.querySelectorAll('#page-portfolio .acard');
+    if(!alertItems.length){
+      el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">目前無警示股</div>';
+      return;
+    }
+    // 只顯示前5筆
+    const summary = Array.from(alertItems).slice(0,5).map(item=>{
+      const name  = item.querySelector('.acard-name')?.textContent||'—';
+      const id    = item.querySelector('.acard-id')?.textContent||'';
+      const price = item.querySelector('.ap')?.textContent||'—';
+      const chg   = item.querySelector('.ac')?.textContent||'';
+      const warn  = item.querySelector('.acard-warn')?.textContent||'';
+      const chgCls = chg.includes('-')?'color:var(--green)':'color:var(--red)';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;'
+        +'padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" '
+        +'onclick="switchPage(\'portfolio\')">'
+        +'<div><div style="font-size:13px;font-weight:700">'+name+'</div>'
+        +'<div style="font-size:10px;color:var(--text3)">'+id+'</div>'
+        +(warn?'<div style="font-size:10px;color:var(--gold);margin-top:2px">'+warn.slice(0,30)+'</div>':'')
+        +'</div>'
+        +'<div style="text-align:right"><div style="font-size:14px;font-weight:700">'+price+'</div>'
+        +'<div style="font-size:12px;font-weight:600;'+chgCls+'">'+chg+'</div></div>'
+        +'</div>';
+    }).join('');
+    el.innerHTML = summary
+      +'<div style="text-align:center;padding:10px 0;font-size:12px">'
+      +'<button onclick="switchPage(\'portfolio\')" style="background:none;border:1px solid var(--border);'
+      +'border-radius:8px;padding:6px 16px;color:var(--text2);cursor:pointer;font-family:inherit">查看全部 →</button>'
+      +'</div>';
+  }catch(e){
+    el.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px">載入失敗，請稍後再試</div>';
+  }
+}
+
 // 個別加入自選股（AI 選股結果）
 function _addOneToWatchlist(id, name){
   if(!id) return;
@@ -9256,7 +9336,7 @@ async function runStratAnalysis(){
                  -webkit-tap-highlight-color:transparent"
           id="wl-btn-${safeId}">＋</button>
         <div style="cursor:pointer;display:flex;align-items:center;gap:10px;flex:1;padding-right:36px"
-             onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('home')">
+             onclick="selectStock(null,'${safe}','${safeId}.TW');switchPage('stock')">
         <div class="sstock-rank">${i+1}</div>
         <div class="sstock-info">
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
@@ -10479,7 +10559,7 @@ async function runCustomStratAnalysis(){
       const safe      = (s.name||'').replace(/'/g,"\'");
       const safeId    = (s.id||'').replace(/'/g,"\'");
       const winColor  = win>=65?'var(--red)':win>=50?'var(--gold)':'var(--text3)';
-      return '<div class="sstock-card" onclick="selectStock(null,\''+safe+'\',\''+safeId+'.TW\');switchPage(\'home\')">'
+      return '<div class="sstock-card" onclick="selectStock(null,\''+safe+'\',\''+safeId+'.TW\');switchPage(\'stock\')">'
         +'<div class="sstock-rank">'+(i+1)+'</div>'
         +'<div class="sstock-info">'
           +'<div class="sstock-name">'+(s.id||'')+' '+(s.name||'')+' <span style="font-size:10px;color:var(--text3)">'+(s.sector||'')+'</span></div>'
@@ -12100,7 +12180,7 @@ function renderHistoryList(){
         (s.name||'').toLowerCase().includes(_historySearch)
       );
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer${highlight?';background:rgba(245,200,66,.06);margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:4px':''}"
-        onclick="selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('home')">
+        onclick="selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('stock')">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
           <span style="font-size:14px;flex-shrink:0">${resIcon}</span>
           <div style="min-width:0">
@@ -12124,7 +12204,7 @@ function renderHistoryList(){
           const col = res==='win'?'rgba(255,76,106,.2)':res==='loss'?'rgba(0,212,170,.2)':res==='flat'?'rgba(245,200,66,.2)':'rgba(255,255,255,.06)'; // 已正確：紅底=勝
           const textCol = res==='win'?'var(--red)':res==='loss'?'var(--green)':res==='flat'?'var(--gold)':'var(--text3)'; // 已正確：紅=勝
           return `<div style="font-size:10px;padding:2px 6px;border-radius:4px;background:${col};color:${textCol};cursor:pointer"
-            onclick="event.stopPropagation();selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('home')">${s.id}</div>`;
+            onclick="event.stopPropagation();selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');closeHistoryModal();switchPage('stock')">${s.id}</div>`;
         }).join('')}
         ${r.stocks.length>8?`<div style="font-size:10px;color:var(--text3);padding:2px 4px">+${r.stocks.length-8}</div>`:''}
       </div>` : '';
