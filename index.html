@@ -299,6 +299,38 @@
           <div style="font-size:9px;margin-top:3px;color:var(--text3)">空頭力道指標</div>
         </div>
       </div>
+
+
+
+      <!-- 雙線圖 -->
+      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
+        <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none"
+             style="width:100%;height:90px;display:block">
+          <defs>
+            <linearGradient id="margGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".15"/>
+              <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="marginFill" fill="url(#margGrad)"/>
+          <path id="marginLine" fill="none" stroke="#ff4c6a" stroke-width="2.2" stroke-linejoin="round"/>
+          <path id="shortLine"  fill="none" stroke="#00d4aa" stroke-width="1.8"
+                stroke-linejoin="round" stroke-dasharray="5,3"/>
+          <circle id="marginDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
+          <circle id="shortDot"  r="3.5" fill="#00d4aa" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
+        </svg>
+        <!-- X 軸時間 -->
+        <div style="position:relative;height:14px;margin-top:2px"
+             id="marginTimeAxis"></div>
+      </div>
+
+      <!-- AI 解讀 -->
+      <div class="li-analysis" id="marginAnalysis">
+        <span class="purple">🤖 AI 解讀：</span>資料載入中…
+      </div>
+    </div>
+  </div>
+
   <!-- ④ 小台散戶多空比 -->
   <div id="li-mxf" class="li-panel" style="display:none">
     <div class="leading-card">
@@ -347,36 +379,6 @@
     </div>
   </div>
 
-
-
-      <!-- 雙線圖 -->
-      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:6px 6px 4px 0;border:1px solid var(--border);margin:0 -4px 8px -16px">
-        <svg id="marginChart" viewBox="0 0 360 90" preserveAspectRatio="none"
-             style="width:100%;height:90px;display:block">
-          <defs>
-            <linearGradient id="margGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".15"/>
-              <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
-            </linearGradient>
-          </defs>
-          <path id="marginFill" fill="url(#margGrad)"/>
-          <path id="marginLine" fill="none" stroke="#ff4c6a" stroke-width="2.2" stroke-linejoin="round"/>
-          <path id="shortLine"  fill="none" stroke="#00d4aa" stroke-width="1.8"
-                stroke-linejoin="round" stroke-dasharray="5,3"/>
-          <circle id="marginDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
-          <circle id="shortDot"  r="3.5" fill="#00d4aa" stroke="rgba(255,255,255,.3)" stroke-width="1"/>
-        </svg>
-        <!-- X 軸時間 -->
-        <div style="position:relative;height:14px;margin-top:2px"
-             id="marginTimeAxis"></div>
-      </div>
-
-      <!-- AI 解讀 -->
-      <div class="li-analysis" id="marginAnalysis">
-        <span class="purple">🤖 AI 解讀：</span>資料載入中…
-      </div>
-    </div>
-  </div>
 
   <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
   <div class="index-row">
