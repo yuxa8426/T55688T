@@ -4828,10 +4828,12 @@ function drawCandlestick(histData, period){
   const low   = histData.low   || [];
   const close = histData.close || [];
   const dates = histData.dates || [];
+  const n     = close.length;
+  if(!n) return;
   const vols  = histData.volume|| [];
 
   // 依週期截取資料
-  const n = period==='1M' ? 22 : 65; // 月=22交易日，季=65交易日
+  const nDisplay = period==='1M' ? 22 : period==='3M' ? 65 : period==='6M' ? 130 : 250; // 各週期顯示根數
   const sl  = i => i.slice(-n);
   const O = sl(open), H = sl(high), L = sl(low), C = sl(close);
   const D = sl(dates), V = sl(vols);
@@ -5275,7 +5277,10 @@ function renderMktBars(){ renderMktBarsStatic(); }
 // ── 時間軸 Tab 切換 ───────────────────────────────────
 // 1D: Yahoo Finance 分鐘K | 其他: FinMind 日K
 // TAB_DAYS: 日K 抓取天數（1M=1個月交易日約30天實際45天）
-const TAB_DAYS = {'1D':1,'1M':45,'3M':95};
+// 各週期對應取幾天歷史資料
+const TAB_DAYS = {'1D':1,'1W':10,'1M':45,'3M':95,'6M':185,'1Y':365};
+// 哪些週期用 K 線（其餘用折線）
+const TAB_KLINE = {'1M':true,'3M':true,'6M':true,'1Y':true};
 
 async function setTab(btn, period){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -5283,19 +5288,19 @@ async function setTab(btn, period){
   currentPeriod = period;
   setLoading('chartSvg', true);
 
-  const sid = currentTicker.replace('.TW','');
+  const sid  = currentTicker.replace('.TW','');
+  const isUp_fallback = true;
 
+  // ── 1日：折線（分鐘K）────────────────────────────────
   if(period === '1D'){
-    // ── 1日：分鐘K ──────────────────────────────────────
     const intra = await fetchIntraday(sid);
     setLoading('chartSvg', false);
     if(intra && intra.pts.length > 2){
-      const first = intra.pts[0], last = intra.pts[intra.pts.length-1];
+      const first=intra.pts[0], last=intra.pts[intra.pts.length-1];
       const isUp = last >= first;
       drawChart(intra.pts, isUp?'#ff4c6a':'#00d4aa', intra.times, '1D');
-      showToast('📈 分鐘K · ' + intra.pts.length + ' 筆');
     } else {
-      // fallback：用日K最近5日
+      // fallback：最近5日日K折線
       const h = await fmHistory(sid, 10);
       setLoading('chartSvg', false);
       const pts = (h?.close||[]).filter(v=>v!=null&&!isNaN(v)).slice(-5);
@@ -5306,22 +5311,37 @@ async function setTab(btn, period){
         showToast('⚠️ 分鐘K不可用，顯示近5日');
       } else { drawFallbackChart(true); }
     }
-  } else {
-    // ── 月/季：K 線圖 ──────────────────────────────────
-    const days = period==='1M' ? 45 : 95;
-    const histData = await fmHistory(sid, days);
+    return;
+  }
+
+  // ── 1週：折線（近7日日K）──────────────────────────────
+  if(period === '1W'){
+    const h = await fmHistory(sid, 10);
     setLoading('chartSvg', false);
-    if(histData?.close?.length > 1){
-      drawCandlestick(histData, period);
-      // 更新成交量（K 線模式）
-      renderVolBars(
-        histData.close[histData.close.length-1] >= histData.close[0],
-        histData
-      );
-    } else {
-      drawFallbackChart(true);
-      showToast('⚠️ 此期間資料不足');
-    }
+    if(h?.close?.length > 1){
+      const pts   = (h.close||[]).filter(v=>v!=null&&!isNaN(v)).slice(-7);
+      const dts   = (h.dates||[]).slice(-7);
+      const isUp  = pts[pts.length-1] >= pts[0];
+      drawChart(pts, isUp?'#ff4c6a':'#00d4aa', dts);
+      renderVolBars(isUp, { close:pts, volume:(h.volume||[]).slice(-7), dates:dts });
+    } else { drawFallbackChart(true); showToast('⚠️ 週線資料不足'); }
+    return;
+  }
+
+  // ── 月/季/半年/年：K 線圖（OHLC）─────────────────────
+  const daysMap = {'1M':45,'3M':95,'6M':185,'1Y':370};
+  const days = daysMap[period] || 95;
+  const histData = await fmHistory(sid, days);
+  setLoading('chartSvg', false);
+  if(histData?.close?.length > 1){
+    drawCandlestick(histData, period);
+    renderVolBars(
+      histData.close[histData.close.length-1] >= histData.close[0],
+      histData
+    );
+  } else {
+    drawFallbackChart(true);
+    showToast('⚠️ 此期間資料不足');
   }
 }
 
