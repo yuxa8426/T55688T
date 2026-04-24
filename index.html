@@ -144,6 +144,119 @@
       </div>
     </div>
   </div>
+  <!-- 加權指數走勢圖 + 成交量 -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <!-- 標題列 -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">加權指數</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
+          <span id="taiexChartPrice" style="font-size:22px;font-weight:800">—</span>
+          <span id="taiexChartChg" style="font-size:13px;font-weight:700">—</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px" id="taiexPeriodTabs">
+        <button onclick="_taiexTab('1D',this)" class="tab active" style="font-size:11px;padding:4px 8px">今日</button>
+        <button onclick="_taiexTab('1W',this)" class="tab" style="font-size:11px;padding:4px 8px">週</button>
+        <button onclick="_taiexTab('1M',this)" class="tab" style="font-size:11px;padding:4px 8px">月</button>
+      </div>
+    </div>
+
+    <!-- 走勢圖 SVG -->
+    <div style="position:relative">
+      <svg id="taiexChartArea" width="100%" height="120"
+           viewBox="0 0 400 120" preserveAspectRatio="none"
+           style="display:block;overflow:visible">
+        <defs>
+          <linearGradient id="taiexGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- 格線 -->
+        <line x1="0" x2="400" y1="40" y2="40" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="0" x2="400" y1="80" y2="80" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <!-- 填充 + 折線（JS 填入）-->
+        <path id="taiexFill" fill="url(#taiexGrad)"/>
+        <path id="taiexLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
+        <circle id="taiexDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
+        <!-- tooltip 準線 -->
+        <line id="taiexTipLine" y1="0" y2="120" stroke="rgba(255,255,255,.3)"
+              stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
+        <circle id="taiexTipDot" r="4" fill="#ff4c6a" style="display:none"/>
+      </svg>
+      <!-- HTML tooltip -->
+      <div id="taiexHtmlTip" style="display:none;position:absolute;pointer-events:none;z-index:10;
+           background:rgba(12,12,24,.96);border:1.5px solid #ff4c6a;border-radius:8px;
+           padding:5px 10px;font-size:11px;color:#fff;white-space:nowrap;font-weight:700"></div>
+      <!-- 載入中 -->
+      <div id="taiexChartLoading" style="position:absolute;inset:0;display:flex;align-items:center;
+           justify-content:center;color:var(--text3);font-size:12px;background:transparent">
+        載入中…
+      </div>
+    </div>
+
+    <!-- 時間軸 -->
+    <div id="taiexTimeAxis" style="display:flex;justify-content:space-between;
+         font-size:9px;color:var(--text3);margin-top:3px;padding:0 2px"></div>
+
+    <!-- 成交量 -->
+    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px">成交量</span>
+        <span id="taiexVolLabel" style="font-size:12px;font-weight:700">—</span>
+      </div>
+      <div id="taiexVolBars" style="display:flex;align-items:flex-end;gap:2px;height:40px"></div>
+      <div id="taiexVolAxis" style="display:flex;justify-content:space-between;
+           font-size:9px;color:var(--text3);margin-top:2px"></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <span id="taiexUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+      <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
+    </div>
+  </div>
+
+  <!-- 加權指數走勢圖 -->
+  <div class="chart-card" id="taiexChartCard" style="margin:0 16px 14px">
+    <div class="chart-top">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <h3 style="font-size:16px" id="taiexChartTitle">加權指數</h3>
+          <span id="taiexChartBadge" style="display:none;font-size:10px;padding:2px 7px;border-radius:5px;font-weight:700;background:rgba(255,76,106,.12);color:var(--red)"></span>
+        </div>
+        <p id="taiexChartSub" style="font-size:12px;color:var(--text2);margin-top:2px">—</p>
+      </div>
+      <!-- 時間週期切換 -->
+      <div class="tabs" id="taiexTabs">
+        <button class="tab active" onclick="switchTaiexPeriod('1D',this)">1日</button>
+        <button class="tab" onclick="switchTaiexPeriod('1W',this)">週</button>
+        <button class="tab" onclick="switchTaiexPeriod('1M',this)">月</button>
+        <button class="tab" onclick="switchTaiexPeriod('3M',this)">季</button>
+      </div>
+    </div>
+    <!-- 走勢圖 -->
+    <svg id="taiexChartArea" class="chart-area" style="height:130px;cursor:crosshair"></svg>
+    <div id="taiexChartTooltip" style="display:none;position:absolute;background:rgba(20,20,35,.95);
+         border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;
+         pointer-events:none;z-index:10;white-space:nowrap;transform:translateX(-50%)">
+      <div id="taiexTipTime" style="color:var(--text3);font-size:10px"></div>
+      <div id="taiexTipPrice" style="font-weight:700;font-size:14px"></div>
+      <div id="taiexTipChg" style="font-size:11px;font-weight:600"></div>
+    </div>
+    <div id="taiexChartTime" class="chart-time"></div>
+    <!-- 成交量 -->
+    <div class="vol-sec" id="taiexVolSec" style="display:none">
+      <div class="vol-head">
+        <span>📊 成交量</span>
+        <span id="taiexVolText" style="font-size:13px;font-weight:700">—</span>
+      </div>
+      <div class="vol-bars" id="taiexVolBars"></div>
+      <div class="vol-dates" id="taiexVolDates"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px" id="taiexUpdateTime"></div>
+  </div>
+
   <!-- 警示股快速入口（收納式，不主動載入）-->
   <div style="margin:0 16px 12px">
     <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
@@ -429,9 +542,10 @@
 </div>
 </div>
 <div class="page" id="page-stock">
-  <!-- 個股搜尋欄（個股頁專用）-->
-  <div style="margin:12px 16px 0">
-    <div class="search" style="margin:0 0 0 0;border-radius:12px"
+  <!-- 個股搜尋欄（sticky 固定頂部，不被鍵盤遮擋）-->
+  <div style="position:sticky;top:0;z-index:50;background:var(--bg);
+              padding:10px 16px 0;margin:0 0 0 0">
+    <div class="search" style="margin:0;border-radius:12px"
          onclick="document.getElementById('stockSearchInput').focus()">
       <span style="color:var(--text3);font-size:18px">🔍</span>
       <input type="text" id="stockSearchInput" placeholder="搜尋股票、ETF、指數…"
@@ -5161,6 +5275,158 @@ function switchLeadingTab(btn, panel){
 }
 
 // 主載入入口（初始化 + 手動重整）
+// ══════════════════════════════════════════════════════
+// 加權指數走勢圖 + 成交量（大盤頁）
+// ══════════════════════════════════════════════════════
+let _taiexPeriod = '1D';
+let _taiexData   = { '1D':null, '1W':null, '1M':null };
+
+function _taiexTab(period, btn){
+  _taiexPeriod = period;
+  document.querySelectorAll('#taiexPeriodTabs .tab').forEach(b=>{
+    b.className = b===btn ? 'tab active' : 'tab';
+  });
+  _renderTaiexChart();
+}
+
+async function loadTaiexChart(){
+  const loadEl = document.getElementById('taiexChartLoading');
+  try{
+    if(API){
+      const r = await fetchWithTimeout(
+        `${API}/intraday?symbol=${encodeURIComponent('tse_t00.tw')}&src=twse`, 10000);
+      if(r.ok){
+        const body = await r.json();
+        if(body?.pts?.length > 2){
+          _taiexData['1D'] = { pts:body.pts, times:body.times||[], vol:body.vol||[] };
+        }
+      }
+    }
+  }catch(e){}
+
+  try{
+    const histData = await fmFetch({
+      dataset:'TaiwanStockPrice', data_id:'TAIEX',
+      start_date:nDaysAgo(35), end_date:nDaysAgo(0),
+    });
+    if(histData?.length >= 5){
+      const rows = histData;
+      const weekRows  = rows.slice(-7);
+      const monthRows = rows.slice(-22);
+      const toRow = r => ({ close:parseFloat(r.close||r.Close||0), vol:parseInt(r.Trading_Volume||r.volume||0), date:(r.date||r.Date||'').slice(5) });
+      const mapRows = arr => arr.map(toRow).filter(r=>r.close>0);
+
+      const wd = mapRows(weekRows);
+      _taiexData['1W'] = { pts:wd.map(r=>r.close), times:wd.map(r=>r.date), vol:wd.map(r=>r.vol) };
+      const md = mapRows(monthRows);
+      _taiexData['1M'] = { pts:md.map(r=>r.close), times:md.map(r=>r.date), vol:md.map(r=>r.vol) };
+
+      if(!_taiexData['1D'] || _taiexData['1D'].pts.length < 2){
+        const d5 = mapRows(rows.slice(-5));
+        _taiexData['1D'] = { pts:d5.map(r=>r.close), times:d5.map(r=>r.date), vol:d5.map(r=>r.vol) };
+      }
+    }
+  }catch(e){}
+
+  if(loadEl) loadEl.style.display = 'none';
+  _renderTaiexChart();
+}
+
+function _renderTaiexChart(){
+  const data = _taiexData[_taiexPeriod];
+  const loadEl = document.getElementById('taiexChartLoading');
+  if(!data?.pts?.length){
+    if(loadEl){ loadEl.style.display='flex'; loadEl.textContent='資料暫時無法取得'; }
+    return;
+  }
+
+  const pts  = data.pts, vols = data.vol||[], times = data.times||[];
+  const isUp = pts[pts.length-1] >= pts[0];
+  const color = isUp ? '#ff4c6a' : '#00d4aa';
+  const W=400, H=120, padT=10, padB=10;
+  const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
+  const toX = i => i/(Math.max(pts.length-1,1))*W;
+  const toY = v => H-padB-((v-mn)/rng)*(H-padT-padB);
+  const coords = pts.map((v,i)=>[toX(i),toY(v)]);
+  const pathD = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+
+  // 更新漸層
+  const stop0 = document.querySelector('#taiexGrad stop:first-child');
+  if(stop0) stop0.setAttribute('stop-color', color);
+
+  const fillEl = document.getElementById('taiexFill');
+  const lineEl = document.getElementById('taiexLine');
+  const dotEl  = document.getElementById('taiexDot');
+  if(fillEl) fillEl.setAttribute('d', pathD+` L${W},${H} L0,${H} Z`);
+  if(lineEl){ lineEl.setAttribute('d',pathD); lineEl.setAttribute('stroke',color); }
+  const last = coords[coords.length-1];
+  if(dotEl){ dotEl.setAttribute('cx',last[0].toFixed(1)); dotEl.setAttribute('cy',last[1].toFixed(1)); dotEl.setAttribute('fill',color); }
+
+  // 價格 + 漲跌
+  const priceEl = document.getElementById('taiexChartPrice');
+  const chgEl   = document.getElementById('taiexChartChg');
+  const lastPt=pts[pts.length-1], firstPt=pts[0];
+  const chgAbs=lastPt-firstPt, chgPct=firstPt>0?chgAbs/firstPt*100:0;
+  if(priceEl) priceEl.textContent = lastPt.toLocaleString('zh-TW',{maximumFractionDigits:2});
+  if(chgEl){ chgEl.textContent=`${chgAbs>=0?'+':''}${chgAbs.toFixed(0)} (${chgPct>=0?'+':''}${chgPct.toFixed(2)}%)`; chgEl.style.color=isUp?'var(--red)':'var(--green)'; }
+
+  // 時間軸
+  const axisEl = document.getElementById('taiexTimeAxis');
+  if(axisEl && times.length){
+    const n=times.length;
+    const picks=[0,Math.floor(n/3),Math.floor(n*2/3),n-1];
+    axisEl.innerHTML = picks.map(i=>`<span>${times[Math.min(i,n-1)]||''}</span>`).join('');
+  }
+
+  // 成交量
+  const volBars=document.getElementById('taiexVolBars');
+  const volAxis=document.getElementById('taiexVolAxis');
+  const volLbl =document.getElementById('taiexVolLabel');
+  if(volBars && vols.length){
+    const maxV=Math.max(...vols,1), lastV=vols[vols.length-1], avgV=vols.reduce((s,v)=>s+v,0)/vols.length;
+    if(volLbl){ const b=Math.round(lastV/1e8); volLbl.textContent=b>0?`${b.toLocaleString()} 億`:'—'; volLbl.style.color=lastV>=avgV?'var(--red)':'var(--green)'; }
+    volBars.innerHTML = vols.map((v,i)=>{
+      const h=Math.max(2,Math.round(v/maxV*38));
+      const isL=i===vols.length-1, isH=v/maxV>0.7;
+      const bg=isL?'#00d4aa':isH?'#7c5cfc':'rgba(255,255,255,.18)';
+      return `<div style="flex:1;background:${bg};height:${h}px;border-radius:2px 2px 0 0;align-self:flex-end"></div>`;
+    }).join('');
+    if(volAxis && times.length){
+      const vi=[0,Math.floor(times.length/2),times.length-1];
+      volAxis.innerHTML=vi.map(i=>`<span>${times[Math.min(i,times.length-1)]||''}</span>`).join('');
+    }
+  }
+
+  const updEl=document.getElementById('taiexUpdateTime');
+  if(updEl){ const now=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}); updEl.textContent=`更新 ${now}`; }
+
+  // tooltip（簡化版，HTML div）
+  const svg = document.getElementById('taiexChartArea');
+  const htmlTip = document.getElementById('taiexHtmlTip');
+  if(!svg||!htmlTip) return;
+  svg._tc = {pts,coords,times,color,W,H};
+
+  function showT(cx,cy){
+    const rc=svg.getBoundingClientRect();
+    const svgX=(cx-rc.left)/rc.width*W;
+    const idx=Math.max(0,Math.min(pts.length-1,Math.round(svgX/W*(pts.length-1))));
+    const val=pts[idx], t=times[idx]||'';
+    const pxX=(coords[idx][0]/W)*rc.width;
+    const pxY=(coords[idx][1]/H)*rc.height;
+    const pr=svg.parentElement.getBoundingClientRect();
+    let left=pxX-45; if(left<2)left=2; if(left+90>pr.width-2)left=pr.width-92;
+    htmlTip.innerHTML=`<div style="font-size:9px;opacity:.7">${t}</div><div>${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>`;
+    htmlTip.style.cssText=`display:block;position:absolute;left:${left.toFixed(0)}px;top:${Math.max(2,pxY-44).toFixed(0)}px;background:rgba(12,12,24,.96);border:1.5px solid ${color};border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;z-index:10;pointer-events:none;text-align:center`;
+  }
+  function hideT(){ htmlTip.style.display='none'; }
+
+  svg.onmousemove  = e=>showT(e.clientX,e.clientY);
+  svg.onmouseleave = hideT;
+  svg.ontouchstart = e=>{ e.preventDefault(); showT(e.touches[0].clientX,e.touches[0].clientY); };
+  svg.ontouchmove  = e=>{ e.preventDefault(); showT(e.touches[0].clientX,e.touches[0].clientY); };
+  svg.ontouchend   = ()=>setTimeout(hideT,1500);
+}
+
 async function loadLeadingIndicators(manual=false){
   if(manual) showToast('🔄 更新先行指標…');
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
@@ -8268,6 +8534,214 @@ function relTime(dateStr){
 // 市場脈動 — 完整即時版 + 自動定時更新
 // ════════════════════════════════════════════════════
 let _pulseTimer = null;
+
+// ══════════════════════════════════════════════════════
+// 加權指數走勢圖（fetchTaiexChart）
+// ══════════════════════════════════════════════════════
+let _taiexChartData = null;  // 快取
+
+async function fetchTaiexChart(period){
+  const WORKER_BASE = (typeof API!=='undefined'&&API)?API.replace(/\/$/,''):'';
+  const periodMap = {
+    '1D': {symbol:'^TWII',  range:'1d',  interval:'5m'},
+    '1W': {symbol:'^TWII',  range:'5d',  interval:'30m'},
+    '1M': {symbol:'^TWII',  range:'1mo', interval:'1d'},
+    '3M': {symbol:'^TWII',  range:'3mo', interval:'1d'},
+  };
+  const { symbol, range, interval } = periodMap[period] || periodMap['1D'];
+
+  // 1D 用盤中資料（已有 tse_t00 路徑），其他週期用 Yahoo Finance
+  if(period === '1D' && WORKER_BASE){
+    try{
+      const r = await fetchWithTimeout(
+        `${WORKER_BASE}/intraday?symbol=${encodeURIComponent('tse_t00.tw')}&src=twse`, 8000);
+      if(r.ok){
+        const j = await r.json();
+        const result = j?.chart?.result?.[0];
+        if(result){
+          const ts    = result.timestamp||[];
+          const close = result.indicators?.quote?.[0]?.close||[];
+          const vol   = result.indicators?.quote?.[0]?.volume||[];
+          const pts=[], times=[], vols=[];
+          for(let i=0;i<ts.length;i++){
+            if(close[i]==null||isNaN(close[i])) continue;
+            const d  = new Date(ts[i]*1000+8*3600000);
+            times.push(String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'));
+            pts.push(close[i]);
+            vols.push(vol[i]||0);
+          }
+          if(pts.length >= 3) return { pts, times, vols, period, symbol:'加權指數' };
+        }
+      }
+    }catch(e){}
+  }
+
+  // Yahoo Finance（週/月/季 + 1D 備援）
+  if(WORKER_BASE){
+    try{
+      const url = `${WORKER_BASE}/intraday?symbol=${encodeURIComponent(symbol)}&range=${range}&interval=${interval}`;
+      const r   = await fetchWithTimeout(url, 10000);
+      if(r.ok){
+        const j = await r.json();
+        const result = j?.chart?.result?.[0];
+        if(result){
+          const ts    = result.timestamp||[];
+          const close = result.indicators?.quote?.[0]?.close||[];
+          const vol   = result.indicators?.quote?.[0]?.volume||[];
+          const pts=[], times=[], vols=[];
+          for(let i=0;i<ts.length;i++){
+            if(close[i]==null||isNaN(close[i])) continue;
+            const d = new Date(ts[i]*1000+8*3600000);
+            const label = period==='1D'
+              ? String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')
+              : (d.getUTCMonth()+1)+'/'+(d.getUTCDate());
+            pts.push(close[i]); times.push(label); vols.push(vol[i]||0);
+          }
+          if(pts.length >= 3) return { pts, times, vols, period, symbol:'加權指數' };
+        }
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
+function renderTaiexChart(data){
+  if(!data) return;
+  const { pts, times, vols, period } = data;
+  if(!pts.length) return;
+
+  const first   = pts[0];
+  const last    = pts[pts.length-1];
+  const isUp    = last >= first;
+  const color   = isUp ? '#ff4c6a' : '#00d4aa';
+  const chg     = last - first;
+  const chgPct  = first > 0 ? (chg/first*100) : 0;
+  const chgStr  = (chg>=0?'+':'')+chg.toFixed(1)+' ('+(chgPct>=0?'+':'')+chgPct.toFixed(2)+'%)';
+
+  // ── 標題更新 ────────────────────────────────────────
+  const titleEl   = document.getElementById('taiexChartTitle');
+  const subEl     = document.getElementById('taiexChartSub');
+  const badgeEl   = document.getElementById('taiexChartBadge');
+  const updateEl  = document.getElementById('taiexUpdateTime');
+  if(titleEl) titleEl.textContent = '加權指數';
+  if(subEl){
+    subEl.textContent = last.toLocaleString('zh-TW',{maximumFractionDigits:2});
+    subEl.style.color = isUp ? 'var(--red)' : 'var(--green)';
+  }
+  if(badgeEl){
+    badgeEl.textContent  = chgStr;
+    badgeEl.style.background = isUp ? 'rgba(255,76,106,.12)' : 'rgba(0,212,170,.12)';
+    badgeEl.style.color  = isUp ? 'var(--red)' : 'var(--green)';
+    badgeEl.style.display = 'inline-block';
+  }
+  const now = new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'});
+  if(updateEl) updateEl.textContent = '更新 '+now;
+
+  // ── 走勢圖（借用 drawChart 函式）──────────────────
+  const svgEl = document.getElementById('taiexChartArea');
+  if(svgEl) drawChartOnSvg(svgEl, pts, color, times, period==='1D'?'1D':'hist');
+
+  // ── 時間軸 ──────────────────────────────────────────
+  const timeEl = document.getElementById('taiexChartTime');
+  if(timeEl && times.length){
+    const picks = [0, Math.floor(times.length*0.25),
+                   Math.floor(times.length*0.5),
+                   Math.floor(times.length*0.75),
+                   times.length-1];
+    timeEl.innerHTML = picks.map(i=>`<span>${times[Math.min(i,times.length-1)]}</span>`).join('');
+  }
+
+  // ── 成交量（近15根 K 棒）──────────────────────────────
+  const volSec  = document.getElementById('taiexVolSec');
+  const volBars = document.getElementById('taiexVolBars');
+  const volText = document.getElementById('taiexVolText');
+  const volDate = document.getElementById('taiexVolDates');
+  if(volBars && vols.length){
+    const recentVols  = vols.slice(-15);
+    const recentPts   = pts.slice(-15);
+    const recentTimes = times.slice(-15);
+    const maxVol = Math.max(...recentVols, 1);
+    const totalVol  = vols.reduce((a,b)=>a+b, 0);
+    const totalBil  = (totalVol/1e8).toFixed(0);
+
+    if(volText) volText.textContent = totalBil+'億股 · 今日合計';
+    volBars.innerHTML = recentVols.map((v,i)=>{
+      const h    = Math.max(4, Math.round(v/maxVol*44));
+      const isU  = i===0 ? true : recentPts[i] >= recentPts[i-1];
+      return `<div class="vb" style="height:${h}px;background:${isU?'rgba(255,76,106,.7)':'rgba(0,212,170,.7)'}"></div>`;
+    }).join('');
+    if(volDate) volDate.innerHTML = recentTimes.filter((_,i)=>[0,7,14].includes(i)).map(t=>`<span>${t}</span>`).join('');
+    if(volSec) volSec.style.display = 'block';
+  }
+
+  // ── hover tooltip ─────────────────────────────────
+  _bindTaiexTooltip(pts, times, color, first);
+}
+
+function _bindTaiexTooltip(pts, times, color, prevClose){
+  const svg  = document.getElementById('taiexChartArea');
+  const tip  = document.getElementById('taiexChartTooltip');
+  if(!svg||!tip) return;
+  svg.onmousemove = svg.ontouchmove = e => {
+    e.preventDefault && e.preventDefault();
+    const rect  = svg.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const idx   = Math.round(ratio * (pts.length-1));
+    const v     = pts[idx];
+    const chg   = v - prevClose;
+    const pct   = prevClose > 0 ? chg/prevClose*100 : 0;
+    const isU   = chg >= 0;
+    document.getElementById('taiexTipTime').textContent  = times[idx]||'';
+    document.getElementById('taiexTipPrice').textContent = v.toLocaleString('zh-TW',{maximumFractionDigits:2});
+    document.getElementById('taiexTipPrice').style.color = isU?'var(--red)':'var(--green)';
+    document.getElementById('taiexTipChg').textContent   = (chg>=0?'+':'')+chg.toFixed(1)+' ('+(pct>=0?'+':'')+pct.toFixed(2)+'%)';
+    document.getElementById('taiexTipChg').style.color   = isU?'var(--red)':'var(--green)';
+    const pxX = ratio * rect.width + rect.left - rect.left;
+    tip.style.left    = (pxX/rect.width*100).toFixed(1)+'%';
+    tip.style.display = 'block';
+    tip.style.bottom  = '10px';
+  };
+  svg.onmouseleave = svg.ontouchend = () => { tip.style.display='none'; };
+}
+
+async function switchTaiexPeriod(period, btn){
+  // 切換 Tab 樣式
+  document.querySelectorAll('#taiexTabs .tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  _taiexPeriod = period;
+  const updateEl = document.getElementById('taiexUpdateTime');
+  if(updateEl) updateEl.textContent = '載入中…';
+  const data = await fetchTaiexChart(period).catch(()=>null);
+  if(data){ _taiexChartData = data; renderTaiexChart(data); }
+  else if(updateEl) updateEl.textContent = '資料載入失敗，請重試';
+}
+
+// drawChart 通用版（支援外部 SVG element）
+function drawChartOnSvg(svgEl, pts, color, times, mode){
+  if(!pts||pts.length<2) return;
+  const W=svgEl.clientWidth||360, H=130;
+  const padL=6, padR=6, padT=8, padB=20;
+  const mn=Math.min(...pts), mx=Math.max(...pts);
+  const rng=mx-mn||mn*0.01||1;
+  const toX=i=>(padL+i/(pts.length-1)*(W-padL-padR));
+  const toY=v=>(H-padB-(v-mn)/rng*(H-padT-padB));
+  const coords=pts.map((v,i)=>[toX(i),toY(v)]);
+  const linePath=coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+  const fillPath=linePath+` L${(W-padR).toFixed(1)},${H-padB} L${padL},${H-padB} Z`;
+  const prev=pts[0];
+  svgEl.innerHTML=`
+    <defs>
+      <linearGradient id="taiexGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity=".3"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+      ${mode==='1D'?`<line x1="${toX(0).toFixed(1)}" y1="${toY(prev).toFixed(1)}" x2="${(W-padR).toFixed(1)}" y2="${toY(prev).toFixed(1)}" stroke="rgba(255,255,255,.15)" stroke-width="1" stroke-dasharray="4,4"/>`:'' }
+    </defs>
+    <path d="${fillPath}" fill="url(#taiexGrad)"/>
+    <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${coords[coords.length-1][0].toFixed(1)}" cy="${coords[coords.length-1][1].toFixed(1)}" r="4" fill="${color}" stroke="rgba(255,255,255,.3)" stroke-width="1"/>`;
+}
 
 async function refreshPulse(){
   const [instData, indexData, txfData] = await Promise.all([
@@ -13951,11 +14425,12 @@ window.addEventListener('load', async ()=>{
   // 第 1 波：主圖表（台積電）
   await selectStock(null,'台積電','2330.TW');
 
-  // 第 3 波：先行指標 + 市場脈動 + VIX + 指數（全部同時非阻塞發出）
+  // 第 3 波：先行指標 + 市場脈動 + VIX + 指數 + 加權指數圖（全部同時非阻塞發出）
   refreshPulse();
   loadVix();
   loadLeadingIndicators();
   loadIndices();
+  loadTaiexChart().catch(()=>{});
 
   // 第 5 波：趨勢股（錯開 1.5s，讓主圖表先完成渲染）
   // 趨勢股：延遲 3 秒
