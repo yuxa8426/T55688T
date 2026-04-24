@@ -604,6 +604,7 @@
     </div>
     <svg class="chart-area" id="chartSvg" viewBox="0 0 320 130" preserveAspectRatio="none"
          onmousemove="chartHover(event)" onmouseleave="chartLeave()"
+         ondblclick="_chartZoomRange=null;setTab(document.querySelector('.tab.active'),currentPeriod)"
          ontouchstart="chartTouchStart(event)" ontouchmove="chartTouch(event)" ontouchend="chartTouchEnd(event)"
          style="touch-action:pan-y">
       <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00d4aa" stop-opacity=".3" id="cgStop"/><stop offset="100%" stop-color="#00d4aa" stop-opacity="0"/></linearGradient></defs>
@@ -4769,6 +4770,11 @@ function drawChart(pts, color, dates, mode){
 
   _chartData = { pts: valid, dates: validDates, color };
 
+  // 清除舊的 K 線元素
+  const svgEl = document.getElementById('chartSvg');
+  if(svgEl) svgEl.querySelectorAll('.kbar-g,.kbar,.ref-line').forEach(e=>e.remove());
+  _chartZoomRange = null;  // 重置縮放
+
   const W=320, H=130, pad=10;
   const mn=Math.min(...valid), mx=Math.max(...valid), rng=mx-mn||mn*0.01||1;
   const coords = valid.map((v,i)=>[
@@ -4822,6 +4828,16 @@ function updateChartTimeLabels(dates, total){
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
   if(!svg || !histData) return;
+
+  // ⚠️ 清空 SVG：清除折線/填色，確保 K 線不與折線疊加
+  const chartLine = document.getElementById('chartLine');
+  const chartFill = document.getElementById('chartFill');
+  const chartDot  = document.getElementById('chartDot');
+  if(chartLine) chartLine.setAttribute('d','');
+  if(chartFill) chartFill.setAttribute('d','');
+  if(chartDot)  chartDot.setAttribute('cx','-999');
+  // 移除舊的 K 線元素
+  svg.querySelectorAll('.kbar-g,.kbar,.ref-line').forEach(e=>e.remove());
 
   const open  = histData.open  || [];
   const high  = histData.high  || [];
@@ -5016,8 +5032,59 @@ function chartLeave(){
   if(tip)   tip.style.display = 'none';
 }
 
+// 縮放狀態
+let _pinchStartDist = 0;
+let _chartZoomRange = null;  // {startIdx, endIdx} or null = 全顯示
+
+function _getPinchDist(e){
+  if(e.touches.length < 2) return 0;
+  const dx = e.touches[0].clientX - e.touches[1].clientX;
+  const dy = e.touches[0].clientY - e.touches[1].clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function _applyChartZoom(zoom){
+  if(!_chartData?.pts?.length) return;
+  const n = _chartData.pts.length;
+  if(!_chartZoomRange) _chartZoomRange = { s:0, e:n-1 };
+
+  const center  = Math.round((_chartZoomRange.s + _chartZoomRange.e) / 2);
+  const curLen  = _chartZoomRange.e - _chartZoomRange.s + 1;
+  const newLen  = Math.max(10, Math.min(n, Math.round(curLen / zoom)));
+  const half    = Math.floor(newLen / 2);
+  let s = Math.max(0, center - half);
+  let e = Math.min(n-1, s + newLen - 1);
+  if(e === n-1) s = Math.max(0, e - newLen + 1);
+  _chartZoomRange = { s, e };
+
+  const pts   = _chartData.pts.slice(s, e+1);
+  const dates = _chartData.dates.slice(s, e+1);
+  if(pts.length < 2) return;
+
+  const W=320, H=130, pad=10;
+  const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
+  const coords = pts.map((v,i)=>[
+    i/(pts.length-1)*W,
+    H-pad - ((v-mn)/rng)*(H-pad*2)
+  ]);
+  const line = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+  const fill = line + ` L${W},${H} L0,${H} Z`;
+  const last = coords[coords.length-1];
+  document.getElementById('chartLine')?.setAttribute('d', line);
+  document.getElementById('chartFill')?.setAttribute('d', fill);
+  document.getElementById('chartDot')?.setAttribute('cx', last[0].toFixed(1));
+  document.getElementById('chartDot')?.setAttribute('cy', last[1].toFixed(1));
+  updateChartTimeLabels(dates, pts.length);
+}
+
 function chartTouchStart(e){
   if(!e.touches.length) return;
+  // 雙指縮放起始
+  if(e.touches.length === 2){
+    _pinchStartDist = _getPinchDist(e);
+    e.preventDefault();
+    return;
+  }
   const t = e.touches[0];
   // 長按計時器（400ms）
   _chartLongPressTimer = setTimeout(()=>{
@@ -5060,14 +5127,26 @@ function drawFallbackChart(isUp){
 }
 
 // ── 成交量柱狀圖 ──────────────────────────────────────
-function renderVolBars(isUp, histData){
+function renderVolBars(isUp, histData, period){
   const el   = document.getElementById('volBars');
   const dtEl = document.getElementById('volDates');
   if(!el) return;
 
-  // 真實成交量（最近10根日K）
-  const vols  = histData?.volume?.filter(v=>v>0).slice(-10) || [];
-  const dates = histData?.dates?.slice(-10) || [];
+  // 依週期決定顯示幾根
+  const barCount = {
+    '1D': 10,   // 近10個交易日
+    '1W': 7,    // 近7個交易日
+    '1M': 22,   // 近1個月
+    '3M': 20,   // 近季（取代表性20根）
+    '6M': 20,
+    '1Y': 20,
+  }[period] || 10;
+
+  const allVols  = histData?.volume?.filter(v=>v!=null) || [];
+  const allDates = histData?.dates || [];
+  // 取最後 barCount 根有效成交量
+  const vols  = allVols.slice(-barCount).filter(v=>v>0);
+  const dates = allDates.slice(-barCount);
   const mx    = vols.length ? Math.max(...vols) : 0;
   const hArr  = vols.length >= 3
     ? vols.map(v => mx>0 ? Math.max(3, Math.round(v/mx*46)) : 4)
@@ -5323,7 +5402,7 @@ async function setTab(btn, period){
       const dts   = (h.dates||[]).slice(-7);
       const isUp  = pts[pts.length-1] >= pts[0];
       drawChart(pts, isUp?'#ff4c6a':'#00d4aa', dts);
-      renderVolBars(isUp, { close:pts, volume:(h.volume||[]).slice(-7), dates:dts });
+      renderVolBars(isUp, { close:pts, volume:(h.volume||[]).slice(-7), dates:dts }, '1W');
     } else { drawFallbackChart(true); showToast('⚠️ 週線資料不足'); }
     return;
   }
@@ -5337,7 +5416,7 @@ async function setTab(btn, period){
     drawCandlestick(histData, period);
     renderVolBars(
       histData.close[histData.close.length-1] >= histData.close[0],
-      histData
+      histData, period
     );
   } else {
     drawFallbackChart(true);
@@ -8660,7 +8739,10 @@ async function selectStock(el, name, ticker){
     if(intra && intra.pts.length > 2){
       // 異常值過濾：若最後一筆與倒數第5筆相差超過5%，則往前找最近合理值
       const rawLast = intra.pts[intra.pts.length - 1];
-      const prevClose = quoteData.prevClose || quoteData.price;
+      // prevClose 優先順序：FinMind 昨收 > histData 前一日收盤 > 今日開盤
+      const prevClose = (quoteData.prevClose && quoteData.prevClose > 0)
+        ? quoteData.prevClose
+        : (histData?.close?.slice(-2,-1)[0] || intra.pts[0] || quoteData.price);
       // 用倒數2~6筆的平均作為基準，過濾異常跳點
       const refPts = intra.pts.slice(-6, -1).filter(v=>v>0);
       const refAvg = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
@@ -8682,7 +8764,7 @@ async function selectStock(el, name, ticker){
 
     const isUp = quoteData.changePct >= 0;
     renderStockHeader(name, currentTicker, quoteData.price, quoteData.changePct, isUp, quoteData.date);
-    renderVolBars(isUp, histData);
+    renderVolBars(isUp, histData, currentPeriod);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
     const dates = histData?.dates||[];
     // 1D 圖：優先用分鐘K（已並行取得），fallback 用日K近5日
