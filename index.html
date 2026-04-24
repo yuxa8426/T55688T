@@ -5392,8 +5392,10 @@ async function loadTaiexChart(){
             pts2.push(close[i]);
             vols2.push(vol[i]||0);
           }
-          if(pts2.length > 2)
-            _taiexData['1D'] = { pts:pts2, times:times2, vol:vols2 };
+          if(pts2.length > 2){
+            const yPrev = res.meta?.chartPreviousClose||0;
+            _taiexData['1D'] = { pts:pts2, times:times2, vol:vols2, prevClose:yPrev||null };
+          }
         }
       }
     }
@@ -5526,7 +5528,10 @@ function _renderTaiexChart(){
   const data = _taiexData[_taiexPeriod];
   const loadEl = document.getElementById('taiexChartLoading');
   if(!data?.pts?.length){
-    if(loadEl){ loadEl.style.display='flex'; loadEl.textContent='資料暫時無法取得'; }
+    // 沒有資料時顯示提示
+    if(loadEl){ loadEl.style.display='flex'; loadEl.textContent='資料載入中，請稍候…'; }
+    // 嘗試重新載入
+    setTimeout(()=>{ if(!_taiexData[_taiexPeriod]?.pts?.length) loadTaiexChart(); }, 3000);
     return;
   }
 
