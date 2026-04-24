@@ -157,7 +157,6 @@
       </div>
       <div style="display:flex;gap:4px" id="taiexPeriodTabs">
         <button onclick="_taiexTab('1D',this)" class="tab active" style="font-size:11px;padding:4px 8px">今日</button>
-        <button onclick="_taiexTab('1W',this)" class="tab" style="font-size:11px;padding:4px 8px">週</button>
         <button onclick="_taiexTab('1M',this)" class="tab" style="font-size:11px;padding:4px 8px">月</button>
         <button onclick="_taiexTab('3M',this)" class="tab" style="font-size:11px;padding:4px 8px">季</button>
       </div>
@@ -504,9 +503,12 @@
 </div>
 </div>
 <div class="page" id="page-stock">
-  <!-- 個股搜尋欄（sticky 固定頂部，不被鍵盤遮擋）-->
-  <div style="position:sticky;top:0;z-index:50;background:var(--bg);
-              padding:max(14px,env(safe-area-inset-top,14px)) 16px 0;margin:0 0 0 0">
+  <!-- 個股搜尋欄（fixed 固定頂部，完全不被遮擋）-->
+  <div id="stockSearchBar" style="position:fixed;top:0;left:50%;
+       transform:translateX(-50%);width:100%;max-width:480px;
+       z-index:200;background:var(--bg);
+       padding:max(10px,env(safe-area-inset-top,10px)) 16px 8px;
+       box-shadow:0 2px 8px rgba(0,0,0,.3)">
     <div class="search" style="margin:0;border-radius:12px"
          onclick="document.getElementById('stockSearchInput').focus()">
       <span style="color:var(--text3);font-size:18px">🔍</span>
@@ -519,10 +521,17 @@
     </div>
   </div>
 
-  <!-- 搜尋結果 / 自選快捷 -->
-  <div id="stockSearchResults" style="display:none;margin:4px 16px 10px;background:var(--card);
-       border-radius:12px;border:1px solid var(--border);overflow:hidden;z-index:100;position:relative">
+  <!-- 搜尋結果（fixed，緊接在搜尋欄下方）-->
+  <div id="stockSearchResults" style="display:none;position:fixed;
+       left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:448px;
+       background:var(--card);border-radius:0 0 12px 12px;
+       border:1px solid var(--border);border-top:none;
+       overflow:hidden;z-index:199;max-height:50vh;overflow-y:auto;
+       box-shadow:0 8px 24px rgba(0,0,0,.5)">
   </div>
+
+  <!-- 固定搜尋欄的高度佔位 -->
+  <div id="stockSearchSpacer" style="height:calc(56px + max(10px,env(safe-area-inset-top,10px)))"></div>
 
   <!-- 自選股快捷列（無搜尋時顯示，有搜尋時隱藏）-->
   <div id="stockQuickAccess" style="margin:10px 16px 0">
@@ -4803,6 +4812,103 @@ function updateChartTimeLabels(dates, total){
   el.innerHTML = labels.map(l=>`<span>${l}</span>`).join('');
 }
 
+// ══════════════════════════════════════════════════════
+// K 線圖（月/季 Tab）
+// ══════════════════════════════════════════════════════
+function drawCandlestick(histData, period){
+  const svg = document.getElementById('chartSvg');
+  if(!svg || !histData) return;
+
+  const open  = histData.open  || [];
+  const high  = histData.high  || [];
+  const low   = histData.low   || [];
+  const close = histData.close || [];
+  const dates = histData.dates || [];
+  const vols  = histData.volume|| [];
+
+  // 依週期截取資料
+  const n = period==='1M' ? 22 : 65; // 月=22交易日，季=65交易日
+  const sl  = i => i.slice(-n);
+  const O = sl(open), H = sl(high), L = sl(low), C = sl(close);
+  const D = sl(dates), V = sl(vols);
+
+  if(!C.length) return;
+
+  const isUp = C[C.length-1] >= C[0];
+  const color = isUp ? '#ff4c6a' : '#00d4aa';
+
+  // 儲存給 crosshair 用（用收盤價陣列 + OHLC 資訊）
+  _chartData = {
+    pts: C, dates: D, color,
+    ohlc: C.map((_,i)=>({ o:O[i], h:H[i], l:L[i], c:C[i], v:V[i], d:D[i] })),
+    isCandle: true,
+  };
+
+  // SVG 尺寸
+  const W=320, H_SVG=130, padT=8, padB=10, padL=2, padR=2;
+  const chartW = W - padL - padR;
+  const chartH = H_SVG - padT - padB;
+
+  const allHigh = H.filter(v=>v>0), allLow = L.filter(v=>v>0);
+  const priceMax = Math.max(...allHigh);
+  const priceMin = Math.min(...allLow);
+  const priceRng = priceMax - priceMin || priceMin * 0.01 || 1;
+  const toY = v => padT + (1-(v-priceMin)/priceRng) * chartH;
+
+  // 柱寬（留間距）
+  const barW  = Math.max(1, Math.floor(chartW / C.length * 0.65));
+  const stepW = chartW / C.length;
+
+  let svgContent = `
+    <defs>
+      <linearGradient id="cgStop" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity=".15"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <!-- 背景格線 -->
+    <line x1="0" x2="${W}" y1="${(padT+chartH/3).toFixed(1)}" y2="${(padT+chartH/3).toFixed(1)}" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+    <line x1="0" x2="${W}" y1="${(padT+chartH*2/3).toFixed(1)}" y2="${(padT+chartH*2/3).toFixed(1)}" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
+  `;
+
+  C.forEach((c_,i)=>{
+    const o=O[i]||c_, h=H[i]||c_, l=L[i]||c_;
+    const isBull = c_ >= o;
+    const col    = isBull ? '#ff4c6a' : '#00d4aa';
+    const cx     = padL + (i + 0.5) * stepW;
+    const bodyT  = toY(Math.max(o, c_));
+    const bodyB  = toY(Math.min(o, c_));
+    const bodyH  = Math.max(1, bodyB - bodyT);
+    const wickT  = toY(h);
+    const wickB  = toY(l);
+
+    // 上影線
+    svgContent += `<line x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${wickT.toFixed(1)}" y2="${bodyT.toFixed(1)}" stroke="${col}" stroke-width="1.2"/>`;
+    // 下影線
+    svgContent += `<line x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${bodyB.toFixed(1)}" y2="${wickB.toFixed(1)}" stroke="${col}" stroke-width="1.2"/>`;
+    // 實體（空心陰線用 stroke 填）
+    if(isBull){
+      svgContent += `<rect x="${(cx-barW/2).toFixed(1)}" y="${bodyT.toFixed(1)}" width="${barW}" height="${bodyH.toFixed(1)}" fill="${col}" rx="1"/>`;
+    } else {
+      svgContent += `<rect x="${(cx-barW/2).toFixed(1)}" y="${bodyT.toFixed(1)}" width="${barW}" height="${bodyH.toFixed(1)}" fill="none" stroke="${col}" stroke-width="1.2" rx="1"/>`;
+    }
+  });
+
+  // 保留 crosshair 元素（hover 用）
+  svgContent += `
+    <line id="chartCross" x1="0" x2="0" y1="0" y2="${H_SVG}" stroke="rgba(255,255,255,.3)" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
+    <circle id="chartHoverDot" r="4" fill="none" stroke="${color}" stroke-width="1.5" style="display:none"/>
+    <circle id="chartDot" r="0" fill="transparent"/>
+    <path id="chartLine" fill="none"/>
+    <path id="chartFill" fill="none"/>
+  `;
+
+  svg.innerHTML = svgContent;
+
+  // 時間軸
+  updateChartTimeLabels(D, C.length);
+}
+
 // ── Crosshair 互動 ───────────────────────────────────
 let _chartLongPressTimer = null;
 let _chartIsLongPress    = false;
@@ -4821,7 +4927,7 @@ function _showChartTip(clientX, clientY){
   const rawX  = (clientX - rect.left) / rect.width * svgW;
   const clampX= Math.max(0, Math.min(svgW, rawX));
 
-  const { pts, dates, color } = _chartData;
+  const { pts, dates, color, ohlc, isCandle } = _chartData;
   const pad = 10, rng = Math.max(...pts)-Math.min(...pts) || Math.min(...pts)*0.01||1;
   const mn  = Math.min(...pts);
 
@@ -4843,17 +4949,29 @@ function _showChartTip(clientX, clientY){
   const ttPrice  = document.getElementById('ttPrice');
   const ttDate   = document.getElementById('ttDate');
   const ttChange = document.getElementById('ttChange');
-  if(ttPrice){ ttPrice.textContent = '$'+fmt(price); ttPrice.style.color = color; }
-  if(ttDate)  ttDate.textContent   = date || '—';
-  // 顯示相對前一點的漲跌
-  if(ttChange && si > 0){
-    const prev  = pts[si-1];
-    const diff  = price - prev;
-    const pct   = prev > 0 ? (diff/prev*100).toFixed(2) : '0';
-    ttChange.textContent = `${diff>=0?'+':''}${diff.toFixed(2)} (${diff>=0?'+':''}${pct}%)`;
-    ttChange.style.color = diff>=0?'var(--red)':'var(--green)';
-  } else if(ttChange){
-    ttChange.textContent = '';
+  const ttOhlc   = document.getElementById('ttOhlc');
+
+  if(ttDate) ttDate.textContent = date || '—';
+
+  if(isCandle && ohlc && ohlc[si]){
+    // K線模式：顯示 OHLC
+    const bar  = ohlc[si];
+    const bull = bar.c >= bar.o;
+    if(ttPrice){ ttPrice.textContent = bar.c.toLocaleString(); ttPrice.style.color = bull?'var(--red)':'var(--green)'; }
+    if(ttChange){ ttChange.textContent = `開${bar.o.toLocaleString()} 高${bar.h.toLocaleString()} 低${bar.l.toLocaleString()}`; ttChange.style.color = 'var(--text2)'; ttChange.style.fontSize = '10px'; }
+    if(ttOhlc) ttOhlc.style.display = 'none';
+  } else {
+    if(ttPrice){ ttPrice.textContent = '$'+fmt(price); ttPrice.style.color = color; }
+    // 折線模式：相對漲跌
+    if(ttChange && si > 0){
+      const prev = pts[si-1];
+      const diff = price - prev;
+      const pct  = prev > 0 ? (diff/prev*100).toFixed(2) : '0';
+      ttChange.textContent = `${diff>=0?'+':''}${diff.toFixed(2)} (${diff>=0?'+':''}${pct}%)`;
+      ttChange.style.color = diff>=0?'var(--red)':'var(--green)';
+      ttChange.style.fontSize = '';
+    } else if(ttChange){ ttChange.textContent = ''; }
+    if(ttOhlc) ttOhlc.style.display = 'none';
   }
 
   // 定位 tooltip（確保不超出畫面）
@@ -5153,7 +5271,7 @@ function renderMktBars(){ renderMktBarsStatic(); }
 // ── 時間軸 Tab 切換 ───────────────────────────────────
 // 1D: Yahoo Finance 分鐘K | 其他: FinMind 日K
 // TAB_DAYS: 日K 抓取天數（1M=1個月交易日約30天實際45天）
-const TAB_DAYS = {'1W':14,'1M':45,'3M':95,'6M':185,'1Y':375};
+const TAB_DAYS = {'1D':1,'1M':45,'3M':95};
 
 async function setTab(btn, period){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -5185,24 +5303,17 @@ async function setTab(btn, period){
       } else { drawFallbackChart(true); }
     }
   } else {
-    // ── 其他 Tab：日K ───────────────────────────────────
-    // 月/季 (≤95天) 用 60天 cache 即可命中；半年/年才補抓更多天數
-    const days = TAB_DAYS[period] || 60;
-    const fetchDays = days <= 60 ? 60 : days; // ≤60天直接命中 cache
-    const histData = await fmHistory(sid, fetchDays);
+    // ── 月/季：K 線圖 ──────────────────────────────────
+    const days = period==='1M' ? 45 : 95;
+    const histData = await fmHistory(sid, days);
     setLoading('chartSvg', false);
-    const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
-    const dates = histData?.dates || [];
-
-    // 1W = 最近10個交易日；其餘全顯示
-    let displayPts = pts, displayDates = dates;
-    if(period==='1W'){
-      displayPts   = pts.slice(-10);
-      displayDates = dates.slice(-10);
-    }
-    if(displayPts.length > 1){
-      const isUp = displayPts[displayPts.length-1] >= displayPts[0];
-      drawChart(displayPts, isUp?'#ff4c6a':'#00d4aa', displayDates);
+    if(histData?.close?.length > 1){
+      drawCandlestick(histData, period);
+      // 更新成交量（K 線模式）
+      renderVolBars(
+        histData.close[histData.close.length-1] >= histData.close[0],
+        histData
+      );
     } else {
       drawFallbackChart(true);
       showToast('⚠️ 此期間資料不足');
@@ -5241,7 +5352,7 @@ function switchLeadingTab(btn, panel){
 // 加權指數走勢圖 + 成交量（大盤頁）
 // ══════════════════════════════════════════════════════
 let _taiexPeriod = '1D';
-let _taiexData   = { '1D':null, '1W':null, '1M':null, '3M':null };
+let _taiexData   = { '1D':null, '1M':null, '3M':null };
 
 function _taiexTab(period, btn){
   _taiexPeriod = period;
@@ -5283,8 +5394,8 @@ async function loadTaiexChart(){
   }catch(e){}
 
   // 週/月/季：透過 Worker Yahoo Finance 取 ^TWII 歷史資料
+  // 月/季：載入 OHLC K 線資料（Yahoo Finance 日 K）
   const periodConfigs = [
-    { key:'1W', range:'5d',  interval:'1h' },
     { key:'1M', range:'1mo', interval:'1d' },
     { key:'3M', range:'3mo', interval:'1d' },
   ];
@@ -5300,22 +5411,74 @@ async function loadTaiexChart(){
       const ts    = res.timestamp||[];
       const close = res.indicators?.quote?.[0]?.close||[];
       const vol   = res.indicators?.quote?.[0]?.volume||[];
-      const pts2=[], times2=[], vols2=[];
+      const open  = res.indicators?.quote?.[0]?.open||[];
+      const high  = res.indicators?.quote?.[0]?.high||[];
+      const low   = res.indicators?.quote?.[0]?.low||[];
+      const pts2=[], times2=[], vols2=[], ohlc2=[];
       for(let i=0;i<ts.length;i++){
         if(close[i]==null||isNaN(close[i])) continue;
         const d = new Date(ts[i]*1000+8*3600000);
-        const label = interval==='1h'
-          ? `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:00`
-          : `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
-        pts2.push(close[i]); times2.push(label); vols2.push(vol[i]||0);
+        const label = `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
+        pts2.push(close[i]);
+        times2.push(label);
+        vols2.push(vol[i]||0);
+        ohlc2.push({
+          o: open[i]||close[i],
+          h: high[i]||close[i],
+          l: low[i]||close[i],
+          c: close[i],
+          t: label,
+        });
       }
       if(pts2.length >= 3)
-        _taiexData[key] = { pts:pts2, times:times2, vol:vols2 };
+        _taiexData[key] = { pts:pts2, times:times2, vol:vols2, ohlc:ohlc2, isKLine:true };
     }catch(e){}
   }
 
   if(loadEl) loadEl.style.display = 'none';
   _renderTaiexChart();
+}
+
+// ── K 線繪製函式 ─────────────────────────────────────────
+function _drawKLine(svg, ohlc, W=400, H=120){
+  svg.innerHTML = '';
+  if(!ohlc?.length) return;
+  const n   = ohlc.length;
+  const mn  = Math.min(...ohlc.map(k=>k.l));
+  const mx  = Math.max(...ohlc.map(k=>k.h));
+  const rng = mx - mn || mn * 0.01 || 1;
+  const padT=8, padB=8, padL=2, padR=2;
+  const barW = Math.max(2, (W - padL - padR) / n - 1.5);
+  const toX  = i => padL + i / n * (W - padL - padR) + (W - padL - padR) / n / 2;
+  const toY  = v => H - padB - ((v - mn) / rng) * (H - padT - padB);
+
+  ohlc.forEach((k, i) => {
+    const isUp  = k.c >= k.o;
+    const color = isUp ? '#ff4c6a' : '#00d4aa';
+    const cx    = toX(i);
+    const openY = toY(k.o), closeY = toY(k.c);
+    const highY = toY(k.h), lowY   = toY(k.l);
+    const bodyT = Math.min(openY, closeY);
+    const bodyH = Math.max(2, Math.abs(openY - closeY));
+
+    // 上下影線
+    const wick = document.createElementNS('http://www.w3.org/2000/svg','line');
+    wick.setAttribute('x1', cx.toFixed(1)); wick.setAttribute('x2', cx.toFixed(1));
+    wick.setAttribute('y1', highY.toFixed(1)); wick.setAttribute('y2', lowY.toFixed(1));
+    wick.setAttribute('stroke', color); wick.setAttribute('stroke-width','1');
+    svg.appendChild(wick);
+
+    // 實體
+    const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    body.setAttribute('x', (cx - barW/2).toFixed(1));
+    body.setAttribute('y', bodyT.toFixed(1));
+    body.setAttribute('width', barW.toFixed(1));
+    body.setAttribute('height', bodyH.toFixed(1));
+    body.setAttribute('fill', isUp ? color : 'none');
+    body.setAttribute('stroke', color);
+    body.setAttribute('stroke-width', '1');
+    svg.appendChild(body);
+  });
 }
 
 function _renderTaiexChart(){
@@ -5327,26 +5490,46 @@ function _renderTaiexChart(){
   }
 
   const pts  = data.pts, vols = data.vol||[], times = data.times||[];
+  const isKLine = !!data.isKLine;
   const isUp = pts[pts.length-1] >= pts[0];
   const color = isUp ? '#ff4c6a' : '#00d4aa';
   const W=400, H=120, padT=10, padB=10;
-  const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
-  const toX = i => i/(Math.max(pts.length-1,1))*W;
-  const toY = v => H-padB-((v-mn)/rng)*(H-padT-padB);
-  const coords = pts.map((v,i)=>[toX(i),toY(v)]);
-  const pathD = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
 
-  // 更新漸層
-  const stop0 = document.querySelector('#taiexGrad stop:first-child');
-  if(stop0) stop0.setAttribute('stop-color', color);
+  const svgEl = document.getElementById('taiexChartArea');
+  if(!svgEl) return;
 
-  const fillEl = document.getElementById('taiexFill');
-  const lineEl = document.getElementById('taiexLine');
-  const dotEl  = document.getElementById('taiexDot');
-  if(fillEl) fillEl.setAttribute('d', pathD+` L${W},${H} L0,${H} Z`);
-  if(lineEl){ lineEl.setAttribute('d',pathD); lineEl.setAttribute('stroke',color); }
-  const last = coords[coords.length-1];
-  if(dotEl){ dotEl.setAttribute('cx',last[0].toFixed(1)); dotEl.setAttribute('cy',last[1].toFixed(1)); dotEl.setAttribute('fill',color); }
+  if(isKLine && data.ohlc?.length){
+    // K 線模式：直接繪製，隱藏折線元素
+    const fillEl = document.getElementById('taiexFill');
+    const lineEl = document.getElementById('taiexLine');
+    const dotEl  = document.getElementById('taiexDot');
+    if(fillEl) fillEl.setAttribute('d','');
+    if(lineEl) lineEl.setAttribute('d','');
+    if(dotEl)  dotEl.setAttribute('cx','-999');
+    // 清除舊 K 線並繪製新的
+    svgEl.querySelectorAll('.kbar').forEach(e=>e.remove());
+    const kGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+    kGroup.classList.add('kbar');
+    _drawKLine(kGroup, data.ohlc, W, H);
+    svgEl.appendChild(kGroup);
+  } else {
+    // 折線模式（今日）
+    svgEl.querySelectorAll('.kbar').forEach(e=>e.remove());
+    const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
+    const toX = i => i/(Math.max(pts.length-1,1))*W;
+    const toY = v => H-padB-((v-mn)/rng)*(H-padT-padB);
+    const coords = pts.map((v,i)=>[toX(i),toY(v)]);
+    const pathD  = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+    const stop0 = document.querySelector('#taiexGrad stop:first-child');
+    if(stop0) stop0.setAttribute('stop-color', color);
+    const fillEl = document.getElementById('taiexFill');
+    const lineEl = document.getElementById('taiexLine');
+    const dotEl  = document.getElementById('taiexDot');
+    if(fillEl) fillEl.setAttribute('d', pathD+` L${W},${H} L0,${H} Z`);
+    if(lineEl){ lineEl.setAttribute('d',pathD); lineEl.setAttribute('stroke',color); }
+    const last = coords[coords.length-1];
+    if(dotEl){ dotEl.setAttribute('cx',last[0].toFixed(1)); dotEl.setAttribute('cy',last[1].toFixed(1)); dotEl.setAttribute('fill',color); }
+  } // end else 折線模式
 
   // 價格 + 漲跌
   const priceEl = document.getElementById('taiexChartPrice');
@@ -5396,19 +5579,39 @@ function _renderTaiexChart(){
   const svg = document.getElementById('taiexChartArea');
   const htmlTip = document.getElementById('taiexHtmlTip');
   if(!svg||!htmlTip) return;
-  svg._tc = {pts,coords,times,color,W,H};
+  // K線模式下 coords 不存在，tooltip 用簡化版
+  const coords = !isKLine ? (() => {
+    const mn2=Math.min(...pts), mx2=Math.max(...pts), rng2=mx2-mn2||1;
+    const toX2=i=>i/(Math.max(pts.length-1,1))*W;
+    const toY2=v=>H-padB-((v-mn2)/rng2)*(H-padT-padB);
+    return pts.map((v,i)=>[toX2(i),toY2(v)]);
+  })() : pts.map((_,i)=>[i/(Math.max(pts.length-1,1))*W, H/2]);
+  svg._tc = {pts,coords,times,color,W,H,ohlc:data.ohlc||null,isKLine};
 
   function showT(cx,cy){
-    const rc=svg.getBoundingClientRect();
-    const svgX=(cx-rc.left)/rc.width*W;
-    const idx=Math.max(0,Math.min(pts.length-1,Math.round(svgX/W*(pts.length-1))));
-    const val=pts[idx], t=times[idx]||'';
-    const pxX=(coords[idx][0]/W)*rc.width;
-    const pxY=(coords[idx][1]/H)*rc.height;
-    const pr=svg.parentElement.getBoundingClientRect();
-    let left=pxX-45; if(left<2)left=2; if(left+90>pr.width-2)left=pr.width-92;
-    htmlTip.innerHTML=`<div style="font-size:9px;opacity:.7">${t}</div><div>${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>`;
-    htmlTip.style.cssText=`display:block;position:absolute;left:${left.toFixed(0)}px;top:${Math.max(2,pxY-44).toFixed(0)}px;background:rgba(12,12,24,.96);border:1.5px solid ${color};border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;z-index:10;pointer-events:none;text-align:center`;
+    const tc = svg._tc;
+    if(!tc) return;
+    const rc = svg.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (cx-rc.left)/rc.width));
+    const idx   = Math.max(0, Math.min(tc.pts.length-1, Math.round(ratio*(tc.pts.length-1))));
+    const val   = tc.pts[idx];
+    const t     = tc.times[idx]||'';
+    const pr    = svg.parentElement.getBoundingClientRect();
+    const pxX   = ratio * pr.width;
+    let left = pxX - 55; if(left<2)left=2; if(left+110>pr.width-2)left=pr.width-112;
+
+    let html;
+    if(tc.isKLine && tc.ohlc?.[idx]){
+      const k = tc.ohlc[idx];
+      const kUp = k.c >= k.o;
+      html = `<div style="font-size:9px;opacity:.7">${t}</div>`
+           + `<div style="color:${kUp?'#ff4c6a':'#00d4aa'}">收 ${k.c.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>`
+           + `<div style="font-size:10px;opacity:.8">開 ${k.o.toFixed(0)} 高 ${k.h.toFixed(0)} 低 ${k.l.toFixed(0)}</div>`;
+    } else {
+      html = `<div style="font-size:9px;opacity:.7">${t}</div><div>${val.toLocaleString('zh-TW',{maximumFractionDigits:2})}</div>`;
+    }
+    htmlTip.innerHTML = html;
+    htmlTip.style.cssText=`display:block;position:absolute;left:${left.toFixed(0)}px;top:4px;background:rgba(12,12,24,.96);border:1.5px solid ${tc.color};border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;color:#fff;z-index:10;pointer-events:none`;
   }
   function hideT(){ htmlTip.style.display='none'; }
 
@@ -6873,6 +7076,13 @@ function _onStockSearchFocus(){
   const inp = document.getElementById('stockSearchInput');
   if(inp && inp.parentElement)
     inp.parentElement.style.borderColor = 'var(--purple)';
+  // 計算搜尋結果 top = 搜尋欄底部
+  const bar = document.getElementById('stockSearchBar');
+  const res = document.getElementById('stockSearchResults');
+  if(bar && res){
+    const barH = bar.getBoundingClientRect().bottom;
+    res.style.top = barH + 'px';
+  }
   // 若有內容，顯示搜尋結果
   if(inp && inp.value.trim()){
     const el = document.getElementById('stockSearchResults');
