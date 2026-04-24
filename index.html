@@ -5611,12 +5611,28 @@ function _renderTaiexChart(){
   if(priceEl) priceEl.textContent = lastPt.toLocaleString('zh-TW',{maximumFractionDigits:2});
   if(chgEl){ chgEl.textContent=`${chgAbs>=0?'+':''}${chgAbs.toFixed(0)} (${chgPct>=0?'+':''}${chgPct.toFixed(2)}%)`; chgEl.style.color=isUp?'var(--red)':'var(--green)'; }
 
-  // 時間軸
+  // 時間軸（精確對齊折線 X 座標）
   const axisEl = document.getElementById('taiexTimeAxis');
   if(axisEl && times.length){
-    const n=times.length;
-    const picks=[0,Math.floor(n/3),Math.floor(n*2/3),n-1];
-    axisEl.innerHTML = picks.map(i=>`<span>${times[Math.min(i,n-1)]||''}</span>`).join('');
+    const n    = times.length;
+    const pL   = 48, pR = 4;  // 與折線/K線 padL/padR 一致
+    const picks = [0, Math.floor(n*0.33), Math.floor(n*0.66), n-1];
+    axisEl.style.position = 'relative';
+    axisEl.style.height   = '14px';
+    axisEl.innerHTML = '';
+    picks.forEach(i => {
+      const t    = times[Math.min(i, n-1)] || '';
+      const ratio= n > 1 ? i / (n-1) : 0;
+      // 折線/K線的實際 X 百分比（含 padL 偏移）
+      const leftPct = (pL + ratio * (W - pL - pR)) / W * 100;
+      const span = document.createElement('span');
+      span.textContent = t;
+      span.style.cssText = 'position:absolute;left:'+leftPct.toFixed(1)+'%;'
+        +'transform:translateX(-50%);font-size:9px;color:var(--text3);white-space:nowrap';
+      if(i === 0)   span.style.transform = 'translateX(0)';
+      if(i === n-1) span.style.transform = 'translateX(-100%)';
+      axisEl.appendChild(span);
+    });
   }
 
   // 成交量
@@ -5633,14 +5649,40 @@ function _renderTaiexChart(){
       volLbl.style.color = lastV>=avgV?'var(--red)':'var(--green)';
     }
     volBars.innerHTML = vols.map((v,i)=>{
-      const h=Math.max(2,Math.round(v/maxV*38));
-      const isL=i===vols.length-1, isH=v/maxV>0.7;
-      const bg=isL?'#00d4aa':isH?'#7c5cfc':'rgba(255,255,255,.18)';
-      return `<div style="flex:1;background:${bg};height:${h}px;border-radius:2px 2px 0 0;align-self:flex-end"></div>`;
+      const h = Math.max(2, Math.round(v/maxV*38));
+      let bg;
+      if(isKLine && data.ohlc?.[i]){
+        // K線模式：依開收判斷漲跌
+        bg = data.ohlc[i].c >= data.ohlc[i].o ? 'rgba(255,76,106,.7)' : 'rgba(0,212,170,.7)';
+      } else {
+        // 今日折線：依該點相對前一點漲跌
+        const isBarUp = i === 0 ? true : pts[i] >= pts[i-1];
+        bg = isBarUp ? 'rgba(255,76,106,.6)' : 'rgba(0,212,170,.6)';
+      }
+      // 今日最後一根：加亮標示
+      if(i === vols.length-1) bg = isKLine
+        ? (data.ohlc?.[i]?.c >= data.ohlc?.[i]?.o ? '#ff4c6a' : '#00d4aa')
+        : (isUp ? '#ff4c6a' : '#00d4aa');
+      return '<div style="flex:1;background:'+bg+';height:'+h+'px;border-radius:2px 2px 0 0;align-self:flex-end"></div>';
     }).join('');
-    if(volAxis && times.length){
-      const vi=[0,Math.floor(times.length/2),times.length-1];
-      volAxis.innerHTML=vi.map(i=>`<span>${times[Math.min(i,times.length-1)]||''}</span>`).join('');
+    if(volAxis && vols.length){
+      const nv   = vols.length;
+      const picks2 = [0, Math.floor(nv/2), nv-1];
+      volAxis.style.position = 'relative';
+      volAxis.style.height   = '12px';
+      volAxis.innerHTML = '';
+      picks2.forEach(i => {
+        const t2 = times[Math.min(i, times.length-1)] || '';
+        const ratio2 = nv > 1 ? i/(nv-1) : 0;
+        const lp2 = (ratio2 * 100).toFixed(1);
+        const sp2 = document.createElement('span');
+        sp2.textContent = t2;
+        sp2.style.cssText = 'position:absolute;left:'+lp2+'%;transform:translateX(-50%);'
+          +'font-size:9px;color:var(--text3);white-space:nowrap';
+        if(i===0)    sp2.style.transform = 'translateX(0)';
+        if(i===nv-1) sp2.style.transform = 'translateX(-100%)';
+        volAxis.appendChild(sp2);
+      });
     }
   }
 
@@ -8885,8 +8927,15 @@ async function refreshPulse(){
   _pulseTimer  = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
   // 盤中同步更新市場成交量（避免重複呼叫，只在 refreshPulse 觸發時更新）
   if(inSess) loadMarketVolume().catch(()=>{});
-  // 加權指數圖更新（盤中每次更新，盤後僅首次載入）
-  if(inSess || !_taiexData['1D']) loadTaiexChart().catch(()=>{});
+  // 加權指數圖更新：
+  // 盤中（09:00-13:45）→ 每次 refreshPulse 都更新今日折線
+  // 盤後 → 只在 1D 尚未載入時才載入一次，之後不再更新
+  if(inSess){
+    loadTaiexChart().catch(()=>{});  // 盤中：即時更新
+  } else if(!_taiexData['1D']){
+    loadTaiexChart().catch(()=>{});  // 盤後首次：載入當日收盤走勢
+  }
+  // 盤後：月/季已載入就不重複載入
 }
 
 function updatePulse(instData, indexData, txfData){
