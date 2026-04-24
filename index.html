@@ -5439,44 +5439,79 @@ async function loadTaiexChart(){
   _renderTaiexChart();
 }
 
-// ── K 線繪製函式 ─────────────────────────────────────────
+// ── K 線繪製函式（含 Y 軸刻度 + 格線）──────────────────────
 function _drawKLine(svg, ohlc, W=400, H=120){
-  svg.innerHTML = '';
+  // 清除舊內容（保留 defs）
+  while(svg.lastChild && svg.lastChild.tagName!=='defs') svg.removeChild(svg.lastChild);
+
   if(!ohlc?.length) return;
-  const n   = ohlc.length;
-  const mn  = Math.min(...ohlc.map(k=>k.l));
-  const mx  = Math.max(...ohlc.map(k=>k.h));
-  const rng = mx - mn || mn * 0.01 || 1;
-  const padT=8, padB=8, padL=2, padR=2;
-  const barW = Math.max(2, (W - padL - padR) / n - 1.5);
-  const toX  = i => padL + i / n * (W - padL - padR) + (W - padL - padR) / n / 2;
-  const toY  = v => H - padB - ((v - mn) / rng) * (H - padT - padB);
+  const n    = ohlc.length;
+  const mn   = Math.min(...ohlc.map(k=>k.l));
+  const mx   = Math.max(...ohlc.map(k=>k.h));
+  const rng  = mx - mn || mn * 0.01 || 1;
+  const padT = 6, padB = 6, padL = 48, padR = 4; // padL 留給 Y 軸
 
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const barW   = Math.max(2, chartW / n * 0.7);
+  const toX    = i => padL + (i + 0.5) / n * chartW;
+  const toY    = v => H - padB - ((v - mn) / rng) * chartH;
+
+  const NS = 'http://www.w3.org/2000/svg';
+
+  // ── Y 軸刻度（4條）─────────────────────────────────────
+  const yTicks = 4;
+  for(let t = 0; t <= yTicks; t++){
+    const v  = mn + (rng * t / yTicks);
+    const y  = toY(v);
+    // 格線
+    const grid = document.createElementNS(NS,'line');
+    grid.setAttribute('x1', padL); grid.setAttribute('x2', W - padR);
+    grid.setAttribute('y1', y.toFixed(1)); grid.setAttribute('y2', y.toFixed(1));
+    grid.setAttribute('stroke','rgba(255,255,255,.06)');
+    grid.setAttribute('stroke-width','1');
+    svg.appendChild(grid);
+    // Y 軸文字
+    if(t > 0 && t < yTicks){  // 只顯示中間3條
+      const txt = document.createElementNS(NS,'text');
+      txt.setAttribute('x', (padL - 4).toString());
+      txt.setAttribute('y', (y + 3).toFixed(1));
+      txt.setAttribute('text-anchor','end');
+      txt.setAttribute('font-size','9');
+      txt.setAttribute('fill','rgba(255,255,255,.45)');
+      // 格式：≥10000 顯示萬，否則正常
+      const label = v >= 10000 ? (v/1).toFixed(0) : v.toFixed(0);
+      txt.textContent = Number(label).toLocaleString('zh-TW');
+      svg.appendChild(txt);
+    }
+  }
+
+  // ── K 線實體 ───────────────────────────────────────────
   ohlc.forEach((k, i) => {
-    const isUp  = k.c >= k.o;
-    const color = isUp ? '#ff4c6a' : '#00d4aa';
-    const cx    = toX(i);
-    const openY = toY(k.o), closeY = toY(k.c);
-    const highY = toY(k.h), lowY   = toY(k.l);
-    const bodyT = Math.min(openY, closeY);
-    const bodyH = Math.max(2, Math.abs(openY - closeY));
+    const isUp   = k.c >= k.o;
+    const color  = isUp ? '#ff4c6a' : '#00d4aa';
+    const cx     = toX(i);
+    const openY  = toY(k.o), closeY = toY(k.c);
+    const highY  = toY(k.h), lowY   = toY(k.l);
+    const bodyT  = Math.min(openY, closeY);
+    const bodyH  = Math.max(2, Math.abs(openY - closeY));
 
-    // 上下影線
-    const wick = document.createElementNS('http://www.w3.org/2000/svg','line');
+    // 影線
+    const wick = document.createElementNS(NS,'line');
     wick.setAttribute('x1', cx.toFixed(1)); wick.setAttribute('x2', cx.toFixed(1));
     wick.setAttribute('y1', highY.toFixed(1)); wick.setAttribute('y2', lowY.toFixed(1));
     wick.setAttribute('stroke', color); wick.setAttribute('stroke-width','1');
     svg.appendChild(wick);
 
-    // 實體
-    const body = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    body.setAttribute('x', (cx - barW/2).toFixed(1));
-    body.setAttribute('y', bodyT.toFixed(1));
-    body.setAttribute('width', barW.toFixed(1));
+    // 實體（漲跌都填實心）
+    const body = document.createElementNS(NS,'rect');
+    body.setAttribute('x',      (cx - barW/2).toFixed(1));
+    body.setAttribute('y',      bodyT.toFixed(1));
+    body.setAttribute('width',  barW.toFixed(1));
     body.setAttribute('height', bodyH.toFixed(1));
-    body.setAttribute('fill', isUp ? color : 'none');
+    body.setAttribute('fill',   color);         // 實心
     body.setAttribute('stroke', color);
-    body.setAttribute('stroke-width', '1');
+    body.setAttribute('stroke-width','0.5');
     svg.appendChild(body);
   });
 }
@@ -5488,6 +5523,10 @@ function _renderTaiexChart(){
     if(loadEl){ loadEl.style.display='flex'; loadEl.textContent='資料暫時無法取得'; }
     return;
   }
+
+  // 隱藏載入中提示
+  const loadEl2 = document.getElementById('taiexChartLoading');
+  if(loadEl2) loadEl2.style.display = 'none';
 
   const pts  = data.pts, vols = data.vol||[], times = data.times||[];
   const isKLine = !!data.isKLine;
@@ -5512,11 +5551,21 @@ function _renderTaiexChart(){
     kGroup.classList.add('kbar');
     _drawKLine(kGroup, data.ohlc, W, H);
     svgEl.appendChild(kGroup);
+
+    // K 線模式：加透明觸控覆蓋層接收 hover/touch 事件
+    const kOverlay = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    kOverlay.setAttribute('x','0'); kOverlay.setAttribute('y','0');
+    kOverlay.setAttribute('width', W.toString()); kOverlay.setAttribute('height', H.toString());
+    kOverlay.setAttribute('fill','transparent');
+    kOverlay.setAttribute('class','kbar');
+    kOverlay.style.cursor = 'crosshair';
+    svgEl.appendChild(kOverlay);
   } else {
     // 折線模式（今日）
     svgEl.querySelectorAll('.kbar').forEach(e=>e.remove());
     const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
-    const toX = i => i/(Math.max(pts.length-1,1))*W;
+    const linePadL=48, linePadR=4;
+    const toX = i => linePadL + i/(Math.max(pts.length-1,1))*(W-linePadL-linePadR);
     const toY = v => H-padB-((v-mn)/rng)*(H-padT-padB);
     const coords = pts.map((v,i)=>[toX(i),toY(v)]);
     const pathD  = coords.map((c,i)=>(i?'L':'M')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
@@ -5525,10 +5574,33 @@ function _renderTaiexChart(){
     const fillEl = document.getElementById('taiexFill');
     const lineEl = document.getElementById('taiexLine');
     const dotEl  = document.getElementById('taiexDot');
-    if(fillEl) fillEl.setAttribute('d', pathD+` L${W},${H} L0,${H} Z`);
+    if(fillEl) fillEl.setAttribute('d', pathD+` L${(W-linePadR).toFixed(1)},${H} L${linePadL},${H} Z`);
     if(lineEl){ lineEl.setAttribute('d',pathD); lineEl.setAttribute('stroke',color); }
     const last = coords[coords.length-1];
     if(dotEl){ dotEl.setAttribute('cx',last[0].toFixed(1)); dotEl.setAttribute('cy',last[1].toFixed(1)); dotEl.setAttribute('fill',color); }
+
+    // 今日折線 Y 軸刻度（3條：最高/中/最低）
+    const NS2 = 'http://www.w3.org/2000/svg';
+    svgEl.querySelectorAll('.y-axis-tick').forEach(e=>e.remove());
+    const mn2=Math.min(...pts), mx2=Math.max(...pts), rng2=mx2-mn2||1;
+    const padL2=48, padB2=10, padT2=10;
+    const toY2 = v => H-padB2-((v-mn2)/rng2)*(H-padT2-padB2);
+    [mx2, (mx2+mn2)/2, mn2].forEach(v=>{
+      const ty = toY2(v);
+      const gl = document.createElementNS(NS2,'line');
+      gl.setAttribute('x1', padL2); gl.setAttribute('x2', W-4);
+      gl.setAttribute('y1', ty.toFixed(1)); gl.setAttribute('y2', ty.toFixed(1));
+      gl.setAttribute('stroke','rgba(255,255,255,.06)'); gl.setAttribute('stroke-width','1');
+      gl.setAttribute('class','y-axis-tick');
+      svgEl.appendChild(gl);
+      const tx = document.createElementNS(NS2,'text');
+      tx.setAttribute('x', (padL2-4).toString()); tx.setAttribute('y', (ty+3).toFixed(1));
+      tx.setAttribute('text-anchor','end'); tx.setAttribute('font-size','9');
+      tx.setAttribute('fill','rgba(255,255,255,.45)');
+      tx.setAttribute('class','y-axis-tick');
+      tx.textContent = Number(v.toFixed(0)).toLocaleString('zh-TW');
+      svgEl.appendChild(tx);
+    });
   } // end else 折線模式
 
   // 價格 + 漲跌
@@ -5582,17 +5654,25 @@ function _renderTaiexChart(){
   // K線模式下 coords 不存在，tooltip 用簡化版
   const coords = !isKLine ? (() => {
     const mn2=Math.min(...pts), mx2=Math.max(...pts), rng2=mx2-mn2||1;
-    const toX2=i=>i/(Math.max(pts.length-1,1))*W;
+    const lPL=48, lPR=4;
+    const toX2=i=>lPL+i/(Math.max(pts.length-1,1))*(W-lPL-lPR);
     const toY2=v=>H-padB-((v-mn2)/rng2)*(H-padT-padB);
     return pts.map((v,i)=>[toX2(i),toY2(v)]);
-  })() : pts.map((_,i)=>[i/(Math.max(pts.length-1,1))*W, H/2]);
+  })() : (() => {
+    // K 線模式：用各 bar 中心 X
+    const n2=pts.length;
+    return pts.map((_,i)=>[(48+(i+0.5)/n2*(W-52)), H/2]);
+  })();
   svg._tc = {pts,coords,times,color,W,H,ohlc:data.ohlc||null,isKLine};
 
   function showT(cx,cy){
     const tc = svg._tc;
     if(!tc) return;
     const rc = svg.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (cx-rc.left)/rc.width));
+    // 考慮 padL（Y軸空間），只取折線區域的比例
+    const padLpx = tc.isKLine ? (48/400)*rc.width : (48/400)*rc.width;
+    const chartPx = rc.width - padLpx - (4/400)*rc.width;
+    const ratio = Math.max(0, Math.min(1, (cx - rc.left - padLpx) / chartPx));
     const idx   = Math.max(0, Math.min(tc.pts.length-1, Math.round(ratio*(tc.pts.length-1))));
     const val   = tc.pts[idx];
     const t     = tc.times[idx]||'';
