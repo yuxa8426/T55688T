@@ -501,6 +501,41 @@
 
 
 </div>
+
+  <!-- VIX 恐慌指數 -->
+  <div class="sec" style="padding-bottom:6px"><h2>😨 VIX 恐慌指數</h2></div>
+<div class="vix-wrap">
+    <div class="vix-top">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">CBOE VIX · 美股恐慌指標</div>
+          <div class="vix-num" id="vixNum">—<span class="vix-unit" id="vixDec"></span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span id="vixChg" style="font-size:14px;font-weight:700;color:var(--text3)">—</span>
+            <span style="font-size:11px;color:var(--text3)" id="vixDataDate">載入中…</span>
+          </div>
+        </div>
+        <span class="vix-badge" id="vixBadge">—</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-needle" id="vixNeedle" style="left:0%"></div></div>
+      <div class="gauge-labels"><span>0</span><span>15</span><span>25</span><span>35</span><span>50+</span></div>
+      <div class="vix-zones">
+        <div class="vzone z1" id="vz1">😌<br>低波動<br><small>&lt;15</small></div>
+        <div class="vzone z2" id="vz2">😐<br>正常<br><small>15~25</small></div>
+        <div class="vzone z3" id="vz3">😰<br>緊張<br><small>25~35</small></div>
+        <div class="vzone z4" id="vz4">😱<br>恐慌<br><small>&gt;35</small></div>
+      </div>
+    </div>
+    <div class="vix-bottom">
+      <div class="vix-stats">
+        <div class="vstat"><div class="vl">近5日均</div><div class="vv" id="vixAvg">—</div></div>
+        <div class="vstat"><div class="vl">近月高</div><div class="vv" id="vixHi">—</div></div>
+        <div class="vstat"><div class="vl">近月低</div><div class="vv" id="vixLo">—</div></div>
+        <div class="vstat"><div class="vl">月百分位</div><div class="vv gold" id="vixPct">—</div></div>
+      </div>
+      <div class="vix-note" id="vixNote"><strong class="purple">🤖 AI 解讀：</strong>資料載入中…</div>
+    </div>
+  </div>
 </div>
 <div class="page" id="page-stock">
   <!-- 個股搜尋欄（fixed 固定頂部，完全不被遮擋）-->
@@ -1185,38 +1220,7 @@
       <button onclick="loadVix(true)" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 6px" title="立即更新">↻</button>
     </div>
   </div>
-  <div class="vix-wrap">
-    <div class="vix-top">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
-        <div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">CBOE VIX · 美股恐慌指標</div>
-          <div class="vix-num" id="vixNum">—<span class="vix-unit" id="vixDec"></span></div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-            <span id="vixChg" style="font-size:14px;font-weight:700;color:var(--text3)">—</span>
-            <span style="font-size:11px;color:var(--text3)" id="vixDataDate">載入中…</span>
-          </div>
-        </div>
-        <span class="vix-badge" id="vixBadge">—</span>
-      </div>
-      <div class="gauge-track"><div class="gauge-needle" id="vixNeedle" style="left:0%"></div></div>
-      <div class="gauge-labels"><span>0</span><span>15</span><span>25</span><span>35</span><span>50+</span></div>
-      <div class="vix-zones">
-        <div class="vzone z1" id="vz1">😌<br>低波動<br><small>&lt;15</small></div>
-        <div class="vzone z2" id="vz2">😐<br>正常<br><small>15~25</small></div>
-        <div class="vzone z3" id="vz3">😰<br>緊張<br><small>25~35</small></div>
-        <div class="vzone z4" id="vz4">😱<br>恐慌<br><small>&gt;35</small></div>
-      </div>
-    </div>
-    <div class="vix-bottom">
-      <div class="vix-stats">
-        <div class="vstat"><div class="vl">近5日均</div><div class="vv" id="vixAvg">—</div></div>
-        <div class="vstat"><div class="vl">近月高</div><div class="vv" id="vixHi">—</div></div>
-        <div class="vstat"><div class="vl">近月低</div><div class="vv" id="vixLo">—</div></div>
-        <div class="vstat"><div class="vl">月百分位</div><div class="vv gold" id="vixPct">—</div></div>
-      </div>
-      <div class="vix-note" id="vixNote"><strong class="purple">🤖 AI 解讀：</strong>資料載入中…</div>
-    </div>
-  </div>
+  
 
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <h2>重大消息 &amp; 市場新聞</h2>
