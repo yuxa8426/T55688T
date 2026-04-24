@@ -5371,7 +5371,13 @@ async function loadTaiexChart(){
       if(r.ok){
         const body = await r.json();
         if(body?.pts?.length > 2){
-          _taiexData['1D'] = { pts:body.pts, times:body.times||[], vol:body.vol||[] };
+          // body.y = 昨日收盤（TWSE tse_t00 提供）
+          _taiexData['1D'] = {
+            pts:     body.pts,
+            times:   body.times||[],
+            vol:     body.vol||[],
+            prevClose: body.y || body.prevClose || null,
+          };
         } else if(body?.chart?.result?.[0]){
           // Yahoo Finance 格式備援
           const res = body.chart.result[0];
@@ -5449,7 +5455,7 @@ function _drawKLine(svg, ohlc, W=400, H=120){
   const mn   = Math.min(...ohlc.map(k=>k.l));
   const mx   = Math.max(...ohlc.map(k=>k.h));
   const rng  = mx - mn || mn * 0.01 || 1;
-  const padT = 6, padB = 6, padL = 48, padR = 4; // padL 留給 Y 軸
+  const padT = 6, padB = 6, padL = 36, padR = 4; // padL 留給 Y 軸
 
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
@@ -5474,7 +5480,7 @@ function _drawKLine(svg, ohlc, W=400, H=120){
     // Y 軸文字
     if(t > 0 && t < yTicks){  // 只顯示中間3條
       const txt = document.createElementNS(NS,'text');
-      txt.setAttribute('x', (padL - 4).toString());
+      txt.setAttribute('x', (padL - 3).toString());
       txt.setAttribute('y', (y + 3).toFixed(1));
       txt.setAttribute('text-anchor','end');
       txt.setAttribute('font-size','9');
@@ -5564,7 +5570,7 @@ function _renderTaiexChart(){
     // 折線模式（今日）
     svgEl.querySelectorAll('.kbar').forEach(e=>e.remove());
     const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.01||1;
-    const linePadL=48, linePadR=4;
+    const linePadL=36, linePadR=4;
     const toX = i => linePadL + i/(Math.max(pts.length-1,1))*(W-linePadL-linePadR);
     const toY = v => H-padB-((v-mn)/rng)*(H-padT-padB);
     const coords = pts.map((v,i)=>[toX(i),toY(v)]);
@@ -5583,7 +5589,7 @@ function _renderTaiexChart(){
     const NS2 = 'http://www.w3.org/2000/svg';
     svgEl.querySelectorAll('.y-axis-tick').forEach(e=>e.remove());
     const mn2=Math.min(...pts), mx2=Math.max(...pts), rng2=mx2-mn2||1;
-    const padL2=48, padB2=10, padT2=10;
+    const padL2=36, padB2=10, padT2=10;
     const toY2 = v => H-padB2-((v-mn2)/rng2)*(H-padT2-padB2);
     [mx2, (mx2+mn2)/2, mn2].forEach(v=>{
       const ty = toY2(v);
@@ -5606,16 +5612,36 @@ function _renderTaiexChart(){
   // 價格 + 漲跌
   const priceEl = document.getElementById('taiexChartPrice');
   const chgEl   = document.getElementById('taiexChartChg');
-  const lastPt=pts[pts.length-1], firstPt=pts[0];
-  const chgAbs=lastPt-firstPt, chgPct=firstPt>0?chgAbs/firstPt*100:0;
+  const lastPt  = pts[pts.length-1];
+
+  // 漲跌基準：
+  // 今日折線 → 用昨日收盤（data.prevClose），若無則用 pts[0]
+  // 月/季 K線 → 用最後一根K線的昨收（倒數第二根的收盤），若無則用 ohlc[-1].o
+  let prevClose;
+  if(isKLine && data.ohlc?.length >= 2){
+    // 用倒數第二根K線的收盤作為昨收
+    prevClose = data.ohlc[data.ohlc.length - 2].c;
+  } else if(data.prevClose){
+    prevClose = data.prevClose;
+  } else {
+    // 今日：pts[0] 是開盤，接近昨收
+    prevClose = pts[0];
+  }
+
+  const chgAbs = lastPt - prevClose;
+  const chgPct = prevClose > 0 ? chgAbs / prevClose * 100 : 0;
   if(priceEl) priceEl.textContent = lastPt.toLocaleString('zh-TW',{maximumFractionDigits:2});
-  if(chgEl){ chgEl.textContent=`${chgAbs>=0?'+':''}${chgAbs.toFixed(0)} (${chgPct>=0?'+':''}${chgPct.toFixed(2)}%)`; chgEl.style.color=isUp?'var(--red)':'var(--green)'; }
+  if(chgEl){
+    chgEl.textContent = (chgAbs>=0?'+':'') + chgAbs.toFixed(0)
+      + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
+    chgEl.style.color = isUp ? 'var(--red)' : 'var(--green)';
+  }
 
   // 時間軸（精確對齊折線 X 座標）
   const axisEl = document.getElementById('taiexTimeAxis');
   if(axisEl && times.length){
     const n    = times.length;
-    const pL   = 48, pR = 4;  // 與折線/K線 padL/padR 一致
+    const pL   = 36, pR = 4;  // 與折線/K線 padL/padR 一致
     const picks = [0, Math.floor(n*0.33), Math.floor(n*0.66), n-1];
     axisEl.style.position = 'relative';
     axisEl.style.height   = '14px';
@@ -5659,10 +5685,17 @@ function _renderTaiexChart(){
         const isBarUp = i === 0 ? true : pts[i] >= pts[i-1];
         bg = isBarUp ? 'rgba(255,76,106,.6)' : 'rgba(0,212,170,.6)';
       }
-      // 今日最後一根：加亮標示
-      if(i === vols.length-1) bg = isKLine
-        ? (data.ohlc?.[i]?.c >= data.ohlc?.[i]?.o ? '#ff4c6a' : '#00d4aa')
-        : (isUp ? '#ff4c6a' : '#00d4aa');
+      // 今日最後一根：加亮標示 + 月季K線最後一根補盤中成交量
+      if(i === vols.length-1){
+        bg = isKLine
+          ? (data.ohlc?.[i]?.c >= data.ohlc?.[i]?.o ? '#ff4c6a' : '#00d4aa')
+          : (isUp ? '#ff4c6a' : '#00d4aa');
+        // 月季最後一根若成交量為 0（今日盤中），用 1D 累計量替代
+        if(isKLine && v === 0 && _taiexData['1D']?.vol?.length){
+          const intraVol = _taiexData['1D'].vol.reduce((s,x)=>s+(x||0), 0);
+          if(intraVol > 0) vols[i] = intraVol; // 動態補值
+        }
+      }
       return '<div style="flex:1;background:'+bg+';height:'+h+'px;border-radius:2px 2px 0 0;align-self:flex-end"></div>';
     }).join('');
     if(volAxis && vols.length){
@@ -5696,14 +5729,14 @@ function _renderTaiexChart(){
   // K線模式下 coords 不存在，tooltip 用簡化版
   const coords = !isKLine ? (() => {
     const mn2=Math.min(...pts), mx2=Math.max(...pts), rng2=mx2-mn2||1;
-    const lPL=48, lPR=4;
+    const lPL=36, lPR=4;
     const toX2=i=>lPL+i/(Math.max(pts.length-1,1))*(W-lPL-lPR);
     const toY2=v=>H-padB-((v-mn2)/rng2)*(H-padT-padB);
     return pts.map((v,i)=>[toX2(i),toY2(v)]);
   })() : (() => {
     // K 線模式：用各 bar 中心 X
     const n2=pts.length;
-    return pts.map((_,i)=>[(48+(i+0.5)/n2*(W-52)), H/2]);
+    return pts.map((_,i)=>[(36+(i+0.5)/n2*(W-40)), H/2]);
   })();
   svg._tc = {pts,coords,times,color,W,H,ohlc:data.ohlc||null,isKLine};
 
@@ -5712,7 +5745,7 @@ function _renderTaiexChart(){
     if(!tc) return;
     const rc = svg.getBoundingClientRect();
     // 考慮 padL（Y軸空間），只取折線區域的比例
-    const padLpx = tc.isKLine ? (48/400)*rc.width : (48/400)*rc.width;
+    const padLpx = tc.isKLine ? (36/400)*rc.width : (36/400)*rc.width;
     const chartPx = rc.width - padLpx - (4/400)*rc.width;
     const ratio = Math.max(0, Math.min(1, (cx - rc.left - padLpx) / chartPx));
     const idx   = Math.max(0, Math.min(tc.pts.length-1, Math.round(ratio*(tc.pts.length-1))));
