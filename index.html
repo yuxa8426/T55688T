@@ -3015,30 +3015,32 @@ function _parseQuote(data, stockId){
   const lastClose = parseFloat(lastRow.close);
   const prevClose = prevRow ? parseFloat(prevRow.close) : parseFloat(lastRow.open||lastClose);
 
-  // 判斷「最後一筆是今日還是昨日」
-  // 若最後一筆日期 = 今天（台灣），就用倒數第二筆當 prevClose
-  const taiwanToday = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei',
-    year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
-  // FinMind 日期格式：2026-04-24
-  const isToday = lastRow.date && lastRow.date.replace(/\//g,'-').slice(0,10) === taiwanToday.slice(0,10);
+  // 台灣今日（YYYY-MM-DD）
+  const _twNow = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const taiwanToday = _twNow.getFullYear()+'-'
+    +String(_twNow.getMonth()+1).padStart(2,'0')+'-'
+    +String(_twNow.getDate()).padStart(2,'0');
 
-  let price, pc, change, changePct;
-  if(isToday){
-    // 今日資料已入庫：最後一筆是今日，倒數第二筆是昨收
-    price      = lastClose;
-    pc         = prevRow ? parseFloat(prevRow.close) : parseFloat(lastRow.open||lastClose);
-    change     = price - pc;
-    changePct  = pc > 0 ? (change/pc)*100 : 0;
-  } else {
-    // 盤中（今日尚未入庫）：最後一筆是昨日收盤 → prevClose 就是它
-    // price 設為昨收，稍後 intraday 會覆蓋成今日即時
-    price      = lastClose;   // 暫時為昨收，intraday 覆蓋後才是今日
-    pc         = lastClose;   // prevClose = 昨收
-    change     = 0;           // 暫時，intraday 覆蓋後重算
-    changePct  = 0;
-  }
+  const lastDate = (lastRow.date||'').replace(/\//g,'-').slice(0,10);
+  const isToday  = lastDate === taiwanToday;
+
+  // prevClose 邏輯：
+  //   今日盤後已入庫 → data[-1]=今日, data[-2]=昨收
+  //   盤中/尚未入庫 → data[-1]=昨收（本身就是 prevClose）
+  const pc = prevRow ? parseFloat(prevRow.close) : parseFloat(lastRow.open||lastClose);
+
+  // price 初始值：
+  //   盤後已入庫 → 今日收盤
+  //   盤中 → 昨收（intraday 稍後覆蓋成今日即時）
+  const price     = lastClose;
+  const change    = isToday ? (lastClose - pc) : 0;
+  const changePct = (isToday && pc > 0) ? (change/pc)*100 : 0;
 
   markFresh('quote');
+  console.log('[_parseQuote]', stockId, {
+    lastDate: lastRow.date, lastClose, pc, isToday,
+    changePct: changePct.toFixed(2)+'%', taiwanToday, dataLen: data.length
+  });
   return {
     stockId,
     price,
@@ -3084,7 +3086,7 @@ async function fmStockData(stockId, days=250){
 
 // 薄包裝：向後相容（有 fmFetch cache 保證不重複 HTTP 請求）
 async function fmQuote(stockId){
-  const data = await fmStockData(stockId, 5);
+  const data = await fmStockData(stockId, 10); // 10天確保跨週末也有足夠資料
   return _parseQuote(data, stockId);
 }
 async function fmHistory(stockId, days=60){
