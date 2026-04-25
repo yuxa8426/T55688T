@@ -2809,7 +2809,9 @@ function scheduleAutoRefresh(){
           else if(pts.length>2) drawChart(pts,isUp?'#ff4c6a':'#00d4aa',rdates);
         }
         updateInstCard(inst, currentName);
-        updateAI(currentName, {...q, closes:h?.close||[], dates:h?.dates||[], inst});
+        updateAI(currentName, {...q,
+          closes: h?.close||[], highs: h?.high||[], lows: h?.low||[],
+          dates: h?.dates||[], inst});
         markFresh('quote');
         showToast('🔄 行情已更新');
       }
@@ -4430,6 +4432,8 @@ function updateLongTerm(price, closes, dates){
 // ════════════════════════════════════════════════════
 function updateAI(name, q){
   const closes = (q.closes||[]).filter(v=>v && !isNaN(v) && v>0);
+  const highs  = (q.highs ||closes).filter(v=>v>0);
+  const lows   = (q.lows  ||closes).filter(v=>v>0);
   const dates  = q.dates   || [];
   const inst   = q.inst    || null;
   const price  = q.price;
@@ -4489,7 +4493,9 @@ function updateAI(name, q){
 
       // 停利參考（技術面三個目標位）
       // 傳入法人資料供停利調整
-      const tp = calcTakeProfit(price, closes, user.risk, inst);
+      // 傳完整 histData（含 high/low 供 ATR 和費波那契計算）
+      const _volHistData = { close: closes, high: highs, low: lows };
+      const tp = calcTakeProfit(price, _volHistData, user.risk, inst);
       const tpBody  = document.getElementById('svTakeProfitBody');
       const tpBasis = document.getElementById('svTakeProfitBasis');
       if(tp && tpBody){
@@ -4506,13 +4512,16 @@ function updateAI(name, q){
           + fmtTpRow('積極', tp.tp3, tp.r3);
         if(tpBasis){
           const instLine = tp.instNote
-            ? '<br>👥 法人動向：<strong>'+tp.instNote+'</strong>' : '';
+            ? '<br>👥 法人：<span style="color:var(--gold)">'+tp.instNote+'</span>' : '';
+          const maLine = tp.ma20
+            ? '<br>📊 MA20='+tp.ma20+'・MA60='+(tp.ma60||'—')
+              +'・波段：'+tp.swingLow+'→'+tp.swingHigh : '';
           tpBasis.innerHTML =
             '📐 <strong>保守</strong>：'+tp.basis1
             +'<br>📐 <strong>標準</strong>：'+tp.basis2
             +'<br>📐 <strong>積極</strong>：'+tp.basis3
-            + instLine
-            +'<br>💡 建議分批停利：達保守目標出 1/3，標準再出 1/3，積極目標全出';
+            + maLine + instLine
+            +'<br>💡 分批停利：到保守目標出 1/3・標準再出 1/3・積極全出';
         }
       }
     }
@@ -14191,85 +14200,142 @@ function calcStopLoss(price, changePct, riskType){
   };
 }
 
-// 功能一-b：停利點計算（技術面壓力位 + 法人指標）
+// ════════════════════════════════════════════════════
+// 停利計算：ATR + 費波那契延伸 + 均線乖離（三法合一）
+// ════════════════════════════════════════════════════
+
+// 計算 ATR（Average True Range，真實波動平均值）
+function _calcATR(highs, lows, closes, period=14){
+  if(!highs||highs.length < period+1) return null;
+  const n = closes.length;
+  const trs = [];
+  for(let i=1; i<n; i++){
+    const hl  = highs[i]  - lows[i];
+    const hpc = Math.abs(highs[i]  - closes[i-1]);
+    const lpc = Math.abs(lows[i]   - closes[i-1]);
+    trs.push(Math.max(hl, hpc, lpc));
+  }
+  // Wilder's smoothing ATR（與 TradingView 一致）
+  let atr = trs.slice(0, period).reduce((a,b)=>a+b,0) / period;
+  for(let i=period; i<trs.length; i++){
+    atr = (atr * (period-1) + trs[i]) / period;
+  }
+  return +atr.toFixed(2);
+}
+
+// 計算移動平均線
+function _calcMA(closes, period){
+  if(closes.length < period) return null;
+  const slice = closes.slice(-period);
+  return +(slice.reduce((a,b)=>a+b,0)/period).toFixed(2);
+}
+
+// 識別最近波段低點（用於費波那契）
+function _findSwingLow(closes, highs, lows, lookback=30){
+  const n = Math.min(lookback, closes.length);
+  const recent = lows.slice(-n);
+  let minIdx=0, minVal=recent[0];
+  recent.forEach((v,i)=>{ if(v<minVal){minVal=v; minIdx=i;} });
+  // 波段低點前的高點
+  const beforeLow = highs.slice(-n, -n+minIdx+1);
+  const swingHigh = beforeLow.length ? Math.max(...beforeLow) : closes[closes.length-1];
+  return { swingLow: minVal, swingHigh };
+}
+
+// 主函式：停利計算
 // price:    當前股價
-// closes:   歷史收盤陣列（建議180天）
+// histData: { close, high, low, open } 歷史 K 線
 // riskType: low/mid/high/pro
-// inst:     法人資料 { foreignShares, trustShares, totalShares }（可選）
-function calcTakeProfit(price, closes, riskType, inst){
-  if(!price || price <= 0 || !closes || closes.length < 5) return null;
+// inst:     法人資料（可選）
+function calcTakeProfit(price, histData, riskType, inst){
+  const closes = (histData?.close||histData||[]).filter(v=>v>0);
+  const highs  = histData?.high  || closes;
+  const lows   = histData?.low   || closes;
 
-  const valid = closes.filter(v=>v>0);
-  const n     = valid.length;
-  if(!n) return null;
+  if(!price||price<=0||closes.length<20) return null;
 
-  // ── 技術壓力位計算 ──────────────────────────────────────
-  // 排除最近5日（避免把當前價算成高點）
-  const base = valid.slice(0, -5);  // 去掉最近5天
-  const h20  = base.length >= 15 ? Math.max(...base.slice(-20))  : price;
-  const h60  = base.length >= 30 ? Math.max(...base.slice(-60))  : price;
-  const h120 = base.length >= 60 ? Math.max(...base.slice(-120)) : price;
+  // ── 1. ATR 停利（最主要方法）────────────────────────────
+  const atr = _calcATR(highs, lows, closes, 14) || (price * 0.02);
+  // ATR 倍數（依風險偏好）
+  const atrMult = { low:[1.5,2.5,3.5], mid:[2,3,4.5], high:[2.5,4,6], pro:[3,5,8] };
+  const [m1,m2,m3] = atrMult[riskType] || atrMult.mid;
+  const atrT1 = +(price + atr * m1).toFixed(0);
+  const atrT2 = +(price + atr * m2).toFixed(0);
+  const atrT3 = +(price + atr * m3).toFixed(0);
 
-  // ── 法人買賣超調整 ───────────────────────────────────────
-  // 法人連續買超 → 籌碼集中 → 目標上調 5%
-  let instAdj = 1.0;
+  // ── 2. 費波那契延伸位（Fibonacci Extension）──────────────
+  const { swingLow, swingHigh } = _findSwingLow(closes, highs, lows, 60);
+  const fibBase = swingHigh - swingLow;
+  // 延伸位從當前低點計算（最近30日低點）
+  const recentLow = Math.min(...lows.slice(-30));
+  const fib1272 = +(recentLow + fibBase * 1.272).toFixed(0);
+  const fib1618 = +(recentLow + fibBase * 1.618).toFixed(0);
+  const fib2618 = +(recentLow + fibBase * 2.618).toFixed(0);
+
+  // ── 3. 均線乖離目標 ───────────────────────────────────────
+  const ma20 = _calcMA(closes, 20);
+  const ma60 = _calcMA(closes, 60);
+  // 歷史統計：台股 MA20 乖離 8% / MA60 乖離 15% 通常是短中線過熱
+  const maT1 = ma20 ? +(ma20 * 1.08).toFixed(0) : null;
+  const maT2 = ma60 ? +(ma60 * 1.15).toFixed(0) : null;
+
+  // ── 4. 法人籌碼調整 ──────────────────────────────────────
+  let instAdj  = 1.0;
   let instNote = '';
   if(inst){
     const netBuy = (inst.foreignShares||0) + (inst.trustShares||0);
+    const netBuyB = netBuy / 1e8; // 轉億元
     if(netBuy > 0){
-      instAdj = 1.05;
-      instNote = '（法人買超，目標上調5%）';
+      // 法人持續買超，目標上調（買超越多，調整越大，最多+10%）
+      instAdj  = Math.min(1.10, 1 + Math.min(netBuyB, 50)/500);
+      instNote = `法人淨買超 ${netBuyB.toFixed(1)} 億，籌碼集中，目標上調 ${((instAdj-1)*100).toFixed(0)}%`;
     } else if(netBuy < 0){
-      instAdj = 0.95;
-      instNote = '（法人賣超，目標下調5%）';
+      instAdj  = Math.max(0.92, 1 + Math.max(netBuyB, -50)/500);
+      instNote = `法人淨賣超 ${Math.abs(netBuyB).toFixed(1)} 億，建議提早獲利了結`;
     }
   }
 
-  // ── 固定比例目標（依風險偏好）───────────────────────────
-  const ratios = {
-    low:  { r1:0.05, r2:0.10, r3:0.18 },
-    mid:  { r1:0.08, r2:0.15, r3:0.25 },
-    high: { r1:0.10, r2:0.20, r3:0.35 },
-    pro:  { r1:0.15, r2:0.30, r3:0.50 },
+  // ── 5. 綜合目標（取三種方法的加權）─────────────────────
+  // 保守：ATR × 短倍 與 費波 1.272 取較小者
+  // 標準：ATR × 中倍 與 費波 1.618 取較接近者
+  // 積極：ATR × 長倍 或 費波 2.618，依風險偏好
+  const _wt = (a, b, wa=0.5) => +(a*wa + b*(1-wa)).toFixed(0);
+
+  let tp1 = Math.min(atrT1, fib1272 > price ? fib1272 : atrT1);
+  let tp2 = _wt(atrT2, fib1618 > price ? fib1618 : atrT2, 0.5);
+  let tp3 = Math.max(atrT3, fib2618 > price ? fib2618 : atrT3);
+
+  // 法人調整
+  tp1 = +(tp1 * instAdj).toFixed(0);
+  tp2 = +(tp2 * instAdj).toFixed(0);
+  tp3 = +(tp3 * instAdj).toFixed(0);
+
+  // 均線乖離校驗（不超過乖離天花板）
+  if(maT1 && tp1 > maT1 * 1.05) tp1 = maT1;
+  if(maT2 && tp2 > maT2 * 1.05) tp2 = maT2;
+
+  // 確保遞增且大於當前價
+  tp1 = Math.max(tp1, +(price*1.02).toFixed(0));
+  tp2 = Math.max(tp2, tp1+1);
+  tp3 = Math.max(tp3, tp2+1);
+
+  const r1 = +((tp1-price)/price*100).toFixed(1);
+  const r2 = +((tp2-price)/price*100).toFixed(1);
+  const r3 = +((tp3-price)/price*100).toFixed(1);
+
+  return {
+    tp1, tp2, tp3, r1, r2, r3,
+    atr, atrT1, atrT2, atrT3,
+    fib1272, fib1618, fib2618,
+    ma20, ma60, maT1, maT2,
+    instNote, instAdj,
+    swingLow, swingHigh, recentLow,
+    // 依據說明
+    basis1: `ATR(14) ${atr} × ${m1}倍 + Fib 1.272 (${fib1272})`,
+    basis2: `ATR(14) × ${m2}倍 + Fib 1.618 (${fib1618})`,
+    basis3: `ATR(14) × ${m3}倍 + Fib 2.618 (${fib2618})`,
   };
-  const R = ratios[riskType] || ratios.mid;
-
-  // ── 三個停利目標 ─────────────────────────────────────────
-  // 策略：取技術壓力位（較有意義）但若已突破則改用固定比例
-  const _pick = (techHigh, ratio) => {
-    const techTarget  = +(techHigh * instAdj).toFixed(0);  // 技術目標（含法人調整）
-    const ratioTarget = +(price * (1 + ratio)).toFixed(0);  // 固定比例目標
-    // 已突破技術高點 → 用固定比例（讓利潤繼續跑）
-    return price >= techHigh ? ratioTarget : Math.max(techTarget, price+1);
-  };
-
-  const p1 = _pick(h20,  R.r1);
-  const p2 = _pick(h60,  R.r2);
-  const p3 = _pick(h120, R.r3);
-  // 確保三個目標遞增
-  const tp1 = p1;
-  const tp2 = Math.max(p2, tp1 + 1);
-  const tp3 = Math.max(p3, tp2 + 1);
-
-  const r1  = +((tp1-price)/price*100).toFixed(1);
-  const r2  = +((tp2-price)/price*100).toFixed(1);
-  const r3  = +((tp3-price)/price*100).toFixed(1);
-
-  // 技術位與當前價的距離
-  const d20  = +((h20-price)/price*100).toFixed(1);
-  const d60  = +((h60-price)/price*100).toFixed(1);
-  const d120 = +((h120-price)/price*100).toFixed(1);
-
-  // 判斷目標依據
-  const basis1 = price >= h20  ? '固定比例（已突破近20日高點）' : '近20日高點壓力 '+h20+'（距'+d20+'%）';
-  const basis2 = price >= h60  ? '固定比例（已突破近60日高點）' : '近60日高點壓力 '+h60+'（距'+d60+'%）';
-  const basis3 = price >= h120 ? '固定比例（已突破近120日高點）': '近120日高點壓力 '+h120+'（距'+d120+'%）';
-
-  return { tp1, tp2, tp3, r1, r2, r3,
-    basis1, basis2, basis3, instNote,
-    h20, h60, h120, d20, d60, d120 };
 }
-
 // 功能二：建議倉位計算（凱利公式精簡版，依風險偏好）
 // winRate: 策略勝率(0-100)  capital: 資金規模字串  riskType: low/mid/high/pro
 // riskScore: 個股風險分(1-10)
