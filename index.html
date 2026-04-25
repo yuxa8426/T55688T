@@ -3007,23 +3007,51 @@ async function fmFetch(params, timeout=15000){
 // fmQuote / fmHistory 保留為薄包裝，供現有呼叫點使用（不需改呼叫處）
 function _parseQuote(data, stockId){
   if(!data||!data.length) return null;
-  const row  = data[data.length-1];
-  const prev = data.length>1 ? data[data.length-2].close : row.open;
-  const price = parseFloat(row.close);
-  const change = price - parseFloat(prev);
+  // FinMind TaiwanStockPrice：最後一筆 = 最近交易日（昨收 or 盤後今日）
+  // prevClose = 倒數第一筆收盤（昨收），price 初始也設為昨收
+  // intraday live override 稍後會把 price/changePct 覆蓋成今日即時
+  const lastRow  = data[data.length-1];
+  const prevRow  = data.length>1 ? data[data.length-2] : null;
+  const lastClose = parseFloat(lastRow.close);
+  const prevClose = prevRow ? parseFloat(prevRow.close) : parseFloat(lastRow.open||lastClose);
+
+  // 判斷「最後一筆是今日還是昨日」
+  // 若最後一筆日期 = 今天（台灣），就用倒數第二筆當 prevClose
+  const taiwanToday = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei',
+    year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  // FinMind 日期格式：2026-04-24
+  const isToday = lastRow.date && lastRow.date.replace(/\//g,'-').slice(0,10) === taiwanToday.slice(0,10);
+
+  let price, pc, change, changePct;
+  if(isToday){
+    // 今日資料已入庫：最後一筆是今日，倒數第二筆是昨收
+    price      = lastClose;
+    pc         = prevRow ? parseFloat(prevRow.close) : parseFloat(lastRow.open||lastClose);
+    change     = price - pc;
+    changePct  = pc > 0 ? (change/pc)*100 : 0;
+  } else {
+    // 盤中（今日尚未入庫）：最後一筆是昨日收盤 → prevClose 就是它
+    // price 設為昨收，稍後 intraday 會覆蓋成今日即時
+    price      = lastClose;   // 暫時為昨收，intraday 覆蓋後才是今日
+    pc         = lastClose;   // prevClose = 昨收
+    change     = 0;           // 暫時，intraday 覆蓋後重算
+    changePct  = 0;
+  }
+
   markFresh('quote');
   return {
     stockId,
     price,
-    open:      parseFloat(row.open),
-    high:      parseFloat(row.max),
-    low:       parseFloat(row.min),
-    volume:    parseInt(row.Trading_Volume),
-    prevClose: parseFloat(prev),
+    open:      parseFloat(lastRow.open),
+    high:      parseFloat(lastRow.max),
+    low:       parseFloat(lastRow.min),
+    volume:    parseInt(lastRow.Trading_Volume)||0,
+    prevClose: pc,
     change,
-    changePct: prev>0 ? (change/parseFloat(prev))*100 : 0,
+    changePct,
     longName:  NAME_MAP[stockId]||stockId,
-    date:      row.date,
+    date:      lastRow.date,
+    _isToday:  isToday,
   };
 }
 function _parseHistory(data){
@@ -8739,10 +8767,14 @@ async function selectStock(el, name, ticker){
     if(intra && intra.pts.length > 2){
       // 異常值過濾：若最後一筆與倒數第5筆相差超過5%，則往前找最近合理值
       const rawLast = intra.pts[intra.pts.length - 1];
-      // prevClose 優先順序：FinMind 昨收 > histData 前一日收盤 > 今日開盤
+      // prevClose 優先順序：
+      // 1. FinMind 今日已入庫 → quoteData.prevClose（倒數第二筆）
+      // 2. FinMind 盤中（今日未入庫）→ quoteData.prevClose（最後一筆收盤=昨收）
+      // 3. histData 最後一筆收盤（備援）
+      // 4. intraday 第一筆（開盤備援）
       const prevClose = (quoteData.prevClose && quoteData.prevClose > 0)
         ? quoteData.prevClose
-        : (histData?.close?.slice(-2,-1)[0] || intra.pts[0] || quoteData.price);
+        : (histData?.close?.filter(v=>v>0).slice(-1)[0] || intra.pts[0] || quoteData.price);
       // 用倒數2~6筆的平均作為基準，過濾異常跳點
       const refPts = intra.pts.slice(-6, -1).filter(v=>v>0);
       const refAvg = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
