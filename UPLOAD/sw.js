@@ -1,22 +1,25 @@
 // 股析 StockAI — Service Worker v2.0
 // 新增：Web Push 訂閱管理、豐富通知樣式
-const CACHE_VERSION = 'stockai-v2.2.0'; // Android PWA 優化
+const CACHE_VERSION = 'stockai-v2.3.0'; // Android PWA 優化
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const DATA_CACHE    = `${CACHE_VERSION}-data`;
 
+// 只快取確實存在的資源（style.css/icons 已 inline 進 index.html）
 const STATIC_ASSETS = [
   '/index.html',
-  '/style.css',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
 ];
 
 // ── Install ──────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(async cache => {
+        // 逐一快取，任一失敗不中斷整個安裝流程
+        for(const url of STATIC_ASSETS){
+          try{ await cache.add(url); }
+          catch(e){ console.warn('[SW] cache skip:', url, e.message); }
+        }
+      })
       .then(() => self.skipWaiting())
   );
 });
