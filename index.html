@@ -571,9 +571,16 @@
 
   <!-- 自選股快捷列（無搜尋時顯示，有搜尋時隱藏）-->
   <div id="stockQuickAccess" style="margin:10px 16px 0">
-    <!-- 自選股標題 -->
+    <!-- 自選股標題 + 編輯清單名稱 -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700;color:var(--text2)">⭐ 我的自選股</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:14px">⭐</span>
+        <span id="wlListNameDisplay" style="font-size:13px;font-weight:700;color:var(--text)"
+              onclick="_editWLName()" title="點擊編輯清單名稱">我的自選股</span>
+        <button onclick="_editWLName()"
+          style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;
+                 padding:0;-webkit-tap-highlight-color:transparent" title="編輯清單名稱">✏️</button>
+      </div>
       <button onclick="switchPage('explore')"
         style="font-size:11px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit">
         探索更多 →
@@ -647,7 +654,10 @@
   <!-- 功能五：個股波動度量化卡片 -->
   <div id="stockVolatilityCard" style="display:none;margin:0 16px 12px">
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px">📉 波動度與風控參考</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2)">📉 波動度與風控參考</div>
+        <div style="font-size:9px;color:var(--text3)">依日K計算 · 每日15:00更新</div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
         <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center;border:1px solid var(--border)">
           <div style="font-size:9px;color:var(--text3);margin-bottom:3px">年化波動</div>
@@ -2607,8 +2617,8 @@ function switchPage(n){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   // 個股頁特殊處理：用同一個 nav-btn nb-stock 對應
   const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
-  // 切換到個股頁時初始化自選快捷列
-  if(n==='stock') setTimeout(_renderStockQuickAccess, 50);
+  // 切換到個股頁時初始化自選快捷列 + 同步清單名稱
+  if(n==='stock'){ setTimeout(()=>{ _renderStockQuickAccess(); _syncWLNameDisplay(); }, 50); }
   document.getElementById('page-'+n).classList.add('active');
   document.getElementById('nb-'+n).classList.add('active');
   window.scrollTo(0,0);
@@ -7448,6 +7458,32 @@ function handleStockSearch(v){
   }, 500);
 }
 
+// 判斷是否已在自選股
+function _isInWatchlist(ticker){
+  try{
+    const wl = JSON.parse(localStorage.getItem('stockai_mywatchlist')||'[]');
+    return wl.some(s=>(s.id||s.t||s)===ticker);
+  }catch(e){ return false; }
+}
+
+// 搜尋結果的自選股切換
+function _toggleWatchlistFromSearch(ticker, name){
+  const btn = document.getElementById('ssrwl-'+ticker);
+  const inWL = _isInWatchlist(ticker);
+  if(inWL){
+    // 移除
+    let wl = JSON.parse(localStorage.getItem('stockai_mywatchlist')||'[]');
+    wl = wl.filter(s=>(s.id||s.t||s)!==ticker);
+    localStorage.setItem('stockai_mywatchlist', JSON.stringify(wl));
+    if(btn){ btn.textContent='＋'; btn.style.background='rgba(255,255,255,.06)'; btn.style.borderColor='var(--border)'; }
+    showToast(name+' 已從自選股移除');
+  } else {
+    // 加入
+    _addOneToWatchlist(ticker, name);
+    if(btn){ btn.textContent='✓'; btn.style.background='rgba(0,212,170,.2)'; btn.style.borderColor='var(--green)'; }
+  }
+}
+
 function clearStockSearch(){
   const inp = document.getElementById('stockSearchInput');
   const el  = document.getElementById('stockSearchResults');
@@ -7495,6 +7531,47 @@ function _onStockSearchBlur(){
 }
 
 // 自選股快捷列（切換到個股頁時載入）
+// 清單名稱存取（存在 localStorage）
+const WL_NAME_KEY = 'stockai_wl_name';
+function getWLName(){ return localStorage.getItem(WL_NAME_KEY)||'我的自選股'; }
+function saveWLName(n){ localStorage.setItem(WL_NAME_KEY, n||'我的自選股'); }
+
+// 更新顯示
+function _syncWLNameDisplay(){
+  const el = document.getElementById('wlListNameDisplay');
+  if(el) el.textContent = getWLName();
+}
+
+// 編輯清單名稱（inline input）
+function _editWLName(){
+  const el = document.getElementById('wlListNameDisplay');
+  if(!el) return;
+  const cur = getWLName();
+  // 建立 inline input 取代文字
+  const inp = document.createElement('input');
+  inp.value = cur;
+  inp.maxLength = 20;
+  inp.style.cssText = 'font-size:13px;font-weight:700;background:var(--surface);'
+    +'border:1px solid var(--green);border-radius:6px;padding:2px 8px;'
+    +'color:var(--text);font-family:inherit;width:120px;outline:none';
+  el.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  const commit = ()=>{
+    const newName = inp.value.trim() || '我的自選股';
+    saveWLName(newName);
+    showToast('✅ 清單名稱已更新：'+newName);
+    inp.replaceWith(el);
+    el.textContent = newName;
+  };
+  inp.addEventListener('blur',  commit);
+  inp.addEventListener('keydown', e=>{
+    if(e.key==='Enter') inp.blur();
+    if(e.key==='Escape'){ inp.value=cur; inp.blur(); }
+  });
+}
+
 function _renderStockQuickAccess(){
   const listEl = document.getElementById('stockQuickList');
   if(!listEl) return;
