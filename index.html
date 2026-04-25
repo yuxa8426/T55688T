@@ -23,7 +23,7 @@
 <meta name="twitter:description" content="結合 AI 與真實市場數據的台股分析平台。智能選股、法人籌碼、策略回測、趨勢股排行。">
 <meta name="twitter:image"       content="https://t55688t.pages.dev/og-image.png">
 
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIuiCoeaekCBTdG9ja0FJIiwgInNob3J0X25hbWUiOiAi6IKh5p6QIiwgImRlc2NyaXB0aW9uIjogIuWwiOalrSBBSSDogqHluILliIbmnpAgQXBwIiwgInN0YXJ0X3VybCI6ICIvIiwgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwYTBhMGYiLCAidGhlbWVfY29sb3IiOiAiIzAwZDRhYSIsICJsYW5nIjogInpoLVRXIiwgImlkIjogIi8iLCAic2NvcGUiOiAiLyIsICJwcmVmZXJfcmVsYXRlZF9hcHBsaWNhdGlvbnMiOiBmYWxzZSwgImljb25zIjogW3sic3JjIjogImljb25zL2ljb24tMTkyLnBuZyIsICJzaXplcyI6ICIxOTJ4MTkyIiwgInR5cGUiOiAiaW1hZ2UvcG5nIiwgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIn0sIHsic3JjIjogImljb25zL2ljb24tNTEyLnBuZyIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2UvcG5nIiwgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIn1dLCAiY2F0ZWdvcmllcyI6IFsiZmluYW5jZSIsICJidXNpbmVzcyJdLCAiZGlzcGxheV9vdmVycmlkZSI6IFsic3RhbmRhbG9uZSIsICJtaW5pbWFsLXVpIl19">
 <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -3503,15 +3503,7 @@ async function fmTWSEIndex(){
     }catch(e){ console.warn('[TWSE] Worker:', e.message); }
   }
 
-  // 來源2：allorigins proxy
-  try{
-    const res  = await fetchWithTimeout(
-      `https://api.allorigins.win/get?url=${encodeURIComponent(misSrc)}`, 6000);
-    const wrap = await res.json();
-    const body = wrap.contents ? JSON.parse(wrap.contents) : wrap;
-    const d = parseMis(body);
-    if(d){; return d; }
-  }catch(e){ console.warn('[TWSE] allorigins:', e.message); }
+  // 來源2：allorigins 已停用（CORS 不穩定），略過
 
   // 來源3：FinMind 日K 盤後備援
   try{
@@ -8795,6 +8787,14 @@ async function selectStock(el, name, ticker){
     }
 
     const isUp = quoteData.changePct >= 0;
+    // 診斷 log：可在 DevTools Console 驗證資料正確性
+    console.log('[StockAI Quote]', stockId, {
+      price:      quoteData.price,
+      changePct:  quoteData.changePct.toFixed(2)+'%',
+      prevClose:  quoteData.prevClose,
+      change:     quoteData.change,
+      source:     intra ? 'intraday+FinMind' : 'FinMind only',
+    });
     renderStockHeader(name, currentTicker, quoteData.price, quoteData.changePct, isUp, quoteData.date);
     renderVolBars(isUp, histData, currentPeriod);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
@@ -8859,10 +8859,18 @@ async function loadNews(stockId){
 
   if(el) el.innerHTML = `<div class="nitem"><div style="flex:1"><div class="nt" style="color:var(--text3)">🔍 載入 ${name} 相關消息…</div></div></div>`;
 
-  // 並行抓：個股新聞 + 大盤通用新聞（2330 作為市場代表）
+  // 並行抓：Yahoo Finance RSS 新聞（免費，透過 Worker 代理）
+  async function _fetchYahooNews(ticker){
+    try{
+      const r = await fetchWithTimeout(
+        `${API}/news?symbol=${encodeURIComponent(ticker+'.TW')}`, 8000);
+      if(r.ok){ const j=await r.json(); return j?.data||[]; }
+    }catch(e){}
+    return [];
+  }
   const [stockNews, marketNews] = await Promise.all([
-    id !== '2330' ? fmFetch({ dataset:'TaiwanStockNews', data_id:id,    start_date:nDaysAgo(7), end_date:todayStr(), _optional:true }) : Promise.resolve(null),
-    fmFetch({ dataset:'TaiwanStockNews', data_id:'2330', start_date:nDaysAgo(3), end_date:todayStr(), _optional:true }),
+    id !== '2330' ? _fetchYahooNews(id) : Promise.resolve([]),
+    _fetchYahooNews('2330'),
   ]);
 
   // 個股專屬新聞（置頂橫幅）
