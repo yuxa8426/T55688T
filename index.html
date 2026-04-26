@@ -575,11 +575,14 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:14px">⭐</span>
-        <span id="wlListNameDisplay" style="font-size:13px;font-weight:700;color:var(--text)"
-              onclick="_editWLName()" title="點擊編輯清單名稱">我的自選股</span>
+        <span id="wlListNameDisplay" style="font-size:13px;font-weight:700;color:var(--text)">我的自選股</span>
         <button onclick="_editWLName()"
-          style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;
-                 padding:0;-webkit-tap-highlight-color:transparent" title="編輯清單名稱">✏️</button>
+          style="display:flex;align-items:center;gap:3px;background:none;border:none;
+                 color:var(--text3);cursor:pointer;font-size:11px;padding:0;
+                 -webkit-tap-highlight-color:transparent">
+          <span>✏️</span>
+          <span style="text-decoration:underline;text-underline-offset:2px">點此修改名稱</span>
+        </button>
       </div>
       <button onclick="switchPage('explore')"
         style="font-size:11px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit">
@@ -3149,35 +3152,38 @@ async function fetchIntraday(stockId){
     const close = result.indicators?.quote?.[0]?.close || [];
     if(!ts.length || !close.length) return null;
 
-    // Yahoo 的 chartPreviousClose 是最準確的昨收（優先使用）
-    const yahooYestClose = result.meta?.chartPreviousClose || null;
+    // Yahoo meta 欄位（最準確的昨收來源）
+    // chartPreviousClose = 前一交易日收盤（交易所提供）
+    const yahooYestClose = result.meta?.chartPreviousClose
+                        || result.meta?.previousClose
+                        || null;
     const regularClose   = result.meta?.regularMarketPrice || null;
 
-    // 台灣今日日期（用於驗證資料是否為今日）
-    const _twn   = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const todayY = _twn.getFullYear();
-    const todayM = _twn.getMonth();
-    const todayD = _twn.getDate();
-
-    const pts=[], times=[], volumes=[];
+    const pts=[], times=[];
     const vol = result.indicators?.quote?.[0]?.volume || [];
+    const volumes=[];
     for(let i=0;i<ts.length;i++){
       const v = close[i];
       if(v==null||isNaN(v)||v<=0) continue;
+      // 轉台灣時間
       const d  = new Date(ts[i]*1000 + 8*3600000);
-      // 只取今日的資料（過濾掉昨日的殘留）
-      if(d.getUTCFullYear()!==todayY||d.getUTCMonth()!==todayM||d.getUTCDate()!==todayD) continue;
       const hh = String(d.getUTCHours()).padStart(2,'0');
       const mm = String(d.getUTCMinutes()).padStart(2,'0');
       pts.push(v);
       times.push(hh+':'+mm);
       volumes.push(vol[i]||0);
     }
-    if(pts.length < 3) return null;
+    if(pts.length < 2) return null;
+
+    // 若 Yahoo 提供昨收，用它計算漲跌；否則 prevClose = pts[0]（開盤）
+    const prevClose = (yahooYestClose && yahooYestClose > 0)
+      ? yahooYestClose
+      : (pts.length > 1 ? pts[0] : null);
+
     return {
       pts, times, volumes, source:'Yahoo',
-      prevClose: yahooYestClose,   // 昨收（最準確）
-      regularClose,                // 今日最新價
+      prevClose,          // 前一交易日收盤（最準確）
+      regularClose,       // 目前最新成交價
     };
   }
 
