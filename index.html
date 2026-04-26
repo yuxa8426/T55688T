@@ -1232,12 +1232,6 @@
   <div id="chipSource" style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">📊 資料載入中…</div>
   </div>
 
-  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
-    <h2>VIX 恐慌指數</h2>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:10px;color:var(--text3)" id="vixUpdateTime">—</span>
-      <button onclick="loadVix(true)" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 6px" title="立即更新">↻</button>
-    </div>
   </div>
   
 
@@ -3154,18 +3148,37 @@ async function fetchIntraday(stockId){
     const ts    = result.timestamp || [];
     const close = result.indicators?.quote?.[0]?.close || [];
     if(!ts.length || !close.length) return null;
-    const pts=[], times=[];
+
+    // Yahoo 的 chartPreviousClose 是最準確的昨收（優先使用）
+    const yahooYestClose = result.meta?.chartPreviousClose || null;
+    const regularClose   = result.meta?.regularMarketPrice || null;
+
+    // 台灣今日日期（用於驗證資料是否為今日）
+    const _twn   = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+    const todayY = _twn.getFullYear();
+    const todayM = _twn.getMonth();
+    const todayD = _twn.getDate();
+
+    const pts=[], times=[], volumes=[];
+    const vol = result.indicators?.quote?.[0]?.volume || [];
     for(let i=0;i<ts.length;i++){
       const v = close[i];
-      if(v==null||isNaN(v)) continue;
-      // 轉成台灣時間 (UTC+8)
+      if(v==null||isNaN(v)||v<=0) continue;
       const d  = new Date(ts[i]*1000 + 8*3600000);
+      // 只取今日的資料（過濾掉昨日的殘留）
+      if(d.getUTCFullYear()!==todayY||d.getUTCMonth()!==todayM||d.getUTCDate()!==todayD) continue;
       const hh = String(d.getUTCHours()).padStart(2,'0');
       const mm = String(d.getUTCMinutes()).padStart(2,'0');
       pts.push(v);
       times.push(hh+':'+mm);
+      volumes.push(vol[i]||0);
     }
-    return pts.length >= 3 ? { pts, times, source:'Yahoo' } : null;
+    if(pts.length < 3) return null;
+    return {
+      pts, times, volumes, source:'Yahoo',
+      prevClose: yahooYestClose,   // 昨收（最準確）
+      regularClose,                // 今日最新價
+    };
   }
 
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
@@ -7551,12 +7564,14 @@ function _editWLName(){
   const inp = document.createElement('input');
   inp.value = cur;
   inp.maxLength = 20;
+  inp.placeholder = '輸入清單名稱…';
   inp.style.cssText = 'font-size:13px;font-weight:700;background:var(--surface);'
     +'border:1px solid var(--green);border-radius:6px;padding:2px 8px;'
-    +'color:var(--text);font-family:inherit;width:120px;outline:none';
+    +'color:var(--text);font-family:inherit;width:130px;outline:none';
   el.replaceWith(inp);
   inp.focus();
   inp.select();
+  showToast('💡 輸入名稱後按 Enter 確認', 2500);
 
   const commit = ()=>{
     const newName = inp.value.trim() || '我的自選股';
@@ -8949,9 +8964,17 @@ async function selectStock(el, name, ticker){
       // 2. FinMind 盤中（今日未入庫）→ quoteData.prevClose（最後一筆收盤=昨收）
       // 3. histData 最後一筆收盤（備援）
       // 4. intraday 第一筆（開盤備援）
-      const prevClose = (quoteData.prevClose && quoteData.prevClose > 0)
-        ? quoteData.prevClose
-        : (histData?.close?.filter(v=>v>0).slice(-1)[0] || intra.pts[0] || quoteData.price);
+      // prevClose 優先順序：
+      // 1. Yahoo chartPreviousClose（最準確，直接由交易所提供）
+      // 2. FinMind _parseQuote 計算的 prevClose（data[-2].close）
+      // 3. histData 最後一筆收盤
+      // 4. intraday 開盤第一筆
+      const prevClose = (intra.prevClose && intra.prevClose > 0)
+        ? intra.prevClose
+        : (quoteData.prevClose && quoteData.prevClose > 0)
+          ? quoteData.prevClose
+          : (histData?.close?.filter(v=>v>0).slice(-1)[0] || intra.pts[0] || quoteData.price);
+      console.log('[prevClose]', stockId, {yahoo: intra.prevClose, finmind: quoteData.prevClose, used: prevClose});
       // 用倒數2~6筆的平均作為基準，過濾異常跳點
       const refPts = intra.pts.slice(-6, -1).filter(v=>v>0);
       const refAvg = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
