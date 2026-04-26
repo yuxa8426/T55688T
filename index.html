@@ -2806,8 +2806,27 @@ function scheduleAutoRefresh(){
         // 自動刷新：1D 用分鐘K，其他用對應天數日K
         if(currentPeriod==='1D'){
           const intra=await fetchIntraday(stockId);
-          if(intra&&intra.pts.length>2) drawChart(intra.pts,isUp?'#ff4c6a':'#00d4aa',intra.times,'1D');
-          else if(pts.length>1) drawChart(pts.slice(-5),isUp?'#ff4c6a':'#00d4aa',rdates.slice(-5));
+          if(intra&&intra.pts.length>2){
+            drawChart(intra.pts,isUp?'#ff4c6a':'#00d4aa',intra.times,'1D');
+          } else if(pts.length>1){
+            // 盤後 fallback：用日K，同時更新 prevClose
+            const _fb5 = pts.slice(-5), _fbd = rdates.slice(-5);
+            // 若有 intra.prevClose（Yahoo chartPreviousClose）用它，否則用 FinMind 昨收
+            const _fbPrev = (intra?.prevClose && intra.prevClose>0)
+              ? intra.prevClose
+              : (quoteData.prevClose && quoteData.prevClose>0 ? quoteData.prevClose : _fb5[_fb5.length-2]);
+            if(_fbPrev && _fbPrev>0 && quoteData){
+              quoteData.prevClose = _fbPrev;
+              const _fbLast = _fb5[_fb5.length-1]||quoteData.price;
+              quoteData.change    = _fbLast - _fbPrev;
+              quoteData.changePct = _fbPrev>0 ? (_fbLast-_fbPrev)/_fbPrev*100 : 0;
+              // 重新渲染標頭
+              renderStockHeader(name, currentTicker, _fbLast,
+                quoteData.changePct, quoteData.changePct>=0, quoteData.date);
+              console.log('[Fallback 1D]', stockId, {price:_fbLast, prevClose:_fbPrev, changePct:quoteData.changePct.toFixed(2)+'%'});
+            }
+            drawChart(_fb5, quoteData.changePct>=0?'#ff4c6a':'#00d4aa', _fbd);
+          }
         } else {
           const _days={'1W':10,'1M':30,'3M':95,'6M':185,'1Y':375};
           const _n=_days[currentPeriod]||30;
@@ -4903,9 +4922,18 @@ function drawChart(pts, color, dates, mode){
 
   _chartData = { pts: valid, dates: validDates, color };
 
-  // 清除舊的 K 線元素
+  // 切換到折線：清除所有 K 線殘留，重置折線路徑
   const svgEl = document.getElementById('chartSvg');
-  if(svgEl) svgEl.querySelectorAll('.kbar-g,.kbar,.ref-line').forEach(e=>e.remove());
+  if(svgEl){
+    svgEl.querySelectorAll('.kbar-g,.kbar,.ref-line,.kbar-overlay').forEach(e=>e.remove());
+  }
+  // 確保折線元素可見且路徑乾淨（避免殘留舊路徑）
+  const _lEl = document.getElementById('chartLine');
+  const _fEl = document.getElementById('chartFill');
+  const _dEl = document.getElementById('chartDot');
+  if(_lEl){ _lEl.style.display=''; }
+  if(_fEl){ _fEl.style.display=''; }
+  if(_dEl){ _dEl.style.display=''; }
   _chartZoomRange = null;  // 重置縮放
 
   const W=320, H=130, pad=10;
@@ -4966,9 +4994,9 @@ function drawCandlestick(histData, period){
   const chartLine = document.getElementById('chartLine');
   const chartFill = document.getElementById('chartFill');
   const chartDot  = document.getElementById('chartDot');
-  if(chartLine) chartLine.setAttribute('d','');
-  if(chartFill) chartFill.setAttribute('d','');
-  if(chartDot)  chartDot.setAttribute('cx','-999');
+  if(chartLine){ chartLine.setAttribute('d',''); chartLine.style.display='none'; }
+  if(chartFill){ chartFill.setAttribute('d',''); chartFill.style.display='none'; }
+  if(chartDot) { chartDot.setAttribute('cx','-999'); chartDot.style.display='none'; }
   // 移除舊的 K 線元素
   svg.querySelectorAll('.kbar-g,.kbar,.ref-line').forEach(e=>e.remove());
 
@@ -5518,7 +5546,12 @@ async function setTab(btn, period){
       const pts = (h?.close||[]).filter(v=>v!=null&&!isNaN(v)).slice(-5);
       const dts = (h?.dates||[]).slice(-5);
       if(pts.length>1){
-        const isUp = pts[pts.length-1] >= pts[0];
+        const fbPrev2 = pts.length>1 ? pts[pts.length-2] : pts[0];
+        const fbLast2 = pts[pts.length-1];
+        const fbChg2  = fbPrev2>0 ? (fbLast2-fbPrev2)/fbPrev2*100 : 0;
+        const isUp    = fbChg2 >= 0;
+        renderStockHeader(currentName, currentTicker, fbLast2, fbChg2, isUp, dts[dts.length-1]+' 收盤');
+        console.log('[setTab fallback 1D]', sid, {fbLast2, fbPrev2, fbChg2:fbChg2.toFixed(2)+'%'});
         drawChart(pts, isUp?'#ff4c6a':'#00d4aa', dts);
         showToast('⚠️ 分鐘K不可用，顯示近5日');
       } else { drawFallbackChart(true); }
