@@ -604,13 +604,25 @@
         <p id="fresh-quote" style="font-size:10px;color:var(--text3);margin-top:2px">—</p>
         <div id="trendTip" style="display:none;font-size:10px;color:var(--text3);background:rgba(0,0,0,.6);border-radius:6px;padding:6px 8px;margin-top:4px;line-height:1.7;white-space:pre-wrap"></div>
       </div>
-      <div class="tabs">
-        <button class="tab active" onclick="setTab(this,'1D')">1日</button>
-        <button class="tab" onclick="setTab(this,'1W')">1週</button>
-        <button class="tab" onclick="setTab(this,'1M')">月</button>
-        <button class="tab" onclick="setTab(this,'3M')">季</button>
-        <button class="tab" onclick="setTab(this,'6M')">半年</button>
-        <button class="tab" onclick="setTab(this,'1Y')">年</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <div class="tabs">
+          <button class="tab active" onclick="setTab(this,'1D')">1日</button>
+          <button class="tab" onclick="setTab(this,'1W')">1週</button>
+          <button class="tab" onclick="setTab(this,'1M')">月</button>
+          <button class="tab" onclick="setTab(this,'3M')">季</button>
+          <button class="tab" onclick="setTab(this,'6M')">半年</button>
+          <button class="tab" onclick="setTab(this,'1Y')">年</button>
+        </div>
+        <!-- 加入自選按鈕 -->
+        <button id="chartWlBtn" onclick="_toggleChartWatchlist()"
+          title="加入自選股"
+          style="flex-shrink:0;width:32px;height:32px;border-radius:8px;
+                 background:rgba(255,255,255,.08);border:1px solid var(--border);
+                 color:var(--text3);font-size:16px;cursor:pointer;
+                 display:flex;align-items:center;justify-content:center;
+                 -webkit-tap-highlight-color:transparent;transition:all .2s">
+          ☆
+        </button>
       </div>
     </div>
     <svg class="chart-area" id="chartSvg" viewBox="0 0 320 130" preserveAspectRatio="none"
@@ -4922,18 +4934,20 @@ function drawChart(pts, color, dates, mode){
 
   _chartData = { pts: valid, dates: validDates, color };
 
-  // 切換到折線：清除所有 K 線殘留，重置折線路徑
+  // 切換到折線：無條件重置 SVG innerHTML（最可靠的清除方式）
   const svgEl = document.getElementById('chartSvg');
   if(svgEl){
-    svgEl.querySelectorAll('.kbar-g,.kbar,.ref-line,.kbar-overlay').forEach(e=>e.remove());
+    svgEl.innerHTML =
+      '<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">'
+      +'<stop offset="0%" stop-color="'+color+'" stop-opacity=".35"/>'
+      +'<stop offset="100%" stop-color="'+color+'" stop-opacity="0"/>'
+      +'</linearGradient></defs>'
+      +'<path id="chartFill" fill="url(#cg)"/>'
+      +'<path id="chartLine" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linejoin="round"/>'
+      +'<line id="chartCross" x1="0" y1="0" x2="0" y2="130" stroke="rgba(255,255,255,.25)" stroke-width="1" display="none"/>'
+      +'<circle id="chartHoverDot" r="4" fill="white" stroke="'+color+'" stroke-width="2" display="none"/>'
+      +'<circle id="chartDot" r="5" fill="'+color+'"/>';
   }
-  // 確保折線元素可見且路徑乾淨（避免殘留舊路徑）
-  const _lEl = document.getElementById('chartLine');
-  const _fEl = document.getElementById('chartFill');
-  const _dEl = document.getElementById('chartDot');
-  if(_lEl){ _lEl.style.display=''; }
-  if(_fEl){ _fEl.style.display=''; }
-  if(_dEl){ _dEl.style.display=''; }
   _chartZoomRange = null;  // 重置縮放
 
   const W=320, H=130, pad=10;
@@ -9035,6 +9049,7 @@ async function selectStock(el, name, ticker){
 
     const isUp = quoteData.changePct >= 0;
     // 診斷 log：可在 DevTools Console 驗證資料正確性
+    _updateChartWlBtn();  // 更新走勢圖自選按鈕狀態
     console.log('[StockAI Quote]', stockId, {
       price:      quoteData.price,
       changePct:  quoteData.changePct.toFixed(2)+'%',
@@ -9724,6 +9739,34 @@ async function _loadAlertSummary(){
   }catch(e){
     el.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px">載入失敗，請稍後再試</div>';
   }
+}
+
+// 走勢圖右上角自選股按鈕
+function _updateChartWlBtn(){
+  const btn = document.getElementById('chartWlBtn');
+  if(!btn || !currentTicker) return;
+  const sid = currentTicker.replace('.TW','');
+  const inWL = _isInWatchlist(sid);
+  btn.textContent = inWL ? '★' : '☆';
+  btn.style.color  = inWL ? 'var(--gold)' : 'var(--text3)';
+  btn.style.background  = inWL ? 'rgba(245,200,66,.12)' : 'rgba(255,255,255,.08)';
+  btn.style.borderColor = inWL ? 'rgba(245,200,66,.4)' : 'var(--border)';
+  btn.title = inWL ? '已加入自選，點擊移除' : '加入自選股';
+}
+
+function _toggleChartWatchlist(){
+  if(!currentTicker || !currentName) return;
+  const sid = currentTicker.replace('.TW','');
+  const inWL = _isInWatchlist(sid);
+  if(inWL){
+    let wl = JSON.parse(localStorage.getItem('stockai_mywatchlist')||'[]');
+    wl = wl.filter(s=>(s.id||s.t||s)!==sid);
+    localStorage.setItem('stockai_mywatchlist', JSON.stringify(wl));
+    showToast(currentName+' 已從自選股移除');
+  } else {
+    _addOneToWatchlist(sid, currentName);
+  }
+  _updateChartWlBtn();
 }
 
 // 個別加入自選股（AI 選股結果）
