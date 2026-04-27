@@ -3573,16 +3573,30 @@ async function fmTWSEIndex(){
   const misSrc = 'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0';
 
   function parseMis(body){
+    // 支援新格式（Worker 解析後的 pts+y）
+    if(!body?.msgArray && body?.y && body?.pts?.length){
+      const price = body.pts[body.pts.length-1] || body.y;
+      const prev  = body.y;
+      if(price <= 0 || prev <= 0) return null;
+      const change    = price - prev;
+      const changePct = prev > 0 ? (change/prev*100) : 0;
+      const lastTime  = body.times?.[body.times.length-1] || '';
+      return { price, index:price.toLocaleString(), change:change.toFixed(0),
+               changePct:changePct.toFixed(2), time:lastTime,
+               source:'TWSE', isRealtime:true };
+    }
+    // 原始格式（msgArray）
     const item = body?.msgArray?.[0];
     if(!item) return null;
-    const price = parseFloat(item.z || item.y || 0);
-    const prev  = parseFloat(item.y || 0);
+    const price = parseFloat(String(item.z||item.y||0).replace(/,/g,''));
+    const prev  = parseFloat(String(item.y||0).replace(/,/g,''));
     if(price <= 0) return null;
     const change    = price - prev;
     const changePct = prev > 0 ? (change/prev*100) : 0;
     return { price, index:price.toLocaleString(), change:change.toFixed(0),
-             changePct:changePct.toFixed(2), open:parseFloat(item.o||0),
-             high:parseFloat(item.h||price), low:parseFloat(item.l||price),
+             changePct:changePct.toFixed(2), open:parseFloat(String(item.o||prev).replace(/,/g,'')),
+             high:parseFloat(String(item.h||price).replace(/,/g,'')),
+             low: parseFloat(String(item.l||price).replace(/,/g,'')),
              time:item.t||'', source:'TWSE', isRealtime:true };
   }
 
