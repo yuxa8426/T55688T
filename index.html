@@ -2701,7 +2701,11 @@ function switchPage(n){
   const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
   // 切換到個股頁時初始化自選快捷列 + 同步清單名稱
   if(n==='stock'){ setTimeout(()=>{ _renderStockQuickAccess(); _syncWLNameDisplay(); }, 50); }
-  document.getElementById('page-'+n).classList.add('active');
+  const pageEl = document.getElementById('page-'+n);
+  pageEl.classList.add('active');
+  // 切換頁面重置捲動位置
+  pageEl.scrollTop = 0;
+  window.scrollTo(0, 0);
   document.getElementById('nb-'+n).classList.add('active');
   window.scrollTo(0,0);
   // 切換頁面時載入對應資料
@@ -6780,7 +6784,11 @@ async function loadMxfData(){
     // ── 趨勢 ────────────────────────────────────────────────
     const trendEl = document.getElementById('mxfTrend');
     const dateEl  = document.getElementById('mxfDate');
-    const tMap = {bull:'🔺 增多',bear:'🔻 減多',neutral:'➡️ 持平'};
+    const tMap = {
+      bull:    '🔺 偏多',   // 法人淨多口增加（看多）
+      bear:    '🔻 偏空',   // 法人淨多口減少（避險/看空）
+      neutral: '➡️ 中立',  // 法人籌碼無明顯方向
+    };
     if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
     if(dateEl) dateEl.textContent = d.date||'—';
 
@@ -6885,9 +6893,9 @@ async function loadMxfData(){
       // 風險訊號
       let riskMsg = '';
       if(d.retailBull && bearDays >= 3)
-        riskMsg = '⚠️ 法人已連續 '+bearDays+' 日減多/偏空，但散戶仍偏多，歷史上此分歧往往預告下行風險。';
+        riskMsg = '⚠️ 法人已連續 '+bearDays+' 日偏空（淨多口遞減），但散戶仍偏多，此分歧往往預告下行風險。';
       else if(!d.retailBull && bullDays >= 3)
-        riskMsg = '📌 法人已連續 '+bullDays+' 日增多，散戶偏空，法人持續買入，可關注多方機會。';
+        riskMsg = '📌 法人已連續 '+bullDays+' 日偏多（淨多口持續增加），散戶偏空，多空分歧，可留意突破機會。';
       else if(Math.abs(d.instNet) > absMax*0.8)
         riskMsg = '🔔 目前法人部位達近期極端值（'+(d.instNetK>=0?'+':'')+d.instNetK+'K），籌碼集中，留意反轉可能。';
 
@@ -9342,8 +9350,8 @@ async function loadMarketNewsSection(force=false){
   try{
     // Worker /news（無 symbol）= RSS 國際市場新聞 → 最能代表大盤
     // 同時抓 2330 個股搜尋新聞作補充
-    const r = await fetchWithTimeout(`${API}/news`, 10000);
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    const r = await fetchWithTimeout(`${API}/news`, 15000);  // 延長至15s
+    if(!r.ok) throw new Error('HTTP '+r.status+' '+r.statusText);
     const raw = await r.json();
 
     // Worker /news 回傳的格式可能是 {items:[...]} 或 {data:[...]}
