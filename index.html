@@ -5838,7 +5838,17 @@ function _renderTaiexChart(){
 
   const pts  = data.pts, vols = data.vol||[], times = data.times||[];
   const isKLine = !!data.isKLine;
-  const isUp = pts[pts.length-1] >= pts[0];
+  const lastPt  = pts[pts.length-1];
+  // 用昨收判斷漲跌（比開盤更準確）
+  // 今日折線：data.prevClose（Worker 的 y 欄位）
+  // K線模式：倒數第二根K線的收盤
+  let _refPrice;
+  if(isKLine && data.ohlc?.length >= 2){
+    _refPrice = data.ohlc[data.ohlc.length-2].c;
+  } else {
+    _refPrice = (data.prevClose && data.prevClose > 0) ? data.prevClose : pts[0];
+  }
+  const isUp = lastPt >= _refPrice;
   const color = isUp ? '#ff4c6a' : '#00d4aa';
   const W=400, H=120, padT=10, padB=10;
 
@@ -5914,7 +5924,7 @@ function _renderTaiexChart(){
   // 價格 + 漲跌
   const priceEl = document.getElementById('taiexChartPrice');
   const chgEl   = document.getElementById('taiexChartChg');
-  const lastPt  = pts[pts.length-1];
+  const lastPt2  = pts[pts.length-1];
 
   // 漲跌基準：
   // 今日折線 → 用昨日收盤（data.prevClose），若無則用 pts[0]
@@ -5930,9 +5940,9 @@ function _renderTaiexChart(){
     prevClose = pts[0];
   }
 
-  const chgAbs = lastPt - prevClose;
+  const chgAbs = lastPt2 - prevClose;
   const chgPct = prevClose > 0 ? chgAbs / prevClose * 100 : 0;
-  if(priceEl) priceEl.textContent = lastPt.toLocaleString('zh-TW',{maximumFractionDigits:2});
+  if(priceEl) priceEl.textContent = lastPt2.toLocaleString('zh-TW',{maximumFractionDigits:2});
   if(chgEl){
     chgEl.textContent = (chgAbs>=0?'+':'') + chgAbs.toFixed(0)
       + ' (' + (chgPct>=0?'+':'') + chgPct.toFixed(2) + '%)';
