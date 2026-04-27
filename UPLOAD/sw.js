@@ -1,6 +1,6 @@
 // 股析 StockAI — Service Worker v2.0
 // 新增：Web Push 訂閱管理、豐富通知樣式
-const CACHE_VERSION = 'stockai-v2.3.0'; // Android PWA 優化
+const CACHE_VERSION = 'stockai-v2.4.0'; // Android PWA 優化
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const DATA_CACHE    = `${CACHE_VERSION}-data`;
 
