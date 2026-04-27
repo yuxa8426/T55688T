@@ -2,6 +2,9 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -2214,6 +2217,26 @@
 // ════════════════════════════════════════════════════════
 
 const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+
+// ── 全域常數 ──────────────────────────────────────────────
+const MY_WL_KEY = 'stockai_mywatchlist';   // 自選股 localStorage key
+
+// ── colorSentiment：關鍵字著色（利多紅/利空綠/中性灰）────
+function colorSentiment(text){
+  if(!text) return '';
+  const safe = String(text)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return safe
+    // 利多（紅）
+    .replace(/(買超|買進|上漲|大漲|突破|強勢|利多|看多|偏多|做多|增持|升息預期|上調|擴張|優於預期|創高|超越)/g,
+      '<span style="color:var(--red);font-weight:600">$1</span>')
+    // 利空（綠）
+    .replace(/(賣超|賣出|下跌|大跌|跌破|弱勢|利空|看空|偏空|做空|減持|降息預期|下調|收縮|低於預期|創低|落後)/g,
+      '<span style="color:var(--green);font-weight:600">$1</span>')
+    // 警示（金色）
+    .replace(/(警告|注意|風險|謹慎|觀望|不確定|波動|震盪)/g,
+      '<span style="color:var(--gold);font-weight:600">$1</span>');
+}
 
 // ════════════════════════════════════════════════════
 // Cloudflare KV 雲端同步層
@@ -7811,7 +7834,6 @@ function _editWLName(){
 function _renderStockQuickAccess(){
   const listEl = document.getElementById('stockQuickList');
   if(!listEl) return;
-  const MY_WL_KEY = 'stockai_mywatchlist';
   let wl = [];
   try{ wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]'); }catch(e){}
 
@@ -14879,6 +14901,34 @@ async function checkWatchlistAlerts(){
 // 市場脈動（refreshPulse / updatePulse）
 // ════════════════════════════════════════════════════
 
+// 判斷是否為交易時段（台灣時間 09:00~13:45）
+function _isTradingHour(){
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const day = tw.getDay(); // 0=日, 6=六
+  if(day===0||day===6) return false;
+  const h = tw.getHours(), m = tw.getMinutes();
+  return (h>9||(h===9&&m>=0)) && (h<13||(h===13&&m<=45));
+}
+
+// 市場進場訊號（VIX + 法人 + 指數綜合判斷）
+function updateMarketEntrySignal(vix, instTotal, idxChg){
+  const el = document.getElementById('marketEntrySignal');
+  if(!el) return;
+  let signal='', color='var(--text3)', bg='rgba(255,255,255,.05)';
+  if(vix!=null && idxChg!=null){
+    if(vix < 15 && idxChg > 0 && instTotal > 0){
+      signal='🟢 積極進場'; color='var(--green)'; bg='rgba(0,212,170,.1)';
+    } else if(vix > 25 || idxChg < -1.5){
+      signal='🔴 謹慎觀望'; color='var(--red)'; bg='rgba(255,76,106,.1)';
+    } else {
+      signal='🟡 中性偏保守'; color='var(--gold)'; bg='rgba(245,200,66,.1)';
+    }
+    el.textContent = signal;
+    el.style.color = color;
+    el.style.background = bg;
+  }
+}
+
 function updatePulse(instData, indexData, txfData){
   const total    = instData?.totalShares ?? instData?.total ?? 0;
   const foreign  = instData?.foreignShares ?? 0;
@@ -14969,11 +15019,13 @@ async function refreshPulse(){
 
     // 加權指數圖更新（盤中才更新）
     const inSess = _isTradingHour();
-    if(inSess){
-      loadTaiexChart().catch(()=>{});
-    } else if(!_taiexData?.['1D']){
-      loadTaiexChart().catch(()=>{});
-    }
+    try{
+      if(inSess){
+        loadTaiexChart().catch(()=>{});
+      } else if(typeof _taiexData === 'undefined' || !_taiexData?.['1D']){
+        loadTaiexChart().catch(()=>{});
+      }
+    }catch(te){}
 
     _pulseTimer = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
   }catch(e){
