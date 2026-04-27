@@ -551,6 +551,25 @@
       <div class="vix-note" id="vixNote"><strong class="purple">🤖 AI 解讀：</strong>資料載入中…</div>
     </div>
   </div>
+  <!-- 市場總覽新聞（大盤相關，可收合）-->
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <h2>📰 市場總覽新聞</h2>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="_toggleMarketNews(this)"
+        id="marketNewsToggleBtn"
+        style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
+               border:1px solid var(--border);border-radius:8px;padding:3px 9px;
+               cursor:pointer;font-family:inherit">收合 ▴</button>
+      <button onclick="loadMarketNewsSection(true)"
+        style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
+    </div>
+  </div>
+  <div id="marketNewsPanel">
+    <div id="marketNewsList">
+      <div style="padding:14px 16px;color:var(--text3);font-size:12px">載入中…</div>
+    </div>
+  </div>
+
 </div>
 <div class="page" id="page-stock">
   <!-- 個股搜尋欄（fixed 固定頂部，完全不被遮擋）-->
@@ -1264,26 +1283,7 @@
   </div>
   
 
-  <!-- 市場總覽新聞（大盤相關，可收合）-->
-  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
-    <h2>📰 市場總覽新聞</h2>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button onclick="_toggleMarketNews(this)"
-        id="marketNewsToggleBtn"
-        style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
-               border:1px solid var(--border);border-radius:8px;padding:3px 9px;
-               cursor:pointer;font-family:inherit">收合 ▴</button>
-      <button onclick="loadMarketNewsSection(true)"
-        style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
-    </div>
-  </div>
-  <div id="marketNewsPanel">
-    <div id="marketNewsList">
-      <div style="padding:14px 16px;color:var(--text3);font-size:12px">載入中…</div>
-    </div>
-  </div>
-
-    <!-- 個股消息（直接關聯當前個股）-->
+  <!-- 個股消息（直接關聯當前個股）-->
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
     <h2>📢 <span id="newsStockTitle">個股消息</span></h2>
     <div style="display:flex;gap:6px;align-items:center">
@@ -4563,6 +4563,7 @@ function updateAI(name, q){
   const price  = q.price;
   const changePct = q.changePct ?? 0;
   const isUp   = changePct >= 0;
+  console.log('[updateAI]', name, {closes: closes.length, price, changePct, hasInst:!!inst});
 
   // ── 功能五：波動度計算與顯示（真實歷史收盤計算）──────────
   (()=>{
@@ -4684,9 +4685,17 @@ function updateAI(name, q){
   // ════════════════════════════════
   // ① 短期評分（5日：RSI + 動能 + 法人）
   // ════════════════════════════════
+  // closes 不足時降級處理（仍顯示可用分數）
   if(closes.length < 15){
-    console.warn('[updateAI] closes 不足15筆無法計算RSI, length=', closes.length,
-      '需要搜尋更長歷史資料');
+    console.warn('[updateAI] closes 不足15筆, length=', closes.length);
+    // 使用可用資料計算基本評分
+    if(closes.length < 2){
+      setEl('s-score', '—');
+      setEl('m-score', '—');
+      setEl('l-score', '—');
+      setEl('total-score', '—');
+      return;
+    }
   }
   const rsi = closes.length>=15 ? calcRSI(closes) : null;
   const rsiVal = rsi != null ? rsi.toFixed(1) : '—';
@@ -14863,6 +14872,113 @@ async function checkWatchlistAlerts(){
         break; // 一次最多推一支，避免洗版
       }
     }catch(e){}
+  }
+}
+
+// ════════════════════════════════════════════════════
+// 市場脈動（refreshPulse / updatePulse）
+// ════════════════════════════════════════════════════
+
+function updatePulse(instData, indexData, txfData){
+  const total    = instData?.totalShares ?? instData?.total ?? 0;
+  const foreign  = instData?.foreignShares ?? 0;
+  const trust    = instData?.trustShares ?? 0;
+  const isInstUp = total >= 0;
+  const idxChg   = parseFloat(indexData?.changePct || 0);
+  const idxPrice = indexData?.price ?? null;
+
+  // 台灣時間
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const hh  = String(now.getHours()).padStart(2,'0');
+  const mm  = String(now.getMinutes()).padStart(2,'0');
+
+  // 更新脈動指標列
+  const pmTwse    = document.getElementById('pmTwse');
+  const pmTxf     = document.getElementById('pmTxf');
+  const pmForeign = document.getElementById('pmForeign');
+  const pmTrust   = document.getElementById('pmTrust');
+  const pulseTime = document.getElementById('pulseTime');
+
+  if(pulseTime) pulseTime.textContent = hh+':'+mm+' 更新';
+  if(pmTwse && idxPrice != null){
+    const chg = idxChg >= 0;
+    pmTwse.textContent = Number(idxPrice).toLocaleString('zh-TW',{maximumFractionDigits:2});
+    pmTwse.style.color = chg ? 'var(--red)' : 'var(--green)';
+  }
+  if(pmTxf && txfData?.price){
+    pmTxf.textContent  = Number(txfData.price).toLocaleString('zh-TW',{maximumFractionDigits:0});
+    pmTxf.style.color  = (txfData.change>=0) ? 'var(--red)' : 'var(--green)';
+  }
+  const fmtB = v => { const b=Math.abs(v)/1e8; return (v>=0?'+':'-')+(b>=1?b.toFixed(1)+'億':Math.round(Math.abs(v)/1e4)+'萬'); };
+  if(pmForeign) { pmForeign.textContent = foreign ? fmtB(foreign) : '—'; pmForeign.style.color = foreign>=0?'var(--red)':'var(--green)'; }
+  if(pmTrust)   { pmTrust.textContent   = trust   ? fmtB(trust)   : '—'; pmTrust.style.color   = trust  >=0?'var(--red)':'var(--green)'; }
+
+  // 市場脈動主文
+  const titleEl = document.getElementById('pulseTitle');
+  const bodyEl  = document.getElementById('pulseBody');
+  const chipsEl = document.getElementById('pulseChips');
+
+  // 判斷市場情緒
+  let title='', body='', chips=[];
+  if(idxChg >= 2){
+    title='🚀 大盤強勢大漲'; body='加權指數今日大幅上揚，多頭氣氛濃厚。';
+    chips = [['偏多','up'],['強勢','up']];
+  } else if(idxChg >= 0.5){
+    title='📈 指數小幅上漲'; body='市場溫和走高，整體趨向偏多。';
+    chips = [['偏多','up']];
+  } else if(idxChg <= -2){
+    title='⚠️ 大盤明顯下跌'; body='加權指數今日大幅下跌，市場觀望情緒升溫。';
+    chips = [['偏空','dn'],['謹慎','dn']];
+  } else if(idxChg <= -0.5){
+    title='📉 指數小幅下跌'; body='市場偏弱，注意風險控管。';
+    chips = [['偏空','dn']];
+  } else {
+    title='🔄 指數盤整'; body='市場觀望，成交量偏低，待方向確認。';
+    chips = [['中性','nt']];
+  }
+  // 法人動向說明
+  if(foreign > 0) chips.push(['外資買超','up']);
+  else if(foreign < 0) chips.push(['外資賣超','dn']);
+
+  if(titleEl) titleEl.textContent = title;
+  if(bodyEl)  bodyEl.textContent  = body;
+  if(chipsEl) chipsEl.innerHTML   = chips.map(([t,c])=>`<span class="chip ${c}">${t}</span>`).join('');
+}
+
+let _pulseTimer = null;
+async function refreshPulse(){
+  clearTimeout(_pulseTimer);
+  try{
+    const [instData, indexData, txfData] = await Promise.all([
+      loadInstitutional().catch(()=>null),
+      fmTWSEIndex().catch(()=>null),
+      fetchTxfAfterHours().catch(()=>null),
+    ]);
+    updatePulse(instData, indexData, txfData);
+
+    // 市場進場訊號（功能四）
+    try{
+      const vixEl  = document.getElementById('vixNum');
+      const vix    = vixEl ? parseFloat(vixEl.textContent) : null;
+      const instTotal = indexData?.instData
+        ? (indexData.instData.foreign||0)+(indexData.instData.trust||0)+(indexData.instData.dealer||0)
+        : (instData?.totalShares ?? null);
+      const idxChg = indexData?.changePct ? parseFloat(indexData.changePct) : 0;
+      updateMarketEntrySignal(vix, instTotal, idxChg);
+    }catch(e){}
+
+    // 加權指數圖更新（盤中才更新）
+    const inSess = _isTradingHour();
+    if(inSess){
+      loadTaiexChart().catch(()=>{});
+    } else if(!_taiexData?.['1D']){
+      loadTaiexChart().catch(()=>{});
+    }
+
+    _pulseTimer = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
+  }catch(e){
+    console.error('[refreshPulse]', e.message);
+    _pulseTimer = setTimeout(refreshPulse, 10*60*1000);
   }
 }
 
