@@ -479,8 +479,22 @@
       <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:8px 8px 4px;
                   border:1px solid var(--border);margin-bottom:8px">
         <div style="font-size:10px;color:var(--text3);margin-bottom:6px">法人淨多口 近20日（千口）</div>
-        <div id="mxfBars" style="display:flex;align-items:flex-end;gap:3px;height:56px"></div>
-        <div id="mxfBarDates" style="position:relative;height:14px;margin-top:2px"></div>
+        <!-- SVG 棒狀圖（含 Y 軸 + hover tooltip）-->
+      <div style="position:relative">
+        <svg id="mxfBars" width="100%" height="80" viewBox="0 0 360 80"
+             preserveAspectRatio="none" style="display:block;overflow:visible;cursor:crosshair"
+             onmousemove="_mxfHover(event,this)" onmouseleave="_mxfLeave()"
+             ontouchmove="_mxfTouchMove(event,this)" ontouchend="_mxfLeave()">
+        </svg>
+        <!-- hover tooltip -->
+        <div id="mxfTooltip" style="display:none;position:absolute;background:rgba(12,12,24,.95);
+             border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;
+             pointer-events:none;z-index:20;white-space:nowrap;transform:translateX(-50%)">
+          <div id="mxfTipDate" style="font-size:10px;color:var(--text3)"></div>
+          <div id="mxfTipVal" style="font-weight:700"></div>
+        </div>
+      </div>
+      <div id="mxfBarDates" style="position:relative;height:14px;margin-top:2px"></div>
       </div>
 
       <!-- AI 解讀 -->
@@ -6113,6 +6127,50 @@ function _renderTaiexChart(){
   svg.ontouchend   = ()=>setTimeout(hideT,1500);
 }
 
+// MXF 棒狀圖 hover / touch
+let _mxfHoverIdx = -1;
+function _mxfGetIdx(e, svg){
+  const rect = svg.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const ratio = Math.max(0, Math.min(1, (clientX - rect.left - (svg._padL||36)) / (svg._chartW||300)));
+  return Math.max(0, Math.min((svg._mxfVals||[]).length-1, Math.floor(ratio*(svg._mxfVals||[]).length)));
+}
+function _mxfHover(e, svg){
+  const vals = svg._mxfVals, dates = svg._mxfDates;
+  if(!vals||!vals.length) return;
+  const idx = _mxfGetIdx(e, svg);
+  if(idx === _mxfHoverIdx) return;
+  _mxfHoverIdx = idx;
+  const tip  = document.getElementById('mxfTooltip');
+  const tDate= document.getElementById('mxfTipDate');
+  const tVal = document.getElementById('mxfTipVal');
+  if(!tip) return;
+  const v = vals[idx];
+  tDate.textContent = dates[idx]||'';
+  tVal.textContent  = (v>=0?'+':'')+v.toFixed(1)+'K口';
+  tVal.style.color  = v>=0?'var(--red)':'var(--green)';
+  // 位置：相對 SVG 父容器
+  const svgRect = svg.getBoundingClientRect();
+  const barFrac = (idx+0.5)/(vals.length||1);
+  const barPx   = (svg._padL||36) + barFrac*(svg._chartW||300);
+  const barLeft = barPx/360*svgRect.width;
+  const parent  = tip.parentElement;
+  const pW      = parent ? parent.getBoundingClientRect().width : svgRect.width;
+  const tipW    = 90;
+  let left = barLeft;
+  if(left < tipW/2)        left = tipW/2;
+  if(left > pW - tipW/2)   left = pW - tipW/2;
+  tip.style.left    = left.toFixed(0)+'px';
+  tip.style.bottom  = (svgRect.height+4)+'px';
+  tip.style.display = 'block';
+}
+function _mxfTouchMove(e, svg){ e.preventDefault&&e.preventDefault(); _mxfHover(e,svg); }
+function _mxfLeave(){
+  _mxfHoverIdx = -1;
+  const tip = document.getElementById('mxfTooltip');
+  if(tip) tip.style.display='none';
+}
+
 async function loadLeadingIndicators(manual=false){
   if(manual) showToast('🔄 更新先行指標…');
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
@@ -6646,30 +6704,71 @@ async function loadMxfData(){
     if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
     if(dateEl) dateEl.textContent = d.date||'—';
 
-    // ── 棒狀圖（近20日法人淨多口，紅=淨多/空方偏空，綠=淨空/散戶偏多）──
+    // ── SVG 棒狀圖（含 Y 軸刻度 + hover tooltip）──────────
     const barsEl = document.getElementById('mxfBars');
     if(barsEl && hist.length){
       const vals   = hist.map(h=>h.instNetK);
+      const dates  = hist.map(h=>h.date);
       const absMax = Math.max(...vals.map(Math.abs), 1);
-      const H=56, midY=H/2;
-      barsEl.style.cssText = 'display:flex;align-items:flex-end;gap:2px;height:'+H+'px;position:relative;border-bottom:1px solid rgba(255,255,255,.15)';
-      barsEl.innerHTML = vals.map(v=>{
-        const barH  = Math.max(2, Math.abs(v)/absMax*(midY-3));
+      const W=360, H=80;
+      const padL=36, padR=6, padT=6, padB=4;
+      const chartW = W - padL - padR;
+      const chartH = H - padT - padB;
+      const midY   = padT + chartH/2;  // 零軸 Y 座標
+      const n      = vals.length;
+      const barW   = Math.max(2, chartW/n - 1.5);
+      const NS     = 'http://www.w3.org/2000/svg';
+
+      // 儲存資料供 hover 使用
+      barsEl._mxfVals  = vals;
+      barsEl._mxfDates = dates;
+      barsEl._mxfAbsMax= absMax;
+      barsEl._padL = padL; barsEl._padR = padR;
+      barsEl._chartW = chartW; barsEl._H = H;
+      barsEl._midY = midY; barsEl._chartH = chartH;
+
+      barsEl.innerHTML = '';
+      barsEl.setAttribute('viewBox', '0 0 '+W+' '+H);
+
+      // ── Y 軸刻度（3條：最大/零/最小）────────────────
+      [absMax, 0, -absMax].forEach(v=>{
+        const yPos = midY - (v/absMax)*(chartH/2-padT/2);
+        // 格線
+        const gl = document.createElementNS(NS,'line');
+        gl.setAttribute('x1', padL); gl.setAttribute('x2', W-padR);
+        gl.setAttribute('y1', yPos.toFixed(1)); gl.setAttribute('y2', yPos.toFixed(1));
+        gl.setAttribute('stroke', v===0 ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.06)');
+        gl.setAttribute('stroke-width', v===0 ? '1' : '0.5');
+        if(v!==0) gl.setAttribute('stroke-dasharray','3,3');
+        barsEl.appendChild(gl);
+        // Y 軸文字
+        const tx = document.createElementNS(NS,'text');
+        tx.setAttribute('x', (padL-3).toString());
+        tx.setAttribute('y', (yPos+3).toFixed(1));
+        tx.setAttribute('text-anchor','end');
+        tx.setAttribute('font-size','9');
+        tx.setAttribute('fill','rgba(255,255,255,.45)');
+        tx.textContent = (v>=0?'+':'')+v.toFixed(1)+'K';
+        barsEl.appendChild(tx);
+      });
+
+      // ── K 棒 ─────────────────────────────────────────
+      vals.forEach((v,i)=>{
         const isPos = v >= 0;
         const col   = isPos ? 'rgba(255,76,106,.85)' : 'rgba(0,212,170,.85)';
-        // 正值從中線往上，負值從中線往下
-        const bottom = isPos ? midY : (midY - barH);
-        return '<div style="flex:1;position:relative;height:'+H+'px">'
-          + '<div style="position:absolute;left:1px;right:1px;'
-          + 'bottom:'+bottom+'px;height:'+barH+'px;'
-          + 'background:'+col+';border-radius:2px"></div>'
-          + '</div>';
-      }).join('');
-      // 零軸線
-      const zeroLine = document.createElement('div');
-      zeroLine.style.cssText = 'position:absolute;left:0;right:0;bottom:'+midY+'px;height:1px;background:rgba(255,255,255,.25);pointer-events:none';
-      barsEl.style.position = 'relative';
-      barsEl.appendChild(zeroLine);
+        const cx    = padL + (i+0.5)/n*chartW;
+        const barH  = Math.max(1.5, Math.abs(v)/absMax*(chartH/2-padT));
+        const barY  = isPos ? midY-barH : midY;
+
+        const rect = document.createElementNS(NS,'rect');
+        rect.setAttribute('x',  (cx-barW/2).toFixed(1));
+        rect.setAttribute('y',  barY.toFixed(1));
+        rect.setAttribute('width',  barW.toFixed(1));
+        rect.setAttribute('height', barH.toFixed(1));
+        rect.setAttribute('fill',   col);
+        rect.setAttribute('rx','1.5');
+        barsEl.appendChild(rect);
+      });
     }
 
     // ── 日期軸 ───────────────────────────────────────────────
@@ -9010,7 +9109,7 @@ function renderTrendList(stocks){
 }
 
 async function pickTrendStock(name, id){
-  switchPage('home');
+  switchPage('stock');          // 跳到個股頁，不是分析頁
   await selectStock(null, name, id+'.TW');
 }
 
