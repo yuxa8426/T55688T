@@ -1264,19 +1264,46 @@
   </div>
   
 
+  <!-- 市場總覽新聞（大盤相關，可收合）-->
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
-    <h2>重大消息 &amp; 市場新聞</h2>
+    <h2>📰 市場總覽新聞</h2>
     <div style="display:flex;gap:6px;align-items:center">
-      <span style="font-size:10px;background:rgba(124,92,252,.15);color:#a080ff;border-radius:999px;padding:3px 8px;font-weight:700" id="newsStockTag">—</span>
-      <button onclick="refreshNews()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 6px" title="重新整理">↻</button>
+      <button onclick="_toggleMarketNews(this)"
+        id="marketNewsToggleBtn"
+        style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
+               border:1px solid var(--border);border-radius:8px;padding:3px 9px;
+               cursor:pointer;font-family:inherit">收合 ▴</button>
+      <button onclick="loadMarketNewsSection(true)"
+        style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
     </div>
   </div>
-  <!-- 個股重大消息（置頂橫幅，有資料才顯示）-->
-  <div id="stockNewsBanner" style="display:none;margin:0 16px 10px"></div>
-  <div id="newsList">
-    <div class="nitem"><div style="flex:1"><div class="nt" style="color:var(--text3)">載入中…</div></div></div>
+  <div id="marketNewsPanel">
+    <div id="marketNewsList">
+      <div style="padding:14px 16px;color:var(--text3);font-size:12px">載入中…</div>
+    </div>
   </div>
-</div>
+
+    <!-- 個股消息（直接關聯當前個股）-->
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+    <h2>📢 <span id="newsStockTitle">個股消息</span></h2>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="_toggleStockNews(this)"
+        id="stockNewsToggleBtn"
+        style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
+               border:1px solid var(--border);border-radius:8px;padding:3px 9px;
+               cursor:pointer;font-family:inherit">收合 ▴</button>
+      <button onclick="refreshNews()"
+        style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
+    </div>
+  </div>
+  <div id="stockNewsPanel">
+    <div id="stockNewsBanner" style="display:none;margin:0 16px 10px"></div>
+    <div id="newsList">
+      <div class="nitem"><div style="flex:1"><div class="nt" style="color:var(--text3)">載入中…</div></div></div>
+    </div>
+  </div>
+
+
 
 <!-- ═══ PAGE: 探索 ═══ -->
 </div>
@@ -1290,11 +1317,18 @@
       <h2>🌐 國際財經</h2>
       <div style="display:flex;align-items:center;gap:6px">
         <span id="intlNewsTime" style="font-size:10px;color:var(--text3)">—</span>
+        <button onclick="_toggleIntlNews(this)" id="intlNewsCollapseBtn"
+          style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
+                 border:1px solid var(--border);border-radius:8px;padding:3px 9px;
+                 cursor:pointer;font-family:inherit">收合 ▴</button>
         <button onclick="loadIntlNews(true)" id="intlNewsRefreshBtn"
-          style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;padding:2px 7px;font-family:inherit">↻</button>
+          style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;padding:2px 7px;font-family:inherit;line-height:1.4">↻</button>
       </div>
     </div>
+    </div>
 
+    <!-- 可收合的內容區 -->
+    <div id="intlNewsPanel">
     <!-- 分類 Tab -->
     <div id="intlNewsTabs" style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch">
       <button onclick="setIntlFilter('all',this)" class="intl-tab"
@@ -1320,6 +1354,8 @@
     <!-- AI 市場簡報 + 新聞列表（合一） -->
     <div id="intlNewsList" style="margin-bottom:16px">
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">載入中…</div>
+    </div><!-- /intlNewsPanel -->
+
     </div>
 
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
@@ -9216,6 +9252,8 @@ async function selectStock(el, name, ticker){
     const sid = currentTicker.replace('.TW','');
     loadShareholder(sid);
     loadNews(sid);
+    // 同步載入市場總覽新聞（若尚未載入）
+    if(!_marketNewsLoaded) loadMarketNewsSection();
     loadFundamentals(sid); // 基本面：季報+月營收+PE+配息
   } else {
     drawFallbackChart(true);
@@ -9228,6 +9266,72 @@ async function selectStock(el, name, ticker){
 
 // ════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════
+// ── 市場總覽新聞（個股頁，顯示大盤相關消息）───────────────
+let _marketNewsLoaded = false;
+let _marketNewsCollapsed = false;
+
+function _toggleMarketNews(btn){
+  const panel = document.getElementById('marketNewsPanel');
+  if(!panel) return;
+  _marketNewsCollapsed = !_marketNewsCollapsed;
+  panel.style.display = _marketNewsCollapsed ? 'none' : 'block';
+  if(btn) btn.textContent = _marketNewsCollapsed ? '展開 ▾' : '收合 ▴';
+  if(!_marketNewsCollapsed && !_marketNewsLoaded) loadMarketNewsSection();
+}
+
+function _toggleStockNews(btn){
+  const panel = document.getElementById('stockNewsPanel');
+  if(!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if(btn) btn.textContent = isOpen ? '展開 ▾' : '收合 ▴';
+}
+
+async function loadMarketNewsSection(force=false){
+  const el = document.getElementById('marketNewsList');
+  if(!el) return;
+  if(_marketNewsLoaded && !force) return;
+  _marketNewsLoaded = true;
+  el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">載入市場總覽新聞…</div>';
+
+  try{
+    // 用台積電代表大盤市場新聞 + 加上外資法人相關
+    const [mktNews, instNews] = await Promise.all([
+      fetchWithTimeout(`${API}/news?symbol=${encodeURIComponent('2330.TW')}`, 8000)
+        .then(r=>r.ok?r.json().then(j=>j?.data||[]):Promise.resolve([])),
+      fetchWithTimeout(`${API}/news?symbol=${encodeURIComponent('0050.TW')}`, 8000)
+        .then(r=>r.ok?r.json().then(j=>j?.data||[]):Promise.resolve([])),
+    ]);
+
+    // 合併去重，最多6則
+    const seen = new Set();
+    const all  = [...mktNews, ...instNews].filter(n=>{
+      if(!n.title||seen.has(n.title)) return false;
+      seen.add(n.title); return true;
+    }).slice(0, 6);
+
+    if(!all.length){
+      el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">目前無市場新聞</div>';
+      return;
+    }
+
+    el.innerHTML = all.map(n=>{
+      const isImp = n.title&&(n.title.includes('Fed')||n.title.includes('法人')||n.title.includes('指數')||n.title.includes('關稅'));
+      return '<div class="nitem" onclick="window.open(\''+encodeURI(n.link||'#')+'\',\'_blank\')" style="cursor:pointer">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div class="nt">'+_escapeHtml(n.title||'')+'</div>'
+        +'<div class="ns">'+_escapeHtml(n.description||'市場新聞')+'</div>'
+        +'</div>'
+        +(isImp?'<span style="flex-shrink:0;font-size:9px;padding:2px 6px;background:rgba(245,200,66,.15);color:var(--gold);border-radius:4px;align-self:flex-start">重要</span>':'')
+        +'</div>';
+    }).join('');
+  }catch(e){
+    if(el) el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">新聞載入失敗，請稍後重試</div>';
+  }
+}
+
+function _escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 // 市場新聞 — 連動當前個股 + FinMind TaiwanStockNews
 // ════════════════════════════════════════════════════
 const NEWS_CAT = { '台積電':'tech','聯發科':'tech','鴻海':'tech','外資':'finance','Fed':'macro','聯準會':'macro','利率':'macro','法人':'finance','ETF':'finance' };
@@ -9247,6 +9351,9 @@ async function loadNews(stockId){
   const banner = document.getElementById('stockNewsBanner');
 
   if(tag) tag.textContent = name + ' & 市場';
+  // 更新個股消息標題
+  const titleEl = document.getElementById('newsStockTitle');
+  if(titleEl) titleEl.textContent = name + ' 消息';
   if(banner) banner.style.display = 'none';
 
   // 快取命中：直接渲染，無需 loading 狀態
@@ -11294,7 +11401,7 @@ function _renderIntlNews(data){
       <div onclick="toggleNews('${id}')" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer">
         <span style="font-size:13px;flex-shrink:0;color:${dColor}">${dIcon}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">${n.title}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);line-height:1.35">${_translateTitle(n.title)}</div>
           <div style="font-size:9px;color:var(--text3);margin-top:3px">${catLabel}${src?' · '+src:''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -11399,6 +11506,51 @@ function renderStratShowcase(){
 }
 
 // 主函式：載入國際財經新聞（AI 只呼叫一次：在 Worker /news 內）
+// 國際財經收合
+let _intlNewsCollapsed = false;
+function _toggleIntlNews(btn){
+  _intlNewsCollapsed = !_intlNewsCollapsed;
+  const panel = document.getElementById('intlNewsPanel');
+  if(panel) panel.style.display = _intlNewsCollapsed ? 'none' : 'block';
+  if(btn) btn.textContent = _intlNewsCollapsed ? '展開 ▾' : '收合 ▴';
+}
+
+// 繁體中文標題翻譯（本地替換 + AI 備援）
+const _intlTitleDict = {
+  // 財經通用
+  'rate cut':'降息', 'rate hike':'升息', 'interest rate':'利率',
+  'Federal Reserve':'聯準會', 'Fed':'聯準會', 'inflation':'通膨',
+  'GDP':'GDP', 'recession':'衰退', 'tariff':'關稅', 'trade war':'貿易戰',
+  'trade':'貿易', 'deficit':'赤字', 'surplus':'順差',
+  'earnings':'財報', 'revenue':'營收', 'profit':'獲利',
+  // 科技
+  'semiconductor':'半導體', 'chip':'晶片', 'AI':'AI人工智慧',
+  'supply chain':'供應鏈', 'export':'出口', 'import':'進口',
+  // 公司
+  'TSMC':'台積電', 'Nvidia':'輝達', 'Apple':'蘋果',
+  'Microsoft':'微軟', 'Google':'谷歌', 'Amazon':'亞馬遜',
+  // 地緣
+  'China':'中國', 'Taiwan':'台灣', 'Japan':'日本',
+  'Europe':'歐洲', 'US':'美國', 'UK':'英國',
+  // 動詞
+  'surges':'大漲', 'plunges':'大跌', 'jumps':'跳升',
+  'falls':'下滑', 'rises':'上漲', 'drops':'下跌',
+  'warns':'警告', 'cuts':'削減', 'raises':'上調',
+};
+
+function _translateTitle(title){
+  if(!title) return title;
+  // 如果已是中文（超過30%中文字符），直接回傳
+  const chCount = (title.match(/[一-龥]/g)||[]).length;
+  if(chCount / title.length > 0.3) return title;
+  // 本地字典替換
+  let t = title;
+  Object.entries(_intlTitleDict).forEach(([en,zh])=>{
+    t = t.replace(new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), zh);
+  });
+  return t;
+}
+
 async function loadIntlNews(force=false){
   // 快取到隔日
   const ttl = INTL_NEWS_TTL();
