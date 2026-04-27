@@ -4855,6 +4855,18 @@ function updateAI(name, q){
 
   // 更新 header 與綜合指標
   setEl('aiTitle', `${name} — 短${shortScore.toFixed(1)} ／ 中${midScore.toFixed(1)} ／ 長${longScoreForComposite.toFixed(1)}`);
+
+  // ── 更新綜合評分 DOM ─────────────────────────────────
+  setEl('scoreNum',    finalScore.toFixed(1), scoreColor(finalScore));
+  setBar('scoreBar',   finalScore, 400);
+  setEl('scoreTech',   shortScore.toFixed(1), scoreColor(shortScore));
+  setEl('scoreInst',   midScore.toFixed(1),   scoreColor(midScore));
+  setEl('scoreMom',    longScoreForComposite.toFixed(1), scoreColor(longScoreForComposite));
+  setEl('scoreInstVal',instScore.toFixed(1),  scoreColor(instScore));
+  setEl('m-rating',    sigText);
+  setEl('m-target',    target+' 元');
+  setEl('m-rsi',       rsiVal);
+
   const aiBodyText = `綜合評分 ${finalScore.toFixed(1)}/10（${rating}）。短期 RSI=${rsiVal}，中期${ma20?'站上':'跌破'} MA20，長期評分 ${longScoreForComposite.toFixed(1)}。技術參考價位 ${target} 元。以上僅供參考，不構成投資建議。`;
   const aiBodyEl = document.getElementById('aiBody');
   if(aiBodyEl){ aiBodyEl.style.opacity='0'; aiBodyEl.innerHTML=colorSentiment(aiBodyText);
