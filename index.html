@@ -4953,7 +4953,7 @@ function drawChart(pts, color, dates, mode){
   if(svgEl){
     svgEl.innerHTML =
       '<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">'
-      +'<stop offset="0%" stop-color="'+color+'" stop-opacity=".35"/>'
+      +'<stop id="cgStop" offset="0%" stop-color="'+color+'" stop-opacity=".35"/>'
       +'<stop offset="100%" stop-color="'+color+'" stop-opacity="0"/>'
       +'</linearGradient></defs>'
       +'<path id="chartFill" fill="url(#cg)"/>'
@@ -8213,7 +8213,20 @@ async function loadSectorData(key){
         fmStockData(s.id, 30), // 30天：穩定計算 vol20avg + volRatio
         fmInstitutional(s.id),
       ]);
-      const q = _parseQuote(raw, s.id);
+      // 優先用 intraday 覆蓋的即時漲跌
+      let q = _parseQuote(raw, s.id);
+      if(q && Math.abs(q.changePct) < 0.01){
+        // changePct 接近0，嘗試從 intraday 取即時漲跌
+        try{
+          const intra = await fetchIntraday(s.id);
+          if(intra && intra.pts.length > 2 && intra.prevClose > 0){
+            const lp = intra.pts[intra.pts.length-1];
+            q.price     = lp;
+            q.changePct = (lp - intra.prevClose) / intra.prevClose * 100;
+            q.change    = lp - intra.prevClose;
+          }
+        }catch(e){}
+      }
       // 計算量能倍數（今日量 / 20日均量）
       if(q && raw && raw.length >= 5){
         const vols = raw.map(r=>parseInt(r.Trading_Volume)||0).filter(v=>v>0);
@@ -8545,10 +8558,11 @@ async function loadSectorPreviewFetch(key){
   if(!leaderId) return;
 
   try{
-    // fmStockData 同時給 quote + 歷史（15天），fmFetch cache 可能命中
-    const raw  = await fmStockData(leaderId, 5);
-    const q    = _parseQuote(raw, leaderId);
-    const inst = await fmInstitutional(leaderId);
+    // 用 getQuoteWithIntraday 取得含即時漲跌的報價
+    const [q, inst] = await Promise.all([
+      getQuoteWithIntraday(leaderId),
+      fmInstitutional(leaderId).catch(()=>null),
+    ]);
     if(!q) return;
     const leaderStock = sec.stocks.find(s=>s.id===leaderId)||{id:leaderId,name:leaderId};
     _sectorPreviewCache[key] = Date.now();
