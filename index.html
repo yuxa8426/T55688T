@@ -9249,6 +9249,8 @@ async function selectStock(el, name, ticker){
     updateStockTrendBar(stockId, histData, instData);
     showToast('✅ '+name+' 資料：'+quoteData.date);
     // 背景執行：籌碼 + 新聞（不阻塞主流程）
+    // 確保法人籌碼趨勢圖有20日資料
+    loadShareholderDays(stockId, 30, '近30日');
     const sid = currentTicker.replace('.TW','');
     loadShareholder(sid);
     loadNews(sid);
@@ -9295,17 +9297,16 @@ async function loadMarketNewsSection(force=false){
   el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">載入市場總覽新聞…</div>';
 
   try{
-    // 用台積電代表大盤市場新聞 + 加上外資法人相關
-    const [mktNews, instNews] = await Promise.all([
-      fetchWithTimeout(`${API}/news?symbol=${encodeURIComponent('2330.TW')}`, 8000)
-        .then(r=>r.ok?r.json().then(j=>j?.data||[]):Promise.resolve([])),
-      fetchWithTimeout(`${API}/news?symbol=${encodeURIComponent('0050.TW')}`, 8000)
-        .then(r=>r.ok?r.json().then(j=>j?.data||[]):Promise.resolve([])),
-    ]);
+    // Worker /news（無 symbol）= RSS 國際市場新聞 → 最能代表大盤
+    // 同時抓 2330 個股搜尋新聞作補充
+    const r = await fetchWithTimeout(`${API}/news`, 10000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const raw = await r.json();
 
-    // 合併去重，最多6則
+    // Worker /news 回傳的格式可能是 {items:[...]} 或 {data:[...]}
+    const allItems = raw?.items || raw?.data || [];
     const seen = new Set();
-    const all  = [...mktNews, ...instNews].filter(n=>{
+    const all  = allItems.filter(n=>{
       if(!n.title||seen.has(n.title)) return false;
       seen.add(n.title); return true;
     }).slice(0, 6);
@@ -9315,18 +9316,22 @@ async function loadMarketNewsSection(force=false){
       return;
     }
 
+    const impKw = ['Fed','聯準會','利率','法人','指數','關稅','貿易','GDP','通膨','降息','升息'];
     el.innerHTML = all.map(n=>{
-      const isImp = n.title&&(n.title.includes('Fed')||n.title.includes('法人')||n.title.includes('指數')||n.title.includes('關稅'));
-      return '<div class="nitem" onclick="window.open(\''+encodeURI(n.link||'#')+'\',\'_blank\')" style="cursor:pointer">'
+      const title = _translateTitle(n.title||'');
+      const isImp = impKw.some(k=>title.includes(k)||(n.title||'').includes(k));
+      const src   = n.source || n.description || '市場新聞';
+      const link  = n.link || n.url || '#';
+      return '<div class="nitem" onclick="window.open(\''+encodeURI(link)+'\',\'_blank\')" style="cursor:pointer">'
         +'<div style="flex:1;min-width:0">'
-        +'<div class="nt">'+_escapeHtml(n.title||'')+'</div>'
-        +'<div class="ns">'+_escapeHtml(n.description||'市場新聞')+'</div>'
+        +'<div class="nt">'+_escapeHtml(title)+'</div>'
+        +'<div class="ns">'+_escapeHtml(src)+'</div>'
         +'</div>'
         +(isImp?'<span style="flex-shrink:0;font-size:9px;padding:2px 6px;background:rgba(245,200,66,.15);color:var(--gold);border-radius:4px;align-self:flex-start">重要</span>':'')
         +'</div>';
     }).join('');
   }catch(e){
-    if(el) el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">新聞載入失敗，請稍後重試</div>';
+    if(el) el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">新聞載入失敗：'+e.message+'</div>';
   }
 }
 
@@ -9425,493 +9430,25 @@ async function loadNews(stockId){
   }
 
   if(!combined.length){
-    // 靜態備援
-    el.innerHTML = [
-      {t:`${name} 最新財經新聞`, s:'Google 新聞', c:'tech', stock:true, u:'https://news.google.com/search?q='+encodeURIComponent(name)+'&hl=zh-TW&gl=TW'},
-      {t:'外資法人買賣超最新動態', s:'Google 新聞', c:'finance', stock:false, u:'https://news.google.com/search?q=%E5%A4%96%E8%B3%87+%E6%B3%95%E4%BA%BA&hl=zh-TW&gl=TW'},
-      {t:'Fed 利率與總體經濟動向', s:'Google 新聞', c:'macro', stock:false, u:'https://news.google.com/search?q=Fed+%E5%88%A9%E7%8E%87&hl=zh-TW&gl=TW'},
-    ].map(n=>newsItem(n.t,n.s,n.c,n.u,n.stock,'')).join('');
-    return;
-  }
-
-  el.innerHTML = combined.slice(0,7).map(n=>{
-    const kw  = Object.keys(NEWS_CAT).find(k=>n.title?.includes(k));
-    const cat = kw ? NEWS_CAT[kw] : (n._isStock ? 'tech' : 'finance');
-    return newsItem(n.title||'—', n.description||'FinMind', cat, n.link||'', n._isStock, n.date||'');
-  }).join('');
-
-  // 存入快取
-  _newsCache.set(id, {html: el.innerHTML, ts: Date.now()});
-  markFresh('news');
-}
-
-// 產生新聞連結：有原始 link 直接用；否則用 Google 新聞搜尋
-function resolveNewsUrl(url, title){
-  if(url && url.startsWith('http')) return url;
-  // Google 新聞搜尋（台灣版，限7天）
-  return 'https://news.google.com/search?q=' + encodeURIComponent(title) + '&hl=zh-TW&gl=TW&ceid=TW:zh-Hant';
-}
-
-// ════════════════════════════════════════════════════
-// 利多/利空關鍵詞著色
-// 台股慣例：利多=紅色、利空=綠色
-// ════════════════════════════════════════════════════
-const BULL_WORDS = [
-  // 業績/財務
-  '獲利','盈餘','淨利','EPS','營收創高','獲利成長','超預期','優於預期','大幅成長',
-  '營收','突破','創高','新高','創新高','歷史高','季增','年增','成長','增加','增長',
-  // 法人動作
-  '買超','加碼','增持','建倉','買進','做多','看多','目標價上調','調升',
-  '外資買','投信買','買入','大買','連買',
-  // 產業/市場
-  '利多','利好','正向','樂觀','上調','升評','強力買進','受惠','題材',
-  '需求強','訂單','滿載','稼動率','漲價','漲',
-  // 政策/總經
-  '降息','寬鬆','補貼','政府支持','擴大投資','資金行情',
-  // 技術
-  '突破壓力','站上','多頭','黃金交叉','漲停',
-];
-const BEAR_WORDS = [
-  // 業績/財務
-  '虧損','虧損擴大','虧損增加','下修','獲利下滑','低於預期','不如預期',
-  '衰退','下滑','下降','季減','年減','縮水','虧','減少',
-  // 法人動作
-  '賣超','減持','降低持股','賣出','做空','看空','目標價下調','調降',
-  '外資賣','投信賣','大賣','連賣',
-  // 產業/市場
-  '利空','負面','悲觀','下調','降評','賣出建議','衝擊','庫存',
-  '需求疲','砍單','降價','跌',
-  // 政策/總經
-  '升息','緊縮','制裁','關稅','貿易戰','地緣政治',
-  // 技術
-  '跌破支撐','死亡交叉','空頭','跌停','破底',
-  // 警示
-  '停牌','下市','處置','注意','警示','違約','掏空','弊案',
-];
-
-function colorSentiment(text){
-  if(!text) return text;
-  let result = text;
-  // 利多詞：紅色
-  BULL_WORDS.forEach(w=>{
-    if(result.includes(w)){
-      result = result.split(w).join(
-        `<span style="color:var(--red);font-weight:700">${w}</span>`
-      );
-    }
-  });
-  // 利空詞：綠色（先利多後利空，避免衝突）
-  BEAR_WORDS.forEach(w=>{
-    // 不在已著色的 span 內才替換
-    if(result.includes(w) && !result.includes(`>${w}</span>`)){
-      result = result.split(w).join(
-        `<span style="color:var(--green);font-weight:700">${w}</span>`
-      );
-    }
-  });
-  return result;
-}
-
-function newsItem(title, source, cat, url, isStockRelated, date){
-  const catLabel  = {tech:'個股',finance:'法人',macro:'總經'}[cat]||'財經';
-  const finalUrl  = resolveNewsUrl(url, title);
-  const badge     = isStockRelated
-    ? `<span style="font-size:9px;background:rgba(124,92,252,.2);color:#a080ff;border-radius:4px;padding:2px 5px;margin-right:4px">個股</span>`
-    : '';
-  const linkIcon  = url && url.startsWith('http')
-    ? `<span style="font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0">↗</span>`
-    : `<span style="font-size:10px;color:var(--text3);margin-left:4px;flex-shrink:0" title="Google 新聞搜尋">🔍</span>`;
-  return `<div class="nitem" onclick="window.open('${finalUrl.replace(/'/g,'%27')}','_blank')" style="cursor:pointer">
-    <div style="flex:1;min-width:0">
-      <div class="nt">${badge}${colorSentiment(title)}</div>
-      <div class="ns">${source}${date ? ' · ' + relTime(date) : ''}</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-      <span class="ncat ${cat}">${catLabel}</span>
-      ${linkIcon}
-    </div>
-  </div>`;
-}
-
-function relTime(dateStr){
-  if(!dateStr) return '—';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const h = Math.floor(diff/3600000);
-  if(isNaN(h)||h<0) return '今日';
-  return h < 1 ? '剛剛' : h < 24 ? h+'小時前' : Math.floor(h/24)+'天前';
-}
-
-// ════════════════════════════════════════════════════
-// 市場脈動 — 根據法人+指數動態生成
-// ════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════
-// 市場脈動 — 完整即時版 + 自動定時更新
-// ════════════════════════════════════════════════════
-let _pulseTimer = null;
-
-async function refreshPulse(){
-  const [instData, indexData, txfData] = await Promise.all([
-    loadInstitutional(),
-    fmTWSEIndex(),
-    fetchTxfAfterHours().catch(()=>null),
-  ]);
-  updatePulse(instData, indexData, txfData);
-
-  // 功能四：市場進場狀態（用真實 VIX + 法人 + 指數計算）
-  (()=>{
-    try{
-      const vixEl = document.getElementById('vixNum');
-      const vix   = vixEl ? parseFloat(vixEl.textContent) : null;
-      const instTotal = indexData?.instData
-        ? (indexData.instData.foreign||0)+(indexData.instData.trust||0)+(indexData.instData.dealer||0)
-        : null;
-      const idxChg = indexData?.changePct ?? null;
-      const sig = calcMarketEntrySignal(vix, instTotal, idxChg);
-      if(!sig) return;
-
-      const banner = document.getElementById('marketEntryBanner');
-      const inner  = document.getElementById('marketEntryInner');
-      if(!banner||!inner) return;
-
-      const bgMap = {
-        good:    'rgba(0,212,170,.1)',
-        ok:      'rgba(0,212,170,.07)',
-        neutral: 'rgba(255,255,255,.05)',
-        caution: 'rgba(245,200,66,.1)',
-        danger:  'rgba(255,76,106,.1)',
-      };
-      const bdMap = {
-        good:    'rgba(0,212,170,.4)',
-        ok:      'rgba(0,212,170,.25)',
-        neutral: 'var(--border)',
-        caution: 'rgba(245,200,66,.35)',
-        danger:  'rgba(255,76,106,.4)',
-      };
-      inner.style.background = bgMap[sig.level]||bgMap.neutral;
-      inner.style.border     = '1px solid '+(bdMap[sig.level]||bdMap.neutral);
-
-      const instStr = sig.instTotal!=null
-        ? (sig.instTotal>=0?'+':'')+Math.round(sig.instTotal/100)+'億'
-        : '—';
-      inner.innerHTML =
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
-        +'<span style="font-weight:700">'+sig.icon+' 市場進場訊號</span>'
-        +'<span style="font-size:10px;color:var(--text3)">VIX '+
-          (sig.vix!=null?sig.vix.toFixed(1):'—')+'・法人'+instStr+'</span>'
-        +'</div>'
-        +'<div style="color:var(--text2)">'+sig.text+'</div>'
-        +(sig.posAdj<100
-          ? '<div style="font-size:10px;margin-top:3px;color:var(--gold)">→ 建議倉位調整至正常水位的 '+sig.posAdj+'%</div>'
-          : '');
-      banner.style.display = 'block';
-    }catch(e){}
-  })();
-
-  // 自動排程：盤中 60 秒，盤外 5 分鐘
-  clearTimeout(_pulseTimer);
-  const now    = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const m      = now.getHours()*60+now.getMinutes();
-  const isWeek = now.getDay()===0||now.getDay()===6;
-  const inSess = !isWeek && m>=555 && m<=810;
-  // 盤中5分鐘，盤外30分鐘
-  _pulseTimer  = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
-  // 盤中同步更新市場成交量（避免重複呼叫，只在 refreshPulse 觸發時更新）
-  if(inSess) loadMarketVolume().catch(()=>{});
-  // 加權指數圖更新：
-  // 盤中（09:00-13:45）→ 每次 refreshPulse 都更新今日折線
-  // 盤後 → 只在 1D 尚未載入時才載入一次，之後不再更新
-  if(inSess){
-    loadTaiexChart().catch(()=>{});  // 盤中：即時更新
-  } else if(!_taiexData['1D']){
-    loadTaiexChart().catch(()=>{});  // 盤後首次：載入當日收盤走勢
-  }
-  // 盤後：月/季已載入就不重複載入
-}
-
-function updatePulse(instData, indexData, txfData){
-  const total     = instData?.totalShares ?? instData?.total ?? 0;
-  const foreign   = instData?.foreignShares ?? 0;
-  const trust     = instData?.trustShares ?? 0;
-  const isInstUp  = total >= 0;
-  const idxChg    = parseFloat(indexData?.changePct || 0);
-  const idxPrice  = indexData?.price ?? null;
-
-  // 台灣時間
-  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const ts  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-
-  // 標題 + 內文
-  let title, body;
-  if(isInstUp && idxChg > 0.5){
-    title = '🟥 今日台股多頭格局';
-    body  = `加權指數上漲 ${Math.abs(idxChg).toFixed(2)}%${idxPrice?' ('+Number(idxPrice).toLocaleString()+')':''}，三大法人買超，外資${foreign>=0?'積極布局':'觀望'}，市場氣氛偏樂觀。`;
-  } else if(!isInstUp && idxChg < -0.5){
-    title = '🟩 今日台股弱勢整理';
-    body  = `加權指數下跌 ${Math.abs(idxChg).toFixed(2)}%${idxPrice?' ('+Number(idxPrice).toLocaleString()+')':''}，三大法人賣超，外資${foreign<0?'持續流出':'小幅賣超'}，短線留意風險。`;
-  } else if(isInstUp && idxChg < -0.5){
-    title = '⚖️ 指數偏弱但法人買超';
-    body  = `加權指數下跌 ${Math.abs(idxChg).toFixed(2)}%，但三大法人合計買超，多空分歧，留意籌碼是否接手。`;
-  } else if(!isInstUp && idxChg > 0.5){
-    title = '⚖️ 指數上漲但法人賣超';
-    body  = `加權指數上漲 ${Math.abs(idxChg).toFixed(2)}%，但三大法人合計賣超，散戶推升為主，留意持續性。`;
-  } else {
-    title = '⏸ 今日台股盤整格局';
-    body  = `加權指數小幅${idxChg>=0?'上漲':'下跌'} ${Math.abs(idxChg).toFixed(2)}%，法人動向${isInstUp?'偏多':'偏空'}，多空交戰，等待量能方向確立。`;
-  }
-
-  // DOM 更新
-  const titleEl = document.getElementById('pulseTitle');
-  const bodyEl  = document.getElementById('pulseBody');
-  const timeEl  = document.getElementById('pulseTime');
-  if(titleEl) titleEl.textContent = title;
-  if(bodyEl)  bodyEl.innerHTML = colorSentiment(body);
-  // 時間標籤：即時顯示盤中時間，非即時顯示資料日期
-  const srcLabel = indexData?.isRealtime
-    ? `⚡ 即時 ${indexData.time||ts}`
-    : `📅 ${indexData?.date||ts} 收盤`;
-  if(timeEl) timeEl.textContent = srcLabel + ' · ' + ts.slice(0,5) + ' 更新';
-
-  // 指標列
-  const fmtM = v => {
-    const abs = Math.abs(v/1e4); // 股→萬股，再看量級
-    const sign = v>=0?'+':'-';
-    if(abs>=10000) return sign+(abs/10000).toFixed(1)+'億股';
-    if(abs>=1000)  return sign+(abs/1000).toFixed(1)+'千萬股';
-    return sign+abs.toFixed(0)+'萬股';
-  };
-  const sc = v => v>=0?'var(--red)':'var(--green)';
-  const pm = (id, val, txt) => {
-    const e = document.getElementById(id);
-    if(!e) return;
-    e.textContent  = txt;
-    e.style.color  = sc(val);
-  };
-  // 指數顯示：即時加入點位，法人標注日期
-  const twseLabel = indexData?.isRealtime
-    ? `${idxChg>=0?'▲':'▼'}${Math.abs(idxChg).toFixed(2)}% · ${Number(indexData.price).toLocaleString()}`
-    : `${idxChg>=0?'▲':'▼'}${Math.abs(idxChg).toFixed(2)}%`;
-  pm('pmTwse',    idxChg,  twseLabel);
-  const instDate = instData?.date ? ` (${instData.date.slice(5)})` : '';
-  pm('pmInst',    total,   total!==0 ? fmtM(total)+instDate : '—');
-  pm('pmForeign', foreign, foreign!==0 ? fmtM(foreign) : '—');
-  pm('pmTrust',   trust,   trust!==0  ? fmtM(trust)   : '—');
-
-  // 台指期盤後
-  const txfEl    = document.getElementById('pmTxf');
-  const txfNoteEl= document.getElementById('pmTxfNote');
-  if(txfEl){
-    if(txfData?.source==='DEV'){
-      // 夜盤開發中：顯示佔位
-      if(txfEl){ txfEl.textContent='—'; txfEl.style.color='var(--text3)'; }
-      if(txfNoteEl) txfNoteEl.innerHTML='<span style="color:var(--gold);font-size:9px">🚧 夜盤行情開發中</span>';
-      const txfLabelEl2 = document.getElementById('pmTxfLabel');
-      if(txfLabelEl2) txfLabelEl2.textContent='台指期';
-    } else if(txfData?.price && txfData?.change!=null){
-      const txfChg = txfData.change;
-      // 主數字顯示漲跌點數
-      txfEl.textContent = `${txfChg>=0?'▲':'▼'}${Math.abs(txfChg).toLocaleString()}pt`;
-      txfEl.style.color = txfChg>=0?'var(--red)':'var(--green)';
-      if(txfNoteEl){
-        const priceStr = Number(txfData.price).toLocaleString();
-        const pctStr   = `${txfData.changePct>=0?'+':''}${txfData.changePct}%`;
-        const _h = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'})).getHours();
-        const _isNight = _h>=15||_h<5;
-        let _srcNote = '';
-        if(txfData.source==='WantGoo'||txfData.source==='TAIFEX夜盤'){
-          _srcNote = ' · WTXP夜盤';
-        } else if(_isNight){
-          _srcNote = ' · 夜盤開發中';
-        } else {
-          _srcNote = ' · TX日盤';
-        }
-        txfNoteEl.textContent = `${priceStr} ${pctStr}${_srcNote}`;
-      }
-    } else {
-      txfEl.textContent   = '—';
-      txfEl.style.color   = 'var(--text3)';
-      if(txfNoteEl) txfNoteEl.textContent = '資料載入中';
-    }
-  }
-
-  // Chips 行（用快取族群資料若有）
-  const chips = document.getElementById('pulseChips');
-  if(chips){
-    const chipsArr = [];
-    // 從已載入的族群快取取均漲幅
-    Object.entries(_sectorCache||{}).forEach(([key, cached])=>{
-      if(!cached?.stocks) return;
-      const withQ = cached.stocks.filter(s=>s.q?.changePct!=null);
-      if(!withQ.length) return;
-      const avg = withQ.reduce((a,s)=>a+s.q.changePct,0)/withQ.length;
-      const sec = SECTORS[key];
-      if(sec) chipsArr.push({name:sec.name, avg});
-    });
-    // 補充預設 chips（若無快取）
-    if(!chipsArr.length){
-      if(idxChg!==0) chipsArr.push({name:'大盤', avg:idxChg});
-      if(foreign!==0) chipsArr.push({name:foreign>=0?'外資買超':'外資賣超', avg:foreign>=0?1:-1});
-    }
-    if(chipsArr.length){
-      // 排序：漲幅絕對值最大前4個
-      chipsArr.sort((a,b)=>Math.abs(b.avg)-Math.abs(a.avg));
-      chips.innerHTML = chipsArr.slice(0,4).map(c=>{
-        const cls = c.avg>=0?'up':'dn';
-        return `<span class="chip ${cls}">${c.avg>=0?'▲':'▼'} ${c.name} ${Math.abs(c.avg).toFixed(1)}%</span>`;
-      }).join('');
-    }
-  }
-}
-
-// ════════════════════════════════════════════════════
-// 自選股 — localStorage 完整 CRUD
-// ════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════
-// 自選股追蹤模組（策略頁 WL Tab）
-// localStorage 儲存 + FinMind 即時報價 + 7日回測
-// ════════════════════════════════════════════════════
-const MY_WL_KEY = 'stockai_mywatchlist';
-
-function getMyWL(){
-  try{ return JSON.parse(localStorage.getItem(MY_WL_KEY)) || []; }
-  catch(e){ return []; }
-}
-function saveMyWL(wl){
-  localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
-  kvPutDebounced('mywatchlist', wl);
-}
-
-// 新增股票
-function wlAddStock(id, name){
-  const wl = getMyWL();
-  if(wl.find(s=>s.id===id)){ showToast('已在自選股中'); return; }
-  const now = todayStr();
-  // 嘗試取入場價
-  fmQuote(id).then(q=>{
-    const entryPx = q?.price || null;
-    wl.push({ id, name: name||NAME_MAP[id]||id, addedDate: now, entryPx });
-    saveMyWL(wl);
-    renderWLPanel();
-    showToast('✅ 已加入 '+(name||id));
-  }).catch(()=>{
-    wl.push({ id, name: name||NAME_MAP[id]||id, addedDate: now, entryPx: null });
-    saveMyWL(wl);
-    renderWLPanel();
-    showToast('✅ 已加入 '+(name||id));
-  });
-  document.getElementById('wlAddInput').value = '';
-  document.getElementById('wlSearchResults').innerHTML = '';
-}
-
-// 移除股票
-function wlRemoveStock(id){
-  const wl = getMyWL().filter(s=>s.id!==id);
-  saveMyWL(wl);
-  renderWLPanel();
-  showToast('已移除');
-}
-
-// 從輸入框新增
-function wlAddFromInput(){
-  const val = (document.getElementById('wlAddInput')?.value||'').trim();
-  if(!val) return;
-  const id   = val.replace(/\.TW$/i,'');
-  const name = NAME_MAP[id] || STOCKS.find(s=>s.t===id)?.n || id;
-  wlAddStock(id, name);
-}
-
-// 搜尋自動完成
-function onWlSearch(v){
-  const el = document.getElementById('wlSearchResults');
-  if(!el) return;
-  if(!v || v.length < 1){ el.innerHTML=''; return; }
-  const q  = v.toLowerCase();
-  const res = STOCKS.filter(s=>
-    s.t.startsWith(v) || s.n.includes(v)
-  ).slice(0, 8);
-  if(!res.length){ el.innerHTML=''; return; }
-  el.innerHTML = res.map(s=>`
-    <div onclick="wlAddStock('${s.t}','${s.n}')"
-      style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--card)">
-      <span><strong style="color:var(--text)">${s.t}</strong> <span style="color:var(--text2)">${s.n}</span></span>
-      <span style="font-size:10px;color:var(--text3)">${s.s||''}</span>
-    </div>`).join('');
-}
-
-// 渲染自選股清單（含即時報價 + 7日回測）
-async function renderWLPanel(){
-  const wl  = getMyWL();
-  const el  = document.getElementById('wlList');
-  const sumEl = document.getElementById('wlBacktestSummary');
-  if(!el) return;
-
-  if(!wl.length){
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">尚無自選股，輸入股票代號新增</div>';
-    if(sumEl) sumEl.style.display = 'none';
-    return;
-  }
-
-  // 先渲染骨架
-  el.innerHTML = wl.map(s=>`
-    <div class="wl-row" id="wlrow-${s.id}">
-      <div style="flex:1;min-width:0;cursor:pointer" onclick="selectStock(null,'${(s.name||s.id).replace(/'/g,"\'")}','${s.id}.TW');switchPage('home')">
-        <div style="font-size:14px;font-weight:700">${s.id} ${s.name||''}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">加入 ${s.addedDate||'—'}</div>
+        // 備援：顯示可搜尋的連結
+    el.innerHTML = `
+      <div class="nitem" onclick="window.open('https://tw.news.yahoo.com/search/?p=${encodeURIComponent(name)}','_blank')" style="cursor:pointer">
+        <div style="flex:1"><div class="nt">🔍 Yahoo 搜尋「${name}」最新消息</div><div class="ns">Yahoo Finance 台灣</div></div>
+        <span style="color:var(--text3);font-size:14px">↗</span>
       </div>
-      <div style="text-align:right;flex-shrink:0;margin:0 10px">
-        <div id="wlprice-${s.id}" style="font-size:16px;font-weight:800">—</div>
-        <div id="wlchg-${s.id}" style="font-size:11px">—</div>
+      <div class="nitem" onclick="window.open('https://news.google.com/search?q=${encodeURIComponent(name)}&hl=zh-TW','_blank')" style="cursor:pointer">
+        <div style="flex:1"><div class="nt">📰 Google 新聞「${name}」</div><div class="ns">Google 新聞</div></div>
+        <span style="color:var(--text3);font-size:14px">↗</span>
       </div>
-      <div style="text-align:right;flex-shrink:0;margin-right:8px;min-width:60px">
-        <div id="wlret-${s.id}" style="font-size:11px;color:var(--text3)">—</div>
-        <div id="wlbt-${s.id}" style="font-size:10px;color:var(--text3)">持有回報</div>
-      </div>
-      <div onclick="wlRemoveStock('${s.id}')" style="color:var(--text3);font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">✕</div>
-    </div>`).join('');
-
-  // 並行載入報價
-  let wins=0, losses=0, total=0;
-  await Promise.all(wl.map(async s=>{
-    try{
-      const q   = await getQuoteWithIntraday(s.id);
-      if(!q) return;
-      const isUp   = q.changePct >= 0;
-      const color  = isUp ? 'var(--red)' : 'var(--green)';
-      const prEl   = document.getElementById('wlprice-'+s.id);
-      const chEl   = document.getElementById('wlchg-'+s.id);
-      if(prEl){ prEl.textContent = fmt(q.price); prEl.style.color = color; }
-      if(chEl){ chEl.textContent = fmtPct(q.changePct); chEl.style.color = color; }
-
-      // 持有回報（從入場價計算）
-      const retEl = document.getElementById('wlret-'+s.id);
-      const btEl  = document.getElementById('wlbt-'+s.id);
-      if(s.entryPx && q.price){
-        const ret   = (q.price - s.entryPx) / s.entryPx * 100;
-        const retUp = ret >= 0;
-        if(retEl){ retEl.textContent = (retUp?'+':'')+ret.toFixed(2)+'%'; retEl.style.color = retUp?'var(--red)':'var(--green)'; }
-        if(btEl)  { btEl.textContent  = `入場 ${fmt(s.entryPx)}`; }
-        total++;
-        if(ret >= 2) wins++;
-        else if(ret <= -2) losses++;
-      } else if(retEl){
-        retEl.textContent = '—';
-      }
-    }catch(e){}
-  }));
-
-  // 回測統計
-  if(sumEl && total > 0){
-    const wr = Math.round(wins/total*100);
-    const color = wr>=60?'var(--red)':wr>=40?'var(--gold)':'var(--green)';
-    sumEl.style.display = 'block';
-    sumEl.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="color:var(--text2)">📊 持倉回測（${total}支）</span>
-        <span style="font-size:16px;font-weight:800;color:${color}">${wr}% 勝率</span>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">
-        ✅ 獲利${wins}支（+2%↑）　❌ 虧損${losses}支（-2%↓）　⚖️ 持平${total-wins-losses}支
+      <div class="nitem" onclick="window.open('https://www.cnyes.com/twstock/${encodeURIComponent(id)}/news','_blank')" style="cursor:pointer">
+        <div style="flex:1"><div class="nt">📊 鉅亨網「${name}」相關新聞</div><div class="ns">鉅亨網</div></div>
+        <span style="color:var(--text3);font-size:14px">↗</span>
       </div>`;
-  } else if(sumEl){
+    // 快取備援結果
+    _newsCache.set(id, { html: el.innerHTML, ts: Date.now() });
+    return;
+  }
+  if(sumEl){
     sumEl.style.display = 'none';
   }
 }
