@@ -9305,8 +9305,7 @@ async function selectStock(el, name, ticker){
     const sid = currentTicker.replace('.TW','');
     loadShareholder(sid);
     loadNews(sid);
-    // 同步載入市場總覽新聞（若尚未載入）
-    if(!_marketNewsLoaded) loadMarketNewsSection();
+    // 注意：loadMarketNewsSection 由初始化和 refreshPulse 統一控制，不在 selectStock 觸發
     loadFundamentals(sid); // 基本面：季報+月營收+PE+配息
   } else {
     drawFallbackChart(true);
@@ -9382,7 +9381,11 @@ async function loadMarketNewsSection(force=false){
         +'</div>';
     }).join('');
   }catch(e){
-    if(el) el.innerHTML = '<div style="padding:14px 16px;color:var(--text3);font-size:12px">新聞載入失敗：'+e.message+'</div>';
+    if(el) el.innerHTML = [
+      '<div style="padding:14px 16px 8px;color:var(--text3);font-size:12px">⚠️ 即時新聞暫時無法取得，請點選以下來源：</div>',
+      '<div class="nitem" onclick="window.open(\'https://finance.yahoo.com/topic/stock-market-news/\',\'_blank\')" style="cursor:pointer"><div style="flex:1"><div class="nt">📰 Yahoo Finance 市場新聞</div><div class="ns">Yahoo Finance</div></div><span style="color:var(--text3)">↗</span></div>',
+      '<div class="nitem" onclick="window.open(\'https://news.google.com/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtZHZHZ0pVVWlnQVAB?hl=zh-TW&gl=TW&ceid=TW%3Azh-Hant\',\'_blank\')" style="cursor:pointer"><div style="flex:1"><div class="nt">📊 Google 台股財經新聞</div><div class="ns">Google 新聞</div></div><span style="color:var(--text3)">↗</span></div>',
+    ].join('');
   }
 }
 
@@ -15176,6 +15179,7 @@ window.addEventListener('load', async ()=>{
   // 第 3 波：先行指標 + 市場脈動 + VIX + 指數 + 加權指數圖（全部同時非阻塞發出）
   refreshPulse();
   loadVix();
+  loadMarketNewsSection(); // 分析頁市場總覽新聞（只在此觸發一次）
   loadLeadingIndicators();
   loadIndices();
   loadTaiexChart().catch(()=>{});
