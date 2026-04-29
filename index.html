@@ -1870,6 +1870,56 @@
 
     </div>
   </div>
+  <!-- ══ 投資組合 & 盈虧紀錄 ══ -->
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+    <h2>📈 投資組合 & 盈虧</h2>
+    <div style="display:flex;gap:6px">
+      <button onclick="_showAddPositionModal()"
+        style="font-size:12px;background:var(--green);color:#fff;border:none;
+               border-radius:8px;padding:5px 12px;cursor:pointer;font-family:inherit;font-weight:600">
+        ＋ 新增持倉
+      </button>
+      <button onclick="_refreshPortfolio()"
+        style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
+    </div>
+  </div>
+
+  <!-- 投資組合總覽 -->
+  <div id="portfolioSummary" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 16px 10px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">投入總成本</div>
+      <div id="ptTotalCost" style="font-size:18px;font-weight:800">—</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">未實現損益</div>
+      <div id="ptTotalPnL" style="font-size:18px;font-weight:800">—</div>
+      <div id="ptTotalPct" style="font-size:11px;color:var(--text3)">—</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">市值合計</div>
+      <div id="ptMarketVal" style="font-size:18px;font-weight:800">—</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">持倉檔數</div>
+      <div id="ptCount" style="font-size:18px;font-weight:800">—</div>
+      <div id="ptConcentration" style="font-size:11px;color:var(--text3)">—</div>
+    </div>
+  </div>
+
+  <!-- 持倉清單 -->
+  <div id="positionList" style="margin:0 16px 8px">
+    <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">
+      尚無持倉紀錄，點擊「＋ 新增持倉」開始追蹤
+    </div>
+  </div>
+
+  <!-- 集中度橫條圖 -->
+  <div id="concentrationChart" style="display:none;margin:0 16px 16px;background:var(--card);
+       border:1px solid var(--border);border-radius:12px;padding:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📊 持倉集中度</div>
+    <div id="concentrationBars" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+
   <!-- ── 安裝 App 教學卡片 ── -->
   <div id="installGuideCard" style="margin:0 16px 10px">
     <div style="background:linear-gradient(135deg,rgba(0,212,170,.1),rgba(124,92,252,.08));
@@ -2185,7 +2235,76 @@
   <button class="nav-btn" id="nb-stock" onclick="switchPage('stock')"><span>📈</span><span>個股</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast">
+  <!-- ── 新增/編輯持倉 Modal ── -->
+  <div id="positionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+       z-index:400;align-items:flex-end;justify-content:center"
+       onclick="if(event.target===this)_closePositionModal()">
+    <div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;
+                padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+                max-height:88vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 id="modalTitle" style="font-size:16px;font-weight:700">新增持倉</h3>
+        <button onclick="_closePositionModal()"
+          style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0 4px">✕</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">股票</label>
+        <div style="position:relative">
+          <input id="modalStockInput" type="text" placeholder="輸入代號或名稱"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                   padding:10px 14px;font-size:14px;color:var(--text);font-family:inherit;outline:none;
+                   box-sizing:border-box"
+            oninput="_modalStockSearch(this.value)">
+          <div id="modalStockSuggestions" style="display:none;position:absolute;top:100%;left:0;right:0;
+               background:var(--card);border:1px solid var(--border);border-radius:10px;margin-top:4px;
+               overflow:hidden;z-index:10;max-height:180px;overflow-y:auto"></div>
+        </div>
+        <div id="modalSelectedStock" style="display:none;margin-top:6px;font-size:13px;
+             color:var(--green);font-weight:600"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">買入成本（元/股）</label>
+        <input id="modalCostPrice" type="number" placeholder="例：500" min="0" step="0.1"
+          oninput="_updateModalPreview()"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                 padding:10px 14px;font-size:14px;color:var(--text);font-family:inherit;outline:none;
+                 box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">持有張數</label>
+        <input id="modalShares" type="number" placeholder="例：1" min="0.1" step="0.1"
+          oninput="_updateModalPreview()"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                 padding:10px 14px;font-size:14px;color:var(--text);font-family:inherit;outline:none;
+                 box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">備註（選填）</label>
+        <input id="modalNote" type="text" placeholder="例：定期定額"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+                 padding:10px 14px;font-size:14px;color:var(--text);font-family:inherit;outline:none;
+                 box-sizing:border-box">
+      </div>
+      <div id="modalPreview" style="display:none;background:rgba(0,212,170,.06);
+           border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px 14px;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">📊 即時損益試算（含手續費）</div>
+        <div id="modalPreviewContent" style="font-size:12px"></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button id="modalDeleteBtn" onclick="_deletePosition()" style="display:none;
+          background:rgba(255,76,106,.12);border:1px solid rgba(255,76,106,.3);
+          border-radius:10px;padding:12px 16px;cursor:pointer;font-family:inherit;
+          font-size:14px;color:var(--red)">刪除</button>
+        <button onclick="_savePosition()"
+          style="flex:1;background:var(--green);color:#fff;border:none;border-radius:10px;
+                 padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+          儲存持倉
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ════════════════════════════════════════════════════════
