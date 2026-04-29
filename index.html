@@ -2202,7 +2202,370 @@
 const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
 
 // ── 全域常數 ──────────────────────────────────────────────
-const MY_WL_KEY = 'stockai_mywatchlist';   // 自選股 localStorage key
+const MY_WL_KEY  = 'stockai_mywatchlist';  // 自選股 localStorage key
+const PT_KEY     = 'stockai_positions';    // 持倉紀錄 localStorage key
+
+// ════════════════════════════════════════════════════════
+// 投資組合 & 盈虧紀錄（方案 A + B）
+// ════════════════════════════════════════════════════════
+
+// 持倉資料結構：{ id, name, costPrice, shares, note, addedAt, editedAt }
+function getPT(){ try{ return JSON.parse(localStorage.getItem(PT_KEY)||'[]'); }catch(e){ return []; } }
+function savePT(pt){
+  localStorage.setItem(PT_KEY, JSON.stringify(pt));
+  if(typeof kvSet==='function') kvSet('positions', pt).catch(()=>{});
+}
+
+// ── 手續費計算（台股） ─────────────────────────────────
+const FEE_RATE     = 0.001425;  // 買賣各收 0.1425%
+const TAX_RATE     = 0.003;     // 賣出交易稅 0.3%
+const MIN_FEE      = 20;        // 最低手續費 20 元
+function calcFee(price, shares, isBuy){
+  const value  = price * shares * 1000;
+  const fee    = Math.max(MIN_FEE, Math.round(value * FEE_RATE));
+  const tax    = isBuy ? 0 : Math.round(value * TAX_RATE);
+  return { value, fee, tax, total: fee + tax };
+}
+
+// ── 持倉卡片 HTML ─────────────────────────────────────
+function _renderPositionCard(pos, quote){
+  const price      = quote?.price || 0;
+  const cost       = pos.costPrice;
+  const shares     = pos.shares;
+  const costVal    = cost * shares * 1000;
+  const mktVal     = price * shares * 1000;
+  const buyCost    = calcFee(cost, shares, true);
+  const sellCost   = price > 0 ? calcFee(price, shares, false) : {fee:0, tax:0, total:0};
+  const totalCost  = costVal + buyCost.fee;       // 買入含手續費
+  const pnlGross   = mktVal - costVal;            // 未實現損益（未含賣出費）
+  const pnlNet     = mktVal - totalCost - sellCost.fee - sellCost.tax; // 含買賣費淨損益
+  const pnlPct     = totalCost > 0 ? pnlNet / totalCost * 100 : 0;
+  const isUp       = pnlNet >= 0;
+  const col        = isUp ? 'var(--red)' : 'var(--green)';
+  const chgPct     = quote?.changePct ?? 0;
+  const chgCol     = chgPct >= 0 ? 'var(--red)' : 'var(--green)';
+
+  const fmt  = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
+  const fmtP = n => (n>=0?'+':'')+n.toFixed(2)+'%';
+
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;
+                       padding:14px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:15px;font-weight:700;cursor:pointer;color:var(--text)"
+             onclick="switchPage('stock');selectStock(null,'${pos.name}','${pos.id}.TW')">
+          ${pos.name}
+          <span style="font-size:11px;color:var(--text3);font-weight:400"> ${pos.id}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          成本 $${fmt(cost)} × ${shares}張 ｜ 今日 <span style="color:${chgCol}">${fmtP(chgPct)}</span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:800;color:${col}">${isUp?'+':''}${fmt(pnlNet)}</div>
+        <div style="font-size:11px;color:${col}">${fmtP(pnlPct)}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:10px;
+                background:var(--surface);border-radius:8px;padding:8px">
+      <div style="font-size:11px;text-align:center">
+        <div style="color:var(--text3)">買入成本</div>
+        <div style="font-weight:600">$${fmt(totalCost)}</div>
+      </div>
+      <div style="font-size:11px;text-align:center">
+        <div style="color:var(--text3)">現值</div>
+        <div style="font-weight:600;color:${chgCol}">$${price>0?fmt(mktVal):'—'}</div>
+      </div>
+      <div style="font-size:11px;text-align:center">
+        <div style="color:var(--text3)">即時價</div>
+        <div style="font-weight:600">$${price>0?fmt(price):'—'}</div>
+      </div>
+    </div>
+    ${pos.note ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">📝 ${pos.note}</div>` : ''}
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button onclick="_editPosition('${pos.id}')"
+        style="flex:1;font-size:12px;background:rgba(255,255,255,.06);border:1px solid var(--border);
+               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--text2)">
+        ✏️ 編輯
+      </button>
+      <button onclick="_showStopCalc('${pos.id}','${pos.name}',${cost},${shares})"
+        style="flex:1;font-size:12px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);
+               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--green)">
+        🎯 停損試算
+      </button>
+    </div>
+  </div>`;
+}
+
+// ── 刷新整個投資組合 ──────────────────────────────────
+async function _refreshPortfolio(){
+  const pt  = getPT();
+  const el  = document.getElementById('positionList');
+  const sumEl = document.getElementById('portfolioSummary');
+  if(!el) return;
+
+  if(!pt.length){
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">尚無持倉紀錄，點擊「＋ 新增持倉」開始追蹤</div>';
+    document.getElementById('concentrationChart').style.display = 'none';
+    ['ptTotalCost','ptTotalPnL','ptTotalPct','ptMarketVal','ptCount','ptConcentration'].forEach(id=>{
+      const e=document.getElementById(id); if(e) e.textContent='—';
+    });
+    return;
+  }
+
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">載入即時報價中…</div>';
+
+  // 並行抓所有持倉的即時報價
+  const quotes = await Promise.all(
+    pt.map(pos => getQuoteWithIntraday(pos.id).catch(()=>null))
+  );
+
+  // 渲染持倉卡片
+  el.innerHTML = pt.map((pos,i) => _renderPositionCard(pos, quotes[i])).join('');
+
+  // 計算總覽
+  let totalCost=0, totalMkt=0, totalPnL=0;
+  pt.forEach((pos,i)=>{
+    const q     = quotes[i];
+    const price = q?.price || 0;
+    const cv    = pos.costPrice * pos.shares * 1000;
+    const fee   = calcFee(pos.costPrice, pos.shares, true).fee;
+    const cost  = cv + fee;
+    const mkt   = price > 0 ? price * pos.shares * 1000 : cv;
+    const sell  = price > 0 ? calcFee(price, pos.shares, false) : {fee:0, tax:0};
+    totalCost += cost;
+    totalMkt  += mkt;
+    totalPnL  += price > 0 ? (mkt - cost - sell.fee - sell.tax) : 0;
+  });
+  const totalPct = totalCost > 0 ? totalPnL / totalCost * 100 : 0;
+  const isUp = totalPnL >= 0;
+  const col  = isUp ? 'var(--red)' : 'var(--green)';
+  const fmt  = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
+
+  const e = id => document.getElementById(id);
+  if(e('ptTotalCost'))  e('ptTotalCost').textContent  = '$'+fmt(totalCost);
+  if(e('ptTotalPnL')){  e('ptTotalPnL').textContent   = (isUp?'+':'')+fmt(totalPnL); e('ptTotalPnL').style.color=col; }
+  if(e('ptTotalPct')){  e('ptTotalPct').textContent   = (totalPct>=0?'+':'')+totalPct.toFixed(2)+'%'; e('ptTotalPct').style.color=col; }
+  if(e('ptMarketVal'))  e('ptMarketVal').textContent  = '$'+fmt(totalMkt);
+  if(e('ptCount'))      e('ptCount').textContent      = pt.length+'支';
+  // 集中度（最大持倉佔比）
+  const maxPos = pt.reduce((mx,pos,i)=>{
+    const mv = (quotes[i]?.price||pos.costPrice)*pos.shares*1000;
+    return mv>mx.mv?{mv,name:pos.name}:mx;
+  },{mv:0,name:''});
+  const concPct = totalMkt>0 ? maxPos.mv/totalMkt*100 : 0;
+  if(e('ptConcentration')) e('ptConcentration').textContent = concPct>0?`最大持倉 ${concPct.toFixed(0)}% (${maxPos.name})`:'';
+  if(concPct>50) e('ptConcentration').style.color='var(--gold)';
+
+  // 集中度圖
+  _renderConcentration(pt, quotes, totalMkt);
+}
+
+// ── 持倉集中度橫條圖 ──────────────────────────────────
+function _renderConcentration(pt, quotes, totalMkt){
+  const chartEl = document.getElementById('concentrationChart');
+  const barsEl  = document.getElementById('concentrationBars');
+  if(!chartEl||!barsEl||totalMkt<=0){ if(chartEl) chartEl.style.display='none'; return; }
+
+  chartEl.style.display='block';
+  const sorted = pt.map((pos,i)=>({
+    name: pos.name,
+    mv:   (quotes[i]?.price||pos.costPrice)*pos.shares*1000,
+    pct:  totalMkt > 0 ? (quotes[i]?.price||pos.costPrice)*pos.shares*1000/totalMkt*100 : 0,
+  })).sort((a,b)=>b.pct-a.pct);
+
+  const colors=['#7c5cfc','#00d4aa','#ff4c6a','#f5c842','#4fc3f7','#ff7043','#a5d6a7'];
+  barsEl.innerHTML = sorted.map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:11px;color:var(--text2);width:60px;flex-shrink:0;text-align:right">${s.name}</div>
+      <div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:14px;overflow:hidden">
+        <div style="height:100%;border-radius:4px;background:${colors[i%colors.length]};
+                    width:${s.pct.toFixed(1)}%;transition:width .4s"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);width:36px;flex-shrink:0">${s.pct.toFixed(1)}%</div>
+    </div>`).join('');
+}
+
+// ── 停損試算 ──────────────────────────────────────────
+function _showStopCalc(id, name, cost, shares){
+  const stops = [
+    { label:'保守 -5%',  price: +(cost*0.95).toFixed(1) },
+    { label:'標準 -8%',  price: +(cost*0.92).toFixed(1) },
+    { label:'積極 -12%', price: +(cost*0.88).toFixed(1) },
+  ];
+  const fmt = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
+  const rows = stops.map(s=>{
+    const pnl = (s.price-cost)*shares*1000 - calcFee(cost,shares,true).fee - calcFee(s.price,shares,false).total;
+    return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text2)">${s.label}</span>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:700;color:var(--green)">$${fmt(s.price)}</div>
+        <div style="font-size:11px;color:var(--text3)">${fmt(pnl)} 元</div>
+      </div>
+    </div>`;
+  }).join('');
+  showToast(`${name} 停損試算（含手續費）\n保守: $${fmt(stops[0].price)} / 標準: $${fmt(stops[1].price)} / 積極: $${fmt(stops[2].price)}`);
+}
+
+// ── Modal：新增持倉 ────────────────────────────────────
+let _editingPositionId = null;
+let _modalSelectedId   = null;
+let _modalSelectedName = null;
+let _modalSearchTimer  = null;
+
+function _showAddPositionModal(){
+  _editingPositionId = null;
+  _modalSelectedId   = null;
+  _modalSelectedName = null;
+  document.getElementById('modalTitle').textContent = '新增持倉';
+  document.getElementById('modalStockInput').value  = '';
+  document.getElementById('modalCostPrice').value   = '';
+  document.getElementById('modalShares').value      = '';
+  document.getElementById('modalNote').value        = '';
+  document.getElementById('modalSelectedStock').style.display = 'none';
+  document.getElementById('modalPreview').style.display = 'none';
+  document.getElementById('modalDeleteBtn').style.display = 'none';
+  document.getElementById('positionModal').style.display = 'flex';
+}
+
+function _editPosition(id){
+  const pt  = getPT();
+  const pos = pt.find(p=>p.id===id);
+  if(!pos) return;
+  _editingPositionId = id;
+  _modalSelectedId   = pos.id;
+  _modalSelectedName = pos.name;
+  document.getElementById('modalTitle').textContent = '編輯持倉';
+  document.getElementById('modalStockInput').value  = pos.name + ' ' + pos.id;
+  document.getElementById('modalCostPrice').value   = pos.costPrice;
+  document.getElementById('modalShares').value      = pos.shares;
+  document.getElementById('modalNote').value        = pos.note || '';
+  document.getElementById('modalSelectedStock').textContent = '✓ ' + pos.name + ' (' + pos.id + ')';
+  document.getElementById('modalSelectedStock').style.display = 'block';
+  document.getElementById('modalDeleteBtn').style.display = 'block';
+  document.getElementById('positionModal').style.display = 'flex';
+  _updateModalPreview();
+}
+
+function _closePositionModal(){
+  document.getElementById('positionModal').style.display = 'none';
+  document.getElementById('modalStockSuggestions').style.display = 'none';
+}
+
+async function _modalStockSearch(val){
+  clearTimeout(_modalSearchTimer);
+  const sug = document.getElementById('modalStockSuggestions');
+  if(!val || val.length < 1){ sug.style.display='none'; return; }
+  _modalSearchTimer = setTimeout(async ()=>{
+    const results = (window._STOCK_LIST || []).filter(s=>
+      s.id.startsWith(val) || s.n.includes(val)
+    ).slice(0, 8);
+    if(!results.length){ sug.style.display='none'; return; }
+    sug.innerHTML = results.map(s=>`
+      <div onclick="_modalSelectStock('${s.id}','${s.n}')"
+           style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+           onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
+        <span style="font-weight:600">${s.id}</span>
+        <span style="color:var(--text3);margin-left:6px">${s.n}</span>
+      </div>`).join('');
+    sug.style.display = 'block';
+  }, 200);
+}
+
+function _modalSelectStock(id, name){
+  _modalSelectedId   = id;
+  _modalSelectedName = name;
+  document.getElementById('modalStockInput').value  = name + ' ' + id;
+  document.getElementById('modalSelectedStock').textContent = '✓ ' + name + ' (' + id + ')';
+  document.getElementById('modalSelectedStock').style.display = 'block';
+  document.getElementById('modalStockSuggestions').style.display = 'none';
+  _updateModalPreview();
+}
+
+async function _updateModalPreview(){
+  const costEl   = document.getElementById('modalCostPrice');
+  const sharesEl = document.getElementById('modalShares');
+  const prevEl   = document.getElementById('modalPreview');
+  const prevCt   = document.getElementById('modalPreviewContent');
+  const cost     = parseFloat(costEl?.value);
+  const shares   = parseFloat(sharesEl?.value);
+  if(!cost||!shares||!_modalSelectedId){ prevEl.style.display='none'; return; }
+
+  prevEl.style.display = 'block';
+  prevCt.textContent = '計算中…';
+
+  const q = await getQuoteWithIntraday(_modalSelectedId).catch(()=>null);
+  const price = q?.price || 0;
+  const fmt = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
+
+  if(!price){ prevCt.textContent = '無法取得即時報價'; return; }
+
+  const costVal = cost * shares * 1000;
+  const buyFee  = calcFee(cost, shares, true).fee;
+  const mktVal  = price * shares * 1000;
+  const sellFee = calcFee(price, shares, false).total;
+  const pnl     = mktVal - costVal - buyFee - sellFee;
+  const pct     = (costVal+buyFee) > 0 ? pnl/(costVal+buyFee)*100 : 0;
+  const col     = pnl>=0?'var(--red)':'var(--green)';
+
+  prevCt.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+      <div>投入成本（含手續費）<br><strong>$${fmt(costVal+buyFee)}</strong></div>
+      <div>目前市值<br><strong style="color:${col}">$${fmt(mktVal)}</strong></div>
+      <div>現值損益（含買賣費）<br><strong style="color:${col}">${pnl>=0?'+':''}${fmt(pnl)}</strong></div>
+      <div>報酬率<br><strong style="color:${col}">${pct>=0?'+':''}${pct.toFixed(2)}%</strong></div>
+    </div>`;
+}
+
+async function _savePosition(){
+  const id     = _modalSelectedId;
+  const name   = _modalSelectedName;
+  const cost   = parseFloat(document.getElementById('modalCostPrice').value);
+  const shares = parseFloat(document.getElementById('modalShares').value);
+  const note   = document.getElementById('modalNote').value.trim();
+
+  if(!id||!name){ showToast('請選擇股票'); return; }
+  if(!cost||cost<=0){ showToast('請輸入有效的買入成本'); return; }
+  if(!shares||shares<=0){ showToast('請輸入持有張數'); return; }
+
+  let pt = getPT();
+  if(_editingPositionId){
+    // 編輯
+    const idx = pt.findIndex(p=>p.id===_editingPositionId);
+    if(idx>=0) pt[idx] = {...pt[idx], costPrice:cost, shares, note, editedAt:Date.now()};
+  } else {
+    // 新增（同一股票可多筆）
+    pt.push({ id, name, costPrice:cost, shares, note, addedAt:Date.now() });
+    // 同時加入自選股
+    const wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]');
+    if(!wl.some(s=>(s.id||s.t||s)===id)){
+      wl.push({id, t:id, n:name, addedAt:Date.now()});
+      localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
+    }
+  }
+  savePT(pt);
+  _closePositionModal();
+  showToast('✅ 持倉已儲存');
+  _refreshPortfolio();
+}
+
+function _deletePosition(){
+  if(!_editingPositionId) return;
+  if(!confirm('確定刪除此持倉？')) return;
+  let pt = getPT().filter(p=>p.id!==_editingPositionId);
+  savePT(pt);
+  _closePositionModal();
+  showToast('已刪除持倉');
+  _refreshPortfolio();
+}
+
+// 股票代號輸入：觸發 preview 更新
+document.addEventListener('DOMContentLoaded', ()=>{
+  ['modalCostPrice','modalShares'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', _updateModalPreview);
+  });
+});
 
 // ── colorSentiment：關鍵字著色（利多紅/利空綠/中性灰）────
 function colorSentiment(text){
@@ -2683,7 +3046,8 @@ function switchPage(n){
   // 個股頁特殊處理：用同一個 nav-btn nb-stock 對應
   const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
   // 切換到個股頁時初始化自選快捷列 + 同步清單名稱
-  if(n==='stock'){ setTimeout(()=>{ _renderStockQuickAccess(); _syncWLNameDisplay(); }, 50); }
+  if(n==='stock'){   setTimeout(()=>{ _renderStockQuickAccess(); _syncWLNameDisplay(); }, 50); }
+  if(n==='profile'){ setTimeout(_refreshPortfolio, 100); }
 
   const pageEl = document.getElementById('page-'+n);
   pageEl.classList.add('active');
