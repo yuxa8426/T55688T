@@ -2179,6 +2179,9 @@
   </div>
   <div class="pref-item" onclick="kvSyncNow()"><div class="pref-icon" style="background:rgba(0,212,170,.12)">☁️</div><div><div class="pref-t">雲端同步</div><div class="pref-s" id="kvSyncStatus">裝置 ID：<span id="kvUidDisplay">載入中…</span></div></div><span style="margin-left:auto;color:var(--text3);font-size:18px">↻</span></div>
 
+  <!-- 底部安全間距（避免最後一個元素被導覽列遮擋）-->
+  <div style="height:calc(80px + env(safe-area-inset-bottom,0px))"></div>
+
   <!-- 刪除選單 Modal -->
   <div id="clearMenuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end;justify-content:center">
     <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 16px 32px">
@@ -2536,15 +2539,20 @@ function _showAddPositionModal(){
   _editingPositionId = null;
   _modalSelectedId   = null;
   _modalSelectedName = null;
-  document.getElementById('modalTitle').textContent = '新增持倉';
-  document.getElementById('modalStockInput').value  = '';
-  document.getElementById('modalCostPrice').value   = '';
-  document.getElementById('modalShares').value      = '';
-  document.getElementById('modalNote').value        = '';
-  document.getElementById('modalSelectedStock').style.display = 'none';
-  document.getElementById('modalPreview').style.display = 'none';
-  document.getElementById('modalDeleteBtn').style.display = 'none';
-  document.getElementById('positionModal').style.display = 'flex';
+  const _se = id => document.getElementById(id);
+  if(_se('modalTitle'))       _se('modalTitle').textContent  = '新增持倉';
+  if(_se('modalStockInput'))  _se('modalStockInput').value   = '';
+  if(_se('modalCostPrice'))   _se('modalCostPrice').value    = '';
+  if(_se('modalShares'))      _se('modalShares').value       = '';
+  if(_se('modalNote'))        _se('modalNote').value         = '';
+  if(_se('modalSelectedStock')){ _se('modalSelectedStock').style.display = 'none'; _se('modalSelectedStock').textContent=''; }
+  if(_se('modalPreview'))     _se('modalPreview').style.display    = 'none';
+  if(_se('modalDeleteBtn'))   _se('modalDeleteBtn').style.display  = 'none';
+  const modal = _se('positionModal');
+  if(!modal){ console.error('[Portfolio] positionModal 元素不存在'); return; }
+  modal.style.display = 'flex';
+  // 確保背景鎖定捲動
+  document.body.style.overflow = 'hidden';
 }
 
 function _editPosition(id){
@@ -2567,8 +2575,11 @@ function _editPosition(id){
 }
 
 function _closePositionModal(){
-  document.getElementById('positionModal').style.display = 'none';
-  document.getElementById('modalStockSuggestions').style.display = 'none';
+  const modal = document.getElementById('positionModal');
+  if(modal) modal.style.display = 'none';
+  const sug = document.getElementById('modalStockSuggestions');
+  if(sug) sug.style.display = 'none';
+  document.body.style.overflow = '';  // 還原捲動
 }
 
 async function _modalStockSearch(val){
@@ -2576,17 +2587,25 @@ async function _modalStockSearch(val){
   const sug = document.getElementById('modalStockSuggestions');
   if(!val || val.length < 1){ sug.style.display='none'; return; }
   _modalSearchTimer = setTimeout(async ()=>{
-    const results = (window._STOCK_LIST || []).filter(s=>
-      s.id.startsWith(val) || s.n.includes(val)
+    // STOCKS 是全域台股清單（DEFAULT_STOCKS 或完整清單）
+    const list    = (typeof STOCKS !== 'undefined' && STOCKS.length) ? STOCKS : DEFAULT_STOCKS || [];
+    const results = list.filter(s=>
+      (s.t||s.id||'').startsWith(val) ||
+      (s.n||'').includes(val)
     ).slice(0, 8);
     if(!results.length){ sug.style.display='none'; return; }
-    sug.innerHTML = results.map(s=>`
-      <div onclick="_modalSelectStock('${s.id}','${s.n}')"
+    sug.innerHTML = results.map(s=>{
+      const sid  = s.t  || s.id  || '';
+      const sn   = s.n  || s.name || '';
+      const ssec = s.s  || s.sec  || '';
+      return `<div onclick="_modalSelectStock('${sid}','${sn}')"
            style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
            onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
-        <span style="font-weight:600">${s.id}</span>
-        <span style="color:var(--text3);margin-left:6px">${s.n}</span>
-      </div>`).join('');
+        <span style="font-weight:600">${sid}</span>
+        <span style="color:var(--text3);margin-left:6px">${sn}</span>
+        ${ssec ? `<span style="font-size:10px;color:var(--text3);margin-left:4px">${ssec}</span>` : ''}
+      </div>`;
+    }).join('');
     sug.style.display = 'block';
   }, 200);
 }
