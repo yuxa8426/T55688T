@@ -2351,41 +2351,44 @@ function calcFee(price, shares, isBuy){
 
 // ── 持倉卡片 HTML ─────────────────────────────────────
 function _renderPositionCard(pos, quote){
-  const price      = quote?.price || 0;
-  const cost       = pos.costPrice;
-  const shares     = pos.shares;
-  const costVal    = cost * shares * 1000;
-  const mktVal     = price * shares * 1000;
-  const buyCost    = calcFee(cost, shares, true);
-  const sellCost   = price > 0 ? calcFee(price, shares, false) : {fee:0, tax:0, total:0};
-  const totalCost  = costVal + buyCost.fee;       // 買入含手續費
-  const pnlGross   = mktVal - costVal;            // 未實現損益（未含賣出費）
-  const pnlNet     = mktVal - totalCost - sellCost.fee - sellCost.tax; // 含買賣費淨損益
-  const pnlPct     = totalCost > 0 ? pnlNet / totalCost * 100 : 0;
-  const isUp       = pnlNet >= 0;
-  const col        = isUp ? 'var(--red)' : 'var(--green)';
-  const chgPct     = quote?.changePct ?? 0;
-  const chgCol     = chgPct >= 0 ? 'var(--red)' : 'var(--green)';
+  const price     = quote?.price || 0;
+  const cost      = pos.costPrice;
+  const shares    = pos.shares;
+  const costVal   = cost * shares * 1000;
+  const mktVal    = price * shares * 1000;
+  const buyCost   = calcFee(cost, shares, true);
+  const sellCost  = price > 0 ? calcFee(price, shares, false) : {fee:0,tax:0,total:0};
+  const totalCost = costVal + buyCost.fee;
+  const pnlNet    = price > 0 ? mktVal - totalCost - sellCost.fee - sellCost.tax : 0;
+  const pnlPct    = totalCost > 0 && price > 0 ? pnlNet/totalCost*100 : 0;
+  const isUp      = pnlNet >= 0;
+  const col       = isUp ? 'var(--red)' : 'var(--green)';
+  const chgPct    = quote?.changePct ?? 0;
+  const chgCol    = chgPct >= 0 ? 'var(--red)' : 'var(--green)';
+  const fmt       = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
+  const fmtP      = n => (n>=0?'+':'')+n.toFixed(2)+'%';
 
-  const fmt  = n => Number(n).toLocaleString('zh-TW',{maximumFractionDigits:0});
-  const fmtP = n => (n>=0?'+':'')+n.toFixed(2)+'%';
-
-  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;
-                       padding:14px;margin-bottom:8px">
+  // 用 data 屬性避免 inline onclick 的引號問題
+  return `<div class="pt-card" data-id="${pos.id}"
+    style="background:var(--card);border:1px solid var(--border);border-radius:12px;
+           padding:14px;margin-bottom:8px;cursor:default">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <div style="font-size:15px;font-weight:700;cursor:pointer;color:var(--text)"
-             onclick="switchPage('stock');selectStock(null,'${pos.name}','${pos.id}.TW')">
+        <div class="pt-name" style="font-size:15px;font-weight:700;color:var(--text);
+             cursor:pointer;-webkit-tap-highlight-color:transparent">
           ${pos.name}
           <span style="font-size:11px;color:var(--text3);font-weight:400"> ${pos.id}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">
-          成本 $${fmt(cost)} × ${shares}張 ｜ 今日 <span style="color:${chgCol}">${fmtP(chgPct)}</span>
+          成本 $${fmt(cost)} × ${shares}張 ｜ 今日
+          <span style="color:${chgCol}">${fmtP(chgPct)}</span>
         </div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:18px;font-weight:800;color:${col}">${isUp?'+':''}${fmt(pnlNet)}</div>
-        <div style="font-size:11px;color:${col}">${fmtP(pnlPct)}</div>
+        <div style="font-size:18px;font-weight:800;color:${col}">
+          ${price>0?(isUp?'+':'')+fmt(pnlNet):'—'}
+        </div>
+        <div style="font-size:11px;color:${col}">${price>0?fmtP(pnlPct):'—'}</div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:10px;
@@ -2403,22 +2406,26 @@ function _renderPositionCard(pos, quote){
         <div style="font-weight:600">$${price>0?fmt(price):'—'}</div>
       </div>
     </div>
-    ${pos.note ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">📝 ${pos.note}</div>` : ''}
+    ${pos.note?`<div style="font-size:11px;color:var(--text3);margin-top:6px">📝 ${pos.note}</div>`:''}
     <div style="display:flex;gap:6px;margin-top:10px">
-      <button onclick="_editPosition('${pos.id}')"
+      <button class="pt-edit"
         style="flex:1;font-size:12px;background:rgba(255,255,255,.06);border:1px solid var(--border);
-               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--text2)">
+               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--text2);
+               -webkit-tap-highlight-color:transparent">
         ✏️ 編輯
       </button>
-      <button onclick="_showStopCalc('${pos.id}','${pos.name}',${cost},${shares})"
+      <button class="pt-stop"
         style="flex:1;font-size:12px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);
-               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--green)">
+               border-radius:8px;padding:6px;cursor:pointer;font-family:inherit;color:var(--green);
+               -webkit-tap-highlight-color:transparent">
         🎯 停損試算
       </button>
     </div>
   </div>`;
 }
 
+
+// ── 刷新整個投資組合
 // ── 刷新整個投資組合 ──────────────────────────────────
 async function _refreshPortfolio(){
   const pt  = getPT();
@@ -2444,6 +2451,27 @@ async function _refreshPortfolio(){
 
   // 渲染持倉卡片
   el.innerHTML = pt.map((pos,i) => _renderPositionCard(pos, quotes[i])).join('');
+
+  // 事件委派：處理卡片點擊（避免 inline onclick 的引號問題）
+  el.onclick = (e) => {
+    const card   = e.target.closest('.pt-card');
+    if(!card) return;
+    const id     = card.dataset.id;
+    const pos    = getPT().find(p=>p.id===id);
+    if(!pos) return;
+
+    if(e.target.closest('.pt-name')){
+      // 點名稱 → 跳到個股頁
+      switchPage('stock');
+      selectStock(null, pos.name, pos.id+'.TW');
+    } else if(e.target.closest('.pt-edit')){
+      // 點編輯
+      _editPosition(id);
+    } else if(e.target.closest('.pt-stop')){
+      // 點停損試算
+      _showStopCalc(id, pos.name, pos.costPrice, pos.shares);
+    }
+  };
 
   // 計算總覽
   let totalCost=0, totalMkt=0, totalPnL=0;
@@ -2703,6 +2731,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', _updateModalPreview);
   });
+  // 初始化：若切到「我的」頁面時 portfolio 已存在資料
+  if(typeof _refreshPortfolio === 'function' && getPT().length > 0){
+    _refreshPortfolio();
+  }
 });
 
 // ── colorSentiment：關鍵字著色（利多紅/利空綠/中性灰）────
