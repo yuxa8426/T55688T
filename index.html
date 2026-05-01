@@ -5,6 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<!-- build:1777638489 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -2319,11 +2320,27 @@
 // 1. 前往 https://aistudio.google.com/apikey 取得免費 API Key
 // 2. Cloudflare Worker 貼入 worker.js，填入 Gemini API Key
 // 3. 部署後將下方 API 改為你的 Worker URL：
-//    const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+//    const API = 'https://xxx.workers.dev';
+
+const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
 
 // ── 全域常數 ──────────────────────────────────────────────
 const MY_WL_KEY  = 'stockai_mywatchlist';  // 自選股 localStorage key
 const PT_KEY     = 'stockai_positions';    // 持倉紀錄 localStorage key
+
+// ── 自選股讀寫（相容舊 key 'stockai_watchlist'）──────
+function getMyWL(){
+  try{
+    const cur = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]');
+    if(cur.length) return cur;
+    // 相容舊 key：若新 key 無資料，讀舊 key
+    return JSON.parse(localStorage.getItem('stockai_watchlist')||'[]');
+  }catch(e){ return []; }
+}
+function saveMyWL(wl){
+  localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
+  kvPut('mywatchlist', wl).catch(()=>{});
+}
 
 // ════════════════════════════════════════════════════════
 // 投資組合 & 盈虧紀錄（方案 A + B）
@@ -15475,6 +15492,31 @@ function setTheme(t){
 })();
 
 window.addEventListener('load', async ()=>{
+  // ── 資料 Migration（一次性，把舊 key 資料合併到新 key）
+  (()=>{
+    try{
+      const OLD_WL_KEY = 'stockai_watchlist';
+      const old = JSON.parse(localStorage.getItem(OLD_WL_KEY)||'[]');
+      if(old.length){
+        const cur = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]');
+        const merged = [...cur];
+        old.forEach(o=>{
+          const id = o.id||o.t||o;
+          if(!merged.some(m=>(m.id||m.t||m)===id)) merged.push(o);
+        });
+        localStorage.setItem(MY_WL_KEY, JSON.stringify(merged));
+        localStorage.removeItem(OLD_WL_KEY); // 清除舊 key
+      }
+    }catch(e){}
+    try{
+      // positions migration（確保 PT_KEY 有資料）
+      const oldPos = localStorage.getItem('stockai_pt');
+      if(oldPos && !localStorage.getItem(PT_KEY)){
+        localStorage.setItem(PT_KEY, oldPos);
+      }
+    }catch(e){}
+  })();
+
   // ── Onboarding（最優先，新用戶直接顯示）
   initOnboarding();
   // 恢復主題按鈕狀態
