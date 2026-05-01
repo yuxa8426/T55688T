@@ -2319,10 +2319,7 @@
 // 1. 前往 https://aistudio.google.com/apikey 取得免費 API Key
 // 2. Cloudflare Worker 貼入 worker.js，填入 Gemini API Key
 // 3. 部署後將下方 API 改為你的 Worker URL：
-//    const API = 'https://stockai-proxy.你的帳號.workers.dev';
-// ════════════════════════════════════════════════════════
-
-const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+//    const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
 
 // ── 全域常數 ──────────────────────────────────────────────
 const MY_WL_KEY  = 'stockai_mywatchlist';  // 自選股 localStorage key
@@ -2336,7 +2333,7 @@ const PT_KEY     = 'stockai_positions';    // 持倉紀錄 localStorage key
 function getPT(){ try{ return JSON.parse(localStorage.getItem(PT_KEY)||'[]'); }catch(e){ return []; } }
 function savePT(pt){
   localStorage.setItem(PT_KEY, JSON.stringify(pt));
-  if(typeof kvSet==='function') kvSet('positions', pt).catch(()=>{});
+  kvPut('positions', pt).catch(()=>{});
 }
 
 // ── 手續費計算（台股） ─────────────────────────────────
@@ -2565,8 +2562,7 @@ let _modalSelectedName = null;
 let _modalSearchTimer  = null;
 
 function _showAddPositionModal(){
-  console.log('[Portfolio] _showAddPositionModal 呼叫');
-  _editingPositionId = null;
+    _editingPositionId = null;
   _modalSelectedId   = null;
   _modalSelectedName = null;
   const g = id => document.getElementById(id);
@@ -2583,10 +2579,8 @@ function _showAddPositionModal(){
   // 顯示 Modal
   const modal = g('positionModal');
   if(!modal){ console.error('[Portfolio] positionModal 找不到'); return; }
-  console.log('[Portfolio] modal 找到, 當前 display:', modal.style.display);
-  modal.classList.add('open');
-  console.log('[Portfolio] Modal 開啟, class:', modal.className);
-  document.body.style.overflow = 'hidden';
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
 }
 
 function _editPosition(id){
@@ -2920,6 +2914,9 @@ async function kvGet(key){
     return j.exists ? j.data : null;
   }catch(e){ return null; }
 }
+
+// kvSet 是 kvPut 的別名（向後相容）
+const kvSet = (key, data) => kvPut(key, data);
 
 async function kvPut(key, data){
   if(!API) return;
@@ -3436,8 +3433,7 @@ function scheduleAutoRefresh(){
               // 重新渲染標頭
               renderStockHeader(name, currentTicker, _fbLast,
                 quoteData.changePct, quoteData.changePct>=0, quoteData.date);
-              console.log('[Fallback 1D]', stockId, {price:_fbLast, prevClose:_fbPrev, changePct:quoteData.changePct.toFixed(2)+'%'});
-            }
+                          }
             drawChart(_fb5, quoteData.changePct>=0?'#ff4c6a':'#00d4aa', _fbd);
           }
         } else {
@@ -3685,10 +3681,7 @@ function _parseQuote(data, stockId){
   const changePct = (isToday && pc > 0) ? (change/pc)*100 : 0;
 
   markFresh('quote');
-  console.log('[_parseQuote]', stockId, {
-    lastDate: lastRow.date, lastClose, pc, isToday,
-    changePct: changePct.toFixed(2)+'%', taiwanToday, dataLen: data.length
-  });
+
   return {
     stockId,
     price,
@@ -5113,8 +5106,7 @@ function updateAI(name, q){
   const price  = q.price;
   const changePct = q.changePct ?? 0;
   const isUp   = changePct >= 0;
-  console.log('[updateAI]', name, {closes: closes.length, price, changePct, hasInst:!!inst});
-
+  
   // ── 功能五：波動度計算與顯示（真實歷史收盤計算）──────────
   (()=>{
     const volCard = document.getElementById('stockVolatilityCard');
@@ -6200,8 +6192,7 @@ async function setTab(btn, period){
         const fbChg2  = fbPrev2>0 ? (fbLast2-fbPrev2)/fbPrev2*100 : 0;
         const isUp    = fbChg2 >= 0;
         renderStockHeader(currentName, currentTicker, fbLast2, fbChg2, isUp, dts[dts.length-1]+' 收盤');
-        console.log('[setTab fallback 1D]', sid, {fbLast2, fbPrev2, fbChg2:fbChg2.toFixed(2)+'%'});
-        drawChart(pts, isUp?'#ff4c6a':'#00d4aa', dts);
+                drawChart(pts, isUp?'#ff4c6a':'#00d4aa', dts);
         showToast('⚠️ 分鐘K不可用，顯示近5日');
       } else { drawFallbackChart(true); }
     }
@@ -6272,7 +6263,7 @@ function switchLeadingTab(btn, panel){
 let _taiexPeriod = '1D';
 let _taiexData   = { '1D':null, '1M':null, '3M':null };
 
-function _taiexTab(period, btn){
+async function _taiexTab(period, btn){
   _taiexPeriod = period;
   document.querySelectorAll('#taiexPeriodTabs .tab').forEach(b=>{
     b.className = b===btn ? 'tab active' : 'tab';
@@ -9774,8 +9765,7 @@ async function selectStock(el, name, ticker){
         : (quoteData.prevClose && quoteData.prevClose > 0)
           ? quoteData.prevClose
           : (histData?.close?.filter(v=>v>0).slice(-1)[0] || intra.pts[0] || quoteData.price);
-      console.log('[prevClose]', stockId, {yahoo: intra.prevClose, finmind: quoteData.prevClose, used: prevClose});
-      // 用倒數2~6筆的平均作為基準，過濾異常跳點
+            // 用倒數2~6筆的平均作為基準，過濾異常跳點
       const refPts = intra.pts.slice(-6, -1).filter(v=>v>0);
       const refAvg = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
       // 若最後一筆偏差超過 8%（盤後異常值），用前一筆
@@ -9797,13 +9787,6 @@ async function selectStock(el, name, ticker){
     const isUp = quoteData.changePct >= 0;
     // 診斷 log：可在 DevTools Console 驗證資料正確性
     _updateChartWlBtn();  // 更新走勢圖自選按鈕狀態
-    console.log('[StockAI Quote]', stockId, {
-      price:      quoteData.price,
-      changePct:  quoteData.changePct.toFixed(2)+'%',
-      prevClose:  quoteData.prevClose,
-      change:     quoteData.change,
-      source:     intra ? 'intraday+FinMind' : 'FinMind only',
-    });
     renderStockHeader(name, currentTicker, quoteData.price, quoteData.changePct, isUp, quoteData.date);
     renderVolBars(isUp, histData, currentPeriod);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
@@ -9963,7 +9946,7 @@ function _addOneToWatchlist(id, name){
     btn.disabled = true;
   }
   // 同步到 KV
-  if(typeof kvSet==='function') kvSet('watchlist', wl).catch(()=>{});
+  kvPut('watchlist', wl).catch(()=>{});
 }
 function removeFromWatchlist(){}
 function renderWatchlist(){}
@@ -13047,7 +13030,7 @@ async function _doSwap(btn){
   btn.style.background = 'rgba(0,212,170,.2)';
   btn.style.color      = 'var(--green)';
 
-  renderWatchlistStocks();
+  _renderStockQuickAccess();
   showToast('✅ 已加入自選股：'+inId+' '+inName+(price?' · 入場參考 '+fmt(price):''));
 }
 
