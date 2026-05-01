@@ -10760,7 +10760,7 @@ async function runStratAnalysis(){
 
     const quantContext = top20forCtx.length >= 5
       ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
-        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的10支（可不限於此清單）。'
+        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的10支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext);
     const WORKER = (typeof API !== 'undefined' && API)
@@ -10782,7 +10782,7 @@ async function runStratAnalysis(){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'gemini-2.5-flash',
-        max_tokens: 3000,
+        max_tokens: 4096,
         messages: [{ role:'user', content: prompt }],
       }),
     });
@@ -10796,8 +10796,18 @@ async function runStratAnalysis(){
 
     _stratProgress(96, '步驟 4/4　整理選股結果…', '✨', '✅ AI 分析完成');
     // 使用強健解析（6步容錯）
-    const stocks = _parseStocksFromAI(text);
+    let stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
+    // 不足10支時，從量化排名補足
+    if(stocks.length < 10){
+      const aiIds = new Set(stocks.map(s=>s.id));
+      const extra = top50
+        .filter(s => !aiIds.has(s.id))
+        .slice(0, 10 - stocks.length)
+        .map(s=>({ id:s.id, name:s.name, sector:s.sector||'—',
+                   winRate:58, risk:5, reason:'量化補入' }));
+      stocks = [...stocks, ...extra];
+    }
 
     // 記錄到回測系統（背景執行，不阻塞渲染）
     recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
@@ -11864,7 +11874,21 @@ function _parseStocksFromAI(raw){
       }catch(e3){}
     }
 
-    // Step6: 逐行手動提取（最後手段）
+    // Step6: 逐個物件提取（最後手段）
+    // 找所有完整的 {...} 物件
+    const objRe = /\{[^{}]*"id"\s*:\s*"(\d{4,6})"[^{}]*"name"\s*:\s*"([^"]{1,20})"[^{}]*\}/g;
+    const objStocks = [];
+    let objM;
+    while((objM = objRe.exec(text || fixed)) !== null){
+      try{
+        const obj = JSON.parse(objM[0].replace(/，/g,',').replace(/：/g,':').replace(/[""]/g,'"'));
+        if(obj.id && obj.name && !objStocks.find(s=>s.id===obj.id)){
+          objStocks.push(obj);
+        }
+      }catch(e){}
+    }
+    if(objStocks.length >= 3) return objStocks;
+
     return _extractStocksManually(fixed);
   }catch(e){
     console.error('[AI parse]', e.message);
