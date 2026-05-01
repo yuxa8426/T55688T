@@ -1921,6 +1921,22 @@
     <div id="concentrationBars" style="display:flex;flex-direction:column;gap:6px"></div>
   </div>
 
+  <!-- ── 資料診斷工具（暫時）── -->
+  <div id="dataDiagCard" style="margin:0 16px 12px;background:rgba(245,200,66,.06);
+       border:1px solid rgba(245,200,66,.3);border-radius:12px;padding:14px">
+    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">
+      🔍 資料診斷
+    </div>
+    <div id="diagResult" style="font-size:11px;color:var(--text2);line-height:1.8;
+         font-family:monospace;word-break:break-all"></div>
+    <button onclick="_runDiag()"
+      style="margin-top:8px;width:100%;background:rgba(245,200,66,.15);
+             border:1px solid rgba(245,200,66,.3);border-radius:8px;padding:8px;
+             cursor:pointer;font-family:inherit;font-size:13px;color:var(--gold)">
+      掃描本機資料
+    </button>
+  </div>
+
   <!-- ── 安裝 App 教學卡片 ── -->
   <div id="installGuideCard" style="margin:0 16px 10px">
     <div style="background:linear-gradient(135deg,rgba(0,212,170,.1),rgba(124,92,252,.08));
@@ -14983,6 +14999,25 @@ function clearFmToken(){
   document.getElementById('fmTokenInputArea').style.display = 'none';
   renderFmTokenStatus();
   showToast('已清除自訂 Token');
+}
+
+function _runDiag(){
+  const el = document.getElementById('diagResult');
+  if(!el) return;
+  const keys = Object.keys(localStorage).filter(k=>k.startsWith('stockai'));
+  if(!keys.length){ el.textContent = '本機無 stockai 資料'; return; }
+  let html = '';
+  keys.forEach(k=>{
+    try{
+      const raw = localStorage.getItem(k)||'';
+      const val = JSON.parse(raw);
+      const cnt = Array.isArray(val) ? val.length+'筆' : typeof val==='object' ? '物件' : raw.slice(0,30);
+      html += k.replace('stockai_','') + ': ' + cnt + '<br>';
+    }catch(e){
+      html += k.replace('stockai_','') + ': (格式錯誤)<br>';
+    }
+  });
+  el.innerHTML = html;
 }
 
 function clearAllData(){
