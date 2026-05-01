@@ -1921,28 +1921,6 @@
     <div id="concentrationBars" style="display:flex;flex-direction:column;gap:6px"></div>
   </div>
 
-  <!-- ── 資料診斷工具（暫時）── -->
-  <div id="dataDiagCard" style="margin:0 16px 12px;background:rgba(245,200,66,.06);
-       border:1px solid rgba(245,200,66,.3);border-radius:12px;padding:14px">
-    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">
-      🔍 資料診斷
-    </div>
-    <div id="diagResult" style="font-size:11px;color:var(--text2);line-height:1.8;
-         font-family:monospace;word-break:break-all"></div>
-    <button onclick="_runDiag()"
-      style="margin-top:8px;width:100%;background:rgba(245,200,66,.15);
-             border:1px solid rgba(245,200,66,.3);border-radius:8px;padding:8px;
-             cursor:pointer;font-family:inherit;font-size:13px;color:var(--gold)">
-      掃描本機資料
-    </button>
-    <button onclick="_checkKV()"
-      style="margin-top:6px;width:100%;background:rgba(124,92,252,.15);
-             border:1px solid rgba(124,92,252,.3);border-radius:8px;padding:8px;
-             cursor:pointer;font-family:inherit;font-size:13px;color:#a080ff">
-      查詢雲端備份（KV）
-    </button>
-  </div>
-
   <!-- ── 安裝 App 教學卡片 ── -->
   <div id="installGuideCard" style="margin:0 16px 10px">
     <div style="background:linear-gradient(135deg,rgba(0,212,170,.1),rgba(124,92,252,.08));
@@ -2958,6 +2936,12 @@ async function kvGet(key){
 const kvSet = (key, data) => kvPut(key, data);
 
 async function kvPut(key, data){
+  // 無論 API 是否可用，先寫入 localStorage 備份
+  try{
+    const bkKey = 'stockai_bk_'+key;
+    localStorage.setItem(bkKey, JSON.stringify(data));
+  }catch(e){}
+
   if(!API) return;
   try{
     await fetch(`${API}/kv?uid=${getUID()}&key=${key}`, {
@@ -3043,6 +3027,24 @@ function initKvUidDisplay(){
 
 // 啟動時從 KV 拉取最新資料（覆蓋本地舊資料）
 async function kvSyncDown(){
+  // 先從 localStorage 備份層還原（API 失敗時的保護）
+  ['backtest','mywatchlist','positions','profile'].forEach(key=>{
+    try{
+      const bk = localStorage.getItem('stockai_bk_'+key);
+      if(!bk) return;
+      const data = JSON.parse(bk);
+      const storageKey = {
+        backtest: 'stockai_backtest',
+        mywatchlist: MY_WL_KEY,
+        positions: PT_KEY,
+        profile: 'stockai_profile',
+      }[key];
+      if(storageKey && !localStorage.getItem(storageKey)){
+        localStorage.setItem(storageKey, bk);
+      }
+    }catch(e){}
+  });
+
   if(!API) return;
   try{
     const [profile, backtest, fmtoken, wlCloud, posCloud] = await Promise.all([
@@ -15007,48 +15009,7 @@ function clearFmToken(){
   showToast('已清除自訂 Token');
 }
 
-async function _checkKV(){
-  const el = document.getElementById('diagResult');
-  if(!el) return;
-  el.innerHTML = '查詢雲端中…';
-  const uid = getUID();
-  const keys = ['backtest','mywatchlist','positions','profile'];
-  let html = '<b>UID: '+uid+'</b><br><br>';
-  for(const key of keys){
-    try{
-      const r = await fetch(API+'/kv?uid='+uid+'&key='+key);
-      const j = await r.json();
-      if(j.exists && j.data){
-        const cnt = Array.isArray(j.data) ? j.data.length+'筆' : '有資料';
-        html += '☁️ '+key+': <span style="color:var(--green)">'+cnt+'</span><br>';
-      } else {
-        html += '☁️ '+key+': <span style="color:var(--text3)">無</span><br>';
-      }
-    }catch(e){
-      html += '☁️ '+key+': <span style="color:var(--red)">'+e.message+'</span><br>';
-    }
-  }
-  el.innerHTML = html;
-}
 
-function _runDiag(){
-  const el = document.getElementById('diagResult');
-  if(!el) return;
-  const keys = Object.keys(localStorage).filter(k=>k.startsWith('stockai'));
-  if(!keys.length){ el.textContent = '本機無 stockai 資料'; return; }
-  let html = '';
-  keys.forEach(k=>{
-    try{
-      const raw = localStorage.getItem(k)||'';
-      const val = JSON.parse(raw);
-      const cnt = Array.isArray(val) ? val.length+'筆' : typeof val==='object' ? '物件' : raw.slice(0,30);
-      html += k.replace('stockai_','') + ': ' + cnt + '<br>';
-    }catch(e){
-      html += k.replace('stockai_','') + ': (格式錯誤)<br>';
-    }
-  });
-  el.innerHTML = html;
-}
 
 function clearAllData(){
   if(!confirm('確定清除所有資料（自選股、投組、設定）？')) return;
