@@ -15543,6 +15543,40 @@ window.addEventListener('load', async ()=>{
     }catch(e){}
   })();
 
+  // ── 系統公告（開啟 APP 時顯示一次）
+  (() => {
+    const NOTICE_KEY = 'stockai_notice_v20260428';
+    if(!localStorage.getItem(NOTICE_KEY)){
+      localStorage.setItem(NOTICE_KEY, '1');
+      setTimeout(()=>{
+        // 顯示公告 Modal
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+        overlay.innerHTML = `
+          <div style="background:var(--bg);border-radius:16px;padding:24px 20px;max-width:360px;width:100%;border:1px solid rgba(255,76,106,.3)">
+            <div style="font-size:18px;font-weight:700;color:var(--red);margin-bottom:12px">⚠️ 重要系統公告</div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">
+              由於近期系統程式碼更新過程中發生錯誤，<strong>2026/04/28 前</strong>儲存的以下資料已無法復原：
+              <br><br>
+              • AI 選股回測記錄<br>
+              • 自選股清單<br>
+              • 投資組合持倉紀錄
+              <br><br>
+              造成您的不便，深感抱歉。我們已加強資料備份機制，確保未來不再發生相同問題。
+              <br><br>
+              <span style="font-size:11px;color:var(--text3)">此公告只會顯示一次。</span>
+            </div>
+            <button onclick="this.closest('div[style*=fixed]').remove()"
+              style="width:100%;background:var(--red);color:#fff;border:none;border-radius:10px;
+                     padding:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+              我已知悉
+            </button>
+          </div>`;
+        document.body.appendChild(overlay);
+      }, 1500);
+    }
+  })();
+
   // ── Onboarding（最優先，新用戶直接顯示）
   initOnboarding();
   // 恢復主題按鈕狀態
