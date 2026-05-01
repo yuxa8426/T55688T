@@ -3006,15 +3006,30 @@ function initKvUidDisplay(){
 async function kvSyncDown(){
   if(!API) return;
   try{
-    const [profile, backtest, fmtoken] = await Promise.all([
+    const [profile, backtest, fmtoken, wlCloud, posCloud] = await Promise.all([
       kvGet('profile'),
       kvGet('backtest'),
       kvGet('fmtoken'),
+      kvGet('mywatchlist'),
+      kvGet('positions'),
     ]);
     if(profile)  localStorage.setItem('stockai_profile',  JSON.stringify(profile));
     if(backtest) localStorage.setItem('stockai_backtest', JSON.stringify(backtest));
     if(fmtoken && typeof fmtoken === 'string' && fmtoken.length > 50)
       localStorage.setItem(FM_TOKEN_KEY, fmtoken);
+    // 自選股：雲端有資料才覆蓋（保護本地資料）
+    if(wlCloud && Array.isArray(wlCloud) && wlCloud.length)
+      localStorage.setItem(MY_WL_KEY, JSON.stringify(wlCloud));
+    // 持倉：合併雲端+本地（取聯集，避免覆蓋）
+    if(posCloud && Array.isArray(posCloud) && posCloud.length){
+      const localPt = getPT();
+      const merged  = [...posCloud];
+      localPt.forEach(lp=>{
+        if(!merged.some(cp=>cp.id===lp.id && cp.addedAt===lp.addedAt))
+          merged.push(lp);
+      });
+      localStorage.setItem(PT_KEY, JSON.stringify(merged));
+    }
   }catch(e){ console.warn('[KV sync]', e.message); }
 }
 
@@ -8263,9 +8278,10 @@ function _toggleWatchlistFromSearch(ticker, name){
   const inWL = _isInWatchlist(ticker);
   if(inWL){
     // 移除
-    let wl = JSON.parse(localStorage.getItem('stockai_mywatchlist')||'[]');
+    let wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]');
     wl = wl.filter(s=>(s.id||s.t||s)!==ticker);
-    localStorage.setItem('stockai_mywatchlist', JSON.stringify(wl));
+    localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
+    kvPut('mywatchlist', wl).catch(()=>{});
     if(btn){ btn.textContent='＋'; btn.style.background='rgba(255,255,255,.06)'; btn.style.borderColor='var(--border)'; }
     showToast(name+' 已從自選股移除');
   } else {
@@ -9926,7 +9942,7 @@ function _toggleChartWatchlist(){
 // 個別加入自選股（AI 選股結果）
 function _addOneToWatchlist(id, name){
   if(!id) return;
-  const key   = 'stockai_watchlist';
+  const key   = MY_WL_KEY;  // 統一使用 stockai_mywatchlist
   let wl      = [];
   try{ wl = JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){}
   const exists = wl.some(s=>(s.id||s.t||s)=== id);
@@ -9946,7 +9962,7 @@ function _addOneToWatchlist(id, name){
     btn.disabled = true;
   }
   // 同步到 KV
-  kvPut('watchlist', wl).catch(()=>{});
+  kvPut('mywatchlist', wl).catch(()=>{});
 }
 function removeFromWatchlist(){}
 function renderWatchlist(){}
@@ -15482,11 +15498,6 @@ window.addEventListener('load', async ()=>{
   iosBanner();
   // 背景同步雲端資料（不阻塞啟動）
   kvSyncDown().then(async ()=>{
-    // 同步 mywatchlist 到 localStorage
-    const wlCloud = await kvGet('mywatchlist');
-    if(wlCloud && Array.isArray(wlCloud) && wlCloud.length){
-      localStorage.setItem(MY_WL_KEY, JSON.stringify(wlCloud));
-    }
     loadProfile();
     renderBacktestPanel();
   });
