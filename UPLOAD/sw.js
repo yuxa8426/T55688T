@@ -2319,7 +2319,9 @@
 // 1. 前往 https://aistudio.google.com/apikey 取得免費 API Key
 // 2. Cloudflare Worker 貼入 worker.js，填入 Gemini API Key
 // 3. 部署後將下方 API 改為你的 Worker URL：
-//    const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+//    const API = 'https://xxx.workers.dev';
+
+const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
 
 // ── 全域常數 ──────────────────────────────────────────────
 const MY_WL_KEY  = 'stockai_mywatchlist';  // 自選股 localStorage key
