@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1777638489 -->
+<!-- build:1777642240 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -15005,6 +15005,30 @@ function clearFmToken(){
   document.getElementById('fmTokenInputArea').style.display = 'none';
   renderFmTokenStatus();
   showToast('已清除自訂 Token');
+}
+
+async function _checkKV(){
+  const el = document.getElementById('diagResult');
+  if(!el) return;
+  el.innerHTML = '查詢雲端中…';
+  const uid = getUID();
+  const keys = ['backtest','mywatchlist','positions','profile'];
+  let html = '<b>UID: '+uid+'</b><br><br>';
+  for(const key of keys){
+    try{
+      const r = await fetch(API+'/kv?uid='+uid+'&key='+key);
+      const j = await r.json();
+      if(j.exists && j.data){
+        const cnt = Array.isArray(j.data) ? j.data.length+'筆' : '有資料';
+        html += '☁️ '+key+': <span style="color:var(--green)">'+cnt+'</span><br>';
+      } else {
+        html += '☁️ '+key+': <span style="color:var(--text3)">無</span><br>';
+      }
+    }catch(e){
+      html += '☁️ '+key+': <span style="color:var(--red)">'+e.message+'</span><br>';
+    }
+  }
+  el.innerHTML = html;
 }
 
 function _runDiag(){
