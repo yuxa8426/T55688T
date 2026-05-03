@@ -6141,50 +6141,123 @@ async function loadMarketVolume(){
       const barData = slice20.map(r=>r.value||0);
       const barMax  = Math.max(...barData);
       if(barEl){
-        // ── SVG 版本（含 Y 軸刻度，對齊）─────────────────
+        // ── SVG 長條圖（Y 軸單位：億，對齊）─────────────
         const isDark = document.documentElement.getAttribute('data-theme')!=='light';
-        const svgW=360, svgH=80, padL=44, padR=6, padT=6, padB=0;
+        // barData 單位為「元」，換算成「億」顯示
+        const barDataB = barData.map(v => Math.round(v / 1e8));
+        const barMaxB  = Math.max(...barDataB, 1);
+
+        const svgW=360, svgH=90, padL=46, padR=6, padT=8, padB=0;
         const chartW = svgW - padL - padR;
         const chartH = svgH - padT - padB;
-        const barCount = barData.length;
+        const barCount = barDataB.length;
         const gap = 2;
         const bw  = Math.max(4, Math.floor((chartW - gap*(barCount-1)) / barCount));
-        const yMax = barMax * 1.05;  // 上方留 5% 空間
+        const yMax = barMaxB * 1.1;  // 上方留 10%
 
-        // Y 軸刻度（最大值、一半、0）
+        // Y 軸三刻度（0、中間、最大），單位億
         const yTicks = [0, Math.round(yMax/2), Math.round(yMax)];
-        const yLabel = v => v >= 10000 ? (v/10000).toFixed(1)+'萬' : v >= 1000 ? (v/1000).toFixed(0)+'千' : v+'';
+        const yLabel = v => v >= 10000 ? (v/10000).toFixed(1)+'萬億'
+                          : v >= 1000  ? (v/1000).toFixed(1)+'千億'
+                          : v+'億';
 
-        let svgHTML = '<svg width="100%" viewBox="0 0 360 80" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">';
+        let svgHTML = '<svg width="100%" viewBox="0 0 360 90" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">';
 
-        // Y 軸刻度線和標籤
+        // Y 軸刻度線
         yTicks.forEach(tick=>{
-          const y = padT + chartH - (tick/yMax)*chartH;
-          svgHTML += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${svgW-padR}" y2="${y.toFixed(1)}"
-            stroke="${isDark?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)'}" stroke-width="1"/>`;
-          svgHTML += `<text x="${padL-3}" y="${(y+3.5).toFixed(1)}" text-anchor="end"
-            font-size="8" fill="${isDark?'rgba(255,255,255,.4)':'rgba(0,0,0,.35)'}">${yLabel(tick)}</text>`;
+          const y = padT + chartH*(1 - tick/yMax);
+          svgHTML += `<line x1="\${padL}" y1="\${y.toFixed(1)}" x2="\${svgW-padR}" y2="\${y.toFixed(1)}"
+            stroke="\${isDark?'rgba(255,255,255,.1)':'rgba(0,0,0,.1)'}" stroke-width="1"/>
+          <text x="\${padL-4}" y="\${(y+3).toFixed(1)}" text-anchor="end"
+            font-size="9" fill="\${isDark?'rgba(255,255,255,.45)':'rgba(0,0,0,.4)'}">\${yLabel(tick)}</text>`;
         });
 
-        // 長條
-        barData.forEach((v,i)=>{
+        // 長條 + hover 互動資料
+        barDataB.forEach((v,i)=>{
           const bh  = yMax>0 ? Math.max(2, (v/yMax)*chartH) : 2;
           const x   = padL + i*(bw+gap);
           const y   = padT + chartH - bh;
-          const isLast = i===barData.length-1;
-          const isHigh = v/barMax > 0.65;
-          const fill = isLast ? '#00d4aa' : isHigh ? '#7c5cfc' : (isDark?'rgba(255,255,255,.22)':'rgba(0,0,0,.15)');
-          svgHTML += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}" rx="2" fill="${fill}"/>`;
+          const isLast = i===barDataB.length-1;
+          const isHigh = v/barMaxB > 0.65;
+          const fill   = isLast ? '#00d4aa' : isHigh ? '#7c5cfc' : (isDark?'rgba(255,255,255,.22)':'rgba(0,0,0,.15)');
+          // 日期格式轉換：TWSE 民國年 1130401 → 04/01 或 YYYY-MM-DD
+          const rawDate = slice20[i]?.date||'';
+          const dateLabel = rawDate.length===7
+            ? rawDate.slice(3,5)+'/'+rawDate.slice(5,7)   // 民國年 1130401 → 04/01
+            : rawDate.replace(/^\d{4}-/,'').replace('-','/'); // ISO → MM/DD
+          svgHTML += `<rect x="\${x.toFixed(1)}" y="\${y.toFixed(1)}" width="\${bw}" height="\${bh.toFixed(1)}" rx="2" fill="\${fill}"
+            data-val="\${v}" data-date="\${dateLabel}" style="cursor:pointer"/>`;
+        });
+
+        // tooltip（用 <title> 實作桌機 hover）
+        barDataB.forEach((v,i)=>{
+          const x = padL + i*(bw+gap);
+          const rawDate = slice20[i]?.date||'';
+          const dateLabel = rawDate.length===7
+            ? rawDate.slice(3,5)+'/'+rawDate.slice(5,7)
+            : rawDate.replace(/^\d{4}-/,'').replace('-','/');
+          svgHTML += `<title>\${dateLabel} : \${v}億元</title>`;
         });
 
         svgHTML += '</svg>';
         barEl.innerHTML = svgHTML;
+
+        // ── 點擊/Hover tooltip（手機 + PC 通用）────────
+        const svgEl = barEl.querySelector('svg');
+        if(svgEl){
+          const tip = document.getElementById('mktVolTip') || (() => {
+            const t = document.createElement('div');
+            t.id = 'mktVolTip';
+            t.style.cssText = 'position:fixed;background:rgba(10,10,20,.92);color:#fff;'
+              + 'font-size:11px;padding:4px 8px;border-radius:6px;pointer-events:none;'
+              + 'display:none;z-index:500;white-space:nowrap;border:1px solid rgba(255,255,255,.15)';
+            document.body.appendChild(t);
+            return t;
+          })();
+
+          const showTip = (rect, x, y) => {
+            const val   = rect.getAttribute('data-val');
+            const date  = rect.getAttribute('data-date');
+            if(!val||!date) return;
+            tip.textContent = date + '  ' + Number(val).toLocaleString() + ' 億';
+            tip.style.display = 'block';
+            // 確保不超出視窗右側
+            const tipW = tip.offsetWidth;
+            const left = Math.min(x+12, window.innerWidth - tipW - 8);
+            tip.style.left = left+'px';
+            tip.style.top  = (y-28)+'px';
+          };
+          const hideTip = () => { tip.style.display='none'; };
+
+          svgEl.addEventListener('mousemove', e=>{
+            const el = e.target.closest('rect');
+            if(el) showTip(el, e.clientX, e.clientY);
+            else hideTip();
+          });
+          svgEl.addEventListener('mouseleave', hideTip);
+          svgEl.addEventListener('click', e=>{
+            const el = e.target.closest('rect');
+            if(el) showTip(el, e.clientX, e.clientY);
+          });
+          svgEl.addEventListener('touchstart', e=>{
+            const t = e.touches[0];
+            const el = document.elementFromPoint(t.clientX, t.clientY)?.closest('rect');
+            if(el) showTip(el, t.clientX, t.clientY);
+          }, {passive:true});
+        }
       }
 
       // 時間軸：首/中/末日期
       const rowEl=document.getElementById('mktVolTimeRow');
       if(rowEl){
-        const ds = slice20.map(r=>(r.date||'').replace(/(\d{4})(\d{2})(\d{2})/,'$2/$3'));
+        // 日期格式：TWSE 民國年 1130401 → 04/01，或 ISO YYYY-MM-DD → MM/DD
+        const fmtD = d => {
+          if(!d) return '';
+          if(d.length===7) return d.slice(3,5)+'/'+d.slice(5,7);        // 民國年
+          return (d.match(/-(\d{2})-(\d{2})$/)||['','',''])[0]         // ISO
+                   .replace(/^-/,'').replace('-','/') || d.slice(-5);
+        };
+        const ds  = slice20.map(r=>fmtD(r.date||''));
         const mid = ds[Math.floor(ds.length/2)]||'';
         rowEl.innerHTML=`<span>${ds[0]||''}</span><span></span><span>${mid}</span><span></span><span></span><span>${ds[ds.length-1]||''}</span>`;
       }
