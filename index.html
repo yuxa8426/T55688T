@@ -11078,10 +11078,46 @@ async function runStratAnalysis(){
 
   }catch(e){
     console.error('[Strategy]', e);
-    const is429 = e.message.includes('429');
-    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">
-      ${is429 ? '⏳ AI 請求過於頻繁，請等待 30 秒後重試' : '❌ 分析失敗：'+e.message}
-    </div>`;
+    const msg = e.message || '';
+    const is429     = msg.includes('429');
+    const isQuota   = msg.includes('quota') || msg.includes('token') || msg.includes('overloaded');
+    const isNetwork = msg.includes('fetch') || msg.includes('network') || msg.includes('Failed');
+    const isNoData  = msg.includes('未回傳') || msg.includes('no data') || msg.includes('empty');
+
+    let errTitle = '❌ 分析失敗';
+    let errBody  = msg;
+    let errHint  = '';
+
+    if(is429){
+      errTitle = '⏳ 請求過於頻繁';
+      errBody  = '請等待 30 秒後重試。';
+    } else if(isQuota){
+      errTitle = '⚠️ AI 使用額度已耗盡';
+      errBody  = '今日 FinMind API 或 AI 分析額度已達上限。';
+      errHint  = '明日 00:00 自動重置。可至「我的」頁面確認 FinMind Token 設定。';
+    } else if(isNetwork){
+      errTitle = '📡 網路連線問題';
+      errBody  = '無法連接資料來源，請確認網路後重試。';
+    } else if(isNoData){
+      errTitle = '📊 資料不足';
+      errBody  = '目前市場資料不足以完成分析。';
+      errHint  = '請於盤中（09:00–13:45）或收盤後重試。';
+    }
+
+    listEl.innerHTML = `
+      <div style="padding:24px 16px;text-align:center">
+        <div style="font-size:28px;margin-bottom:10px">${is429?'⏳':isQuota?'⚠️':isNetwork?'📡':'❌'}</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">${errTitle}</div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.6">${errBody}</div>
+        ${errHint ? `<div style="font-size:11px;color:var(--text3);margin-top:8px;padding:8px;
+                     background:rgba(255,255,255,.04);border-radius:8px">${errHint}</div>` : ''}
+        <button onclick="runStratAnalysis()"
+          style="margin-top:16px;padding:8px 20px;background:var(--surface);
+                 border:1px solid var(--border);border-radius:8px;cursor:pointer;
+                 font-family:inherit;font-size:13px;color:var(--text2)">
+          🔄 重試
+        </button>
+      </div>`;
     resultEl.style.display = 'block';
   }finally{
     runBtn.disabled = false;
@@ -16065,6 +16101,103 @@ function initOnboarding(){
   document.body.style.overflow = 'hidden';
   _obStep = 0;
   obRender();
+}
+
+// ════════════════════════════════════════
+// 自選清單面板函式
+// ════════════════════════════════════════
+function renderWLPanel(){
+  const panel = document.getElementById('wlPanel');
+  if(!panel) return;
+  const wl     = getMyWL();
+  const wlName = localStorage.getItem('stockai_wlname') || '我的自選股';
+  if(!wl.length){
+    panel.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text3)"><div style="font-size:28px;margin-bottom:8px">⭐</div><div style="font-size:13px;margin-bottom:12px">自選清單是空的</div><div style="font-size:11px">請至「個股」頁面點擊 ☆ 加入自選股</div></div>';
+    return;
+  }
+  const itemsHtml = wl.map(s=>{
+    const id   = s.id||s.t||String(s);
+    const name = s.n||s.name||id;
+    const sn   = name.replace(/'/g,"\\'");
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer" onclick="selectStock(null,\'' + sn + '\',\'' + id + '.TW\');switchPage(\'stock\');">'
+      + '<div><span style="font-size:13px;font-weight:600;color:var(--text)">' + id + '</span>'
+      + '<span style="font-size:12px;color:var(--text3);margin-left:6px">' + name + '</span></div>'
+      + '<button onclick="event.stopPropagation();_wlRemove(\'' + id + '\')" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 4px">✕</button></div>';
+  }).join('');
+  panel.innerHTML =
+    '<div style="padding:0 16px 8px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    + '<div style="font-size:13px;font-weight:700;color:var(--text2)">⭐ ' + wlName + ' <span style="font-size:11px;color:var(--text3)">' + wl.length + ' 支</span></div>'
+    + '<button onclick="_wlRunAI()" style="font-size:11px;background:var(--green);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:700">▶ AI 分析</button>'
+    + '</div>'
+    + '<input id="wlSearchInput" type="text" placeholder="搜尋或新增股票（代號/名稱）" oninput="_wlSearch(this.value)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">'
+    + '<div id="wlSearchResults" style="display:none;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto"></div>'
+    + '</div>'
+    + '<div id="wlStockList" style="padding:0 16px 8px">' + itemsHtml + '</div>';
+}
+let _wlST = null;
+function _wlSearch(val){
+  clearTimeout(_wlST);
+  const r = document.getElementById('wlSearchResults');
+  if(!val||val.length<1){ if(r) r.style.display='none'; return; }
+  _wlST = setTimeout(()=>{
+    const list = (typeof STOCKS!=='undefined'&&STOCKS.length)?STOCKS:(typeof DEFAULT_STOCKS!=='undefined'?DEFAULT_STOCKS:[]);
+    const hits  = list.filter(s=>(s.t||s.id||'').startsWith(val)||(s.n||s.name||'').includes(val)).slice(0,8);
+    if(!hits.length||!r){ if(r) r.style.display='none'; return; }
+    r.innerHTML = hits.map(s=>{ const id=s.t||s.id||'',name=s.n||s.name||''; return '<div onclick="_wlAdd(\'' + id + '\',\'' + name + '\')" style="padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'"><span style="font-weight:600">' + id + '</span><span style="color:var(--text3);margin-left:6px">' + name + '</span><span style="float:right;color:var(--green);font-size:11px;font-weight:700">＋</span></div>'; }).join('');
+    r.style.display='block';
+  }, 180);
+}
+function _wlAdd(id,name){
+  _addOneToWatchlist(id,name);
+  const inp=document.getElementById('wlSearchInput'),res=document.getElementById('wlSearchResults');
+  if(inp) inp.value='';
+  if(res) res.style.display='none';
+  renderWLPanel();
+  _renderStockQuickAccess();
+  showToast('✅ 已加入：'+name);
+}
+function _wlRemove(id){
+  const wl=getMyWL().filter(s=>(s.id||s.t||String(s))!==id);
+  saveMyWL(wl);
+  renderWLPanel();
+  _renderStockQuickAccess();
+  showToast('已移除自選股');
+}
+async function _wlRunAI(){
+  const wl=getMyWL();
+  if(!wl.length){ showToast('⚠️ 自選清單是空的'); return; }
+  const panel=document.getElementById('wlPanel'),resultEl=document.getElementById('stratResult'),listEl=document.getElementById('stratStockList'),titleEl=document.getElementById('stratResultTitle');
+  if(panel) panel.style.display='none';
+  if(resultEl) resultEl.style.display='block';
+  if(listEl) listEl.innerHTML='<div style="padding:16px;text-align:center;color:var(--text3)">⏳ 分析中…</div>';
+  if(titleEl) titleEl.textContent='⭐ 自選清單分析中…';
+  try{
+    const ids=wl.map(s=>s.id||s.t||String(s)).filter(Boolean);
+    const quotes=await Promise.all(ids.map(id=>fmStockData(id,10).catch(()=>null)));
+    const stocks=ids.map((id,i)=>{
+      const q=quotes[i],wlS=wl.find(s=>(s.id||s.t||String(s))===id),name=wlS?.n||wlS?.name||id;
+      const data=q?{pe:null,pb:null,yield:null,ret5:q.changePct||0,changePct:q.changePct||0,close:q.price||0,instScore:0,volRatio:1,closes:q.closes||[]}:null;
+      return {id,name,sector:(typeof SECTOR_MAP!=='undefined'?SECTOR_MAP[id]:null)||'—',_3layer:data?calcThreeLayerScore(data):null};
+    });
+    if(titleEl) titleEl.textContent='⭐ 自選清單 — '+stocks.length+' 支';
+    if(listEl) listEl.innerHTML=stocks.map((s,i)=>{
+      const L=s._3layer;
+      const mkB=(v,col)=>'<div style="display:flex;align-items:center;gap:3px"><div style="width:32px;height:3px;background:rgba(255,255,255,.1);border-radius:2px"><div style="width:'+v+'%;height:100%;background:'+col+';border-radius:2px"></div></div><span style="font-size:9px;color:'+col+';font-weight:700">'+v+'</span></div>';
+      const sh=L?'<div style="margin-top:5px;padding:5px 7px;background:rgba(255,255,255,.04);border-radius:6px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><span style="font-size:9px;color:var(--text3);width:36px">研究員</span>'+mkB(L.researcher,L.researcher>=70?'#ff4c6a':L.researcher>=50?'#f5c842':'#00d4aa')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><span style="font-size:9px;color:var(--text3);width:36px">分析師</span>'+mkB(L.analyst,L.analyst>=70?'#ff4c6a':L.analyst>=50?'#f5c842':'#00d4aa')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:9px;color:var(--text3);width:36px">交易員</span>'+mkB(L.trader,L.trader>=70?'#ff4c6a':L.trader>=50?'#f5c842':'#00d4aa')+'</div>'
+        +(L.eliminated?'<div style="font-size:9px;color:var(--gold);margin-top:3px">⚠️ '+L.reason+'</div>':'')
+        +'</div>':'';
+      const sn=(s.name||'').replace(/'/g,"\\'");
+      return '<div class="sstock-card" onclick="selectStock(null,\''+sn+'\',\''+s.id+'.TW\');switchPage(\'stock\')">'
+        +'<div style="display:flex;align-items:center;gap:10px;flex:1">'
+        +'<div class="sstock-rank">'+(i+1)+'</div>'
+        +'<div class="sstock-info"><div class="sstock-name">'+s.id+' '+s.name+'<span style="font-size:10px;color:var(--text3)"> '+s.sector+'</span></div>'+sh+'</div>'
+        +'</div></div>';
+    }).join('');
+  }catch(e){ if(listEl) listEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">❌ '+e.message+'</div>'; }
 }
 
 </script>
