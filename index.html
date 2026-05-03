@@ -509,7 +509,69 @@
   </div>
 
 
-  <div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
+  
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <h2>市場成交量</h2>
+    <span id="mktVolUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+  </div>
+  <div class="vol-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">台股今日成交額</div>
+        <div class="vol-big" id="mktVolBig">— <span>億元</span></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;margin-bottom:0"
+          id="mktVolCompare">載入中…</div>
+      </div>
+      <span class="chip" id="mktVolChip" style="margin-top:4px">—</span>
+    </div>
+    <!-- 方案B：API失效時的示意標示 -->
+    <div id="mktVolFallbackNote" style="display:none;font-size:10px;color:var(--gold);
+      background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);
+      border-radius:6px;padding:4px 8px;margin-top:6px">
+      ⚠️ 目前顯示近期歷史數據（示意），非今日即時成交額
+    </div>
+    <div class="market-bars" id="mktBars"></div>
+    <!-- 顏色圖例 -->
+    <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+        <div style="width:10px;height:10px;border-radius:2px;background:#00d4aa"></div>今日
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+        <div style="width:10px;height:10px;border-radius:2px;background:#7c5cfc"></div>高量（&gt;月均65%）
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+        <div style="width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,.18)"></div>一般
+      </div>
+    </div>
+    <div class="vol-time-row" id="mktVolTimeRow">
+      <span>—</span><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>
+    </div>
+    <div class="vol-stats3">
+      <div class="vs3"><div class="vsl">昨日</div><div class="vsv" id="mktVolYest">—億</div></div>
+      <div class="vs3"><div class="vsl">月均</div><div class="vsv" id="mktVolAvg">—億</div></div>
+      <div class="vs3"><div class="vsl">換手率</div><div class="vsv purple" id="mktVolTurnover">—%</div></div>
+    </div>
+    <div class="breakdown">
+      <div class="bdi">
+        <div class="bdl">上市</div>
+        <div class="bdv" id="mktVolTSE">—億</div>
+        <div class="bdc" id="mktVolTSEChg">—</div>
+      </div>
+      <div class="bdiv"></div>
+      <div class="bdi">
+        <div class="bdl">上櫃</div>
+        <div class="bdv" id="mktVolOTC">—億</div>
+        <div class="bdc" id="mktVolOTCChg">—</div>
+      </div>
+      <div class="bdiv"></div>
+      <div class="bdi">
+        <div class="bdl">興櫃</div>
+        <div class="bdv" id="mktVolEMG">—億</div>
+        <div class="bdc" id="mktVolEMGChg">—</div>
+      </div>
+    </div>
+  </div>
+<div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
   <div class="index-row">
     <div class="idx"><div class="n">加權指數</div><div class="v" id="idx-taiex">—</div><div class="c" id="idx-taiex-c">—</div></div>
     <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
@@ -1095,56 +1157,6 @@
     <!-- 更新時間戳 -->
     <div style="display:flex;justify-content:flex-end;margin-top:8px">
       <span style="font-size:10px;color:var(--text3)" id="aiUpdateTime">—</span>
-    </div>
-  </div>
-
-  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
-    <h2>市場成交量</h2>
-    <span id="mktVolUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
-  </div>
-  <div class="vol-card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">台股今日成交額</div>
-        <div class="vol-big" id="mktVolBig">— <span>億元</span></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;margin-bottom:0"
-          id="mktVolCompare">載入中…</div>
-      </div>
-      <span class="chip" id="mktVolChip" style="margin-top:4px">—</span>
-    </div>
-    <!-- 方案B：API失效時的示意標示 -->
-    <div id="mktVolFallbackNote" style="display:none;font-size:10px;color:var(--gold);
-      background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);
-      border-radius:6px;padding:4px 8px;margin-top:6px">
-      ⚠️ 目前顯示近期歷史數據（示意），非今日即時成交額
-    </div>
-    <div class="market-bars" id="mktBars"></div>
-    <div class="vol-time-row" id="mktVolTimeRow">
-      <span>—</span><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>
-    </div>
-    <div class="vol-stats3">
-      <div class="vs3"><div class="vsl">昨日</div><div class="vsv" id="mktVolYest">—億</div></div>
-      <div class="vs3"><div class="vsl">月均</div><div class="vsv" id="mktVolAvg">—億</div></div>
-      <div class="vs3"><div class="vsl">換手率</div><div class="vsv purple" id="mktVolTurnover">—%</div></div>
-    </div>
-    <div class="breakdown">
-      <div class="bdi">
-        <div class="bdl">上市</div>
-        <div class="bdv" id="mktVolTSE">—億</div>
-        <div class="bdc" id="mktVolTSEChg">—</div>
-      </div>
-      <div class="bdiv"></div>
-      <div class="bdi">
-        <div class="bdl">上櫃</div>
-        <div class="bdv" id="mktVolOTC">—億</div>
-        <div class="bdc" id="mktVolOTCChg">—</div>
-      </div>
-      <div class="bdiv"></div>
-      <div class="bdi">
-        <div class="bdl">興櫃</div>
-        <div class="bdv" id="mktVolEMG">—億</div>
-        <div class="bdc" id="mktVolEMGChg">—</div>
-      </div>
     </div>
   </div>
 
