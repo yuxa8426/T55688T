@@ -16127,34 +16127,68 @@ function initOnboarding(){
 // 自選清單面板函式
 // ════════════════════════════════════════
 function renderWLPanel(){
-  const panel = document.getElementById('wlPanel');
-  if(!panel) return;
-  const wl     = getMyWL();
-  const wlName = localStorage.getItem('stockai_wlname') || '我的自選股';
+  const listEl = document.getElementById('wlList');
+  if(!listEl) return;
+  const wl = getMyWL();
   if(!wl.length){
-    panel.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text3)"><div style="font-size:28px;margin-bottom:8px">⭐</div><div style="font-size:13px;margin-bottom:12px">自選清單是空的</div><div style="font-size:11px">請至「個股」頁面點擊 ☆ 加入自選股</div></div>';
+    listEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">尚無自選股，輸入股票代號新增</div>';
     return;
   }
-  const itemsHtml = wl.map(s=>{
+  listEl.innerHTML = wl.map(s=>{
     const id   = s.id||s.t||String(s);
     const name = s.n||s.name||id;
-    const sn   = name.replace(/'/g,"\\'");
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer" onclick="selectStock(null,\'' + sn + '\',\'' + id + '.TW\');switchPage(\'stock\');">'
-      + '<div><span style="font-size:13px;font-weight:600;color:var(--text)">' + id + '</span>'
-      + '<span style="font-size:12px;color:var(--text3);margin-left:6px">' + name + '</span></div>'
-      + '<button onclick="event.stopPropagation();_wlRemove(\'' + id + '\')" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:0 4px">✕</button></div>';
+    const sn   = name.replace(/'/g,"\'");
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">'
+      +'<div style="cursor:pointer;flex:1" onclick="selectStock(null,\''+sn+'\',\''+id+'.TW\');switchPage(\'stock\')">'
+      +'<span style="font-size:14px;font-weight:600;color:var(--text)">'+id+'</span>'
+      +'<span style="font-size:12px;color:var(--text3);margin-left:8px">'+name+'</span>'
+      +'</div>'
+      +'<button onclick="wlRemoveStock(\''+id+'\')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px">✕</button>'
+      +'</div>';
   }).join('');
-  panel.innerHTML =
-    '<div style="padding:0 16px 8px">'
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-    + '<div style="font-size:13px;font-weight:700;color:var(--text2)">⭐ ' + wlName + ' <span style="font-size:11px;color:var(--text3)">' + wl.length + ' 支</span></div>'
-    + '<button onclick="_wlRunAI()" style="font-size:11px;background:var(--green);color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:700">▶ AI 分析</button>'
-    + '</div>'
-    + '<input id="wlSearchInput" type="text" placeholder="搜尋或新增股票（代號/名稱）" oninput="_wlSearch(this.value)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;box-sizing:border-box">'
-    + '<div id="wlSearchResults" style="display:none;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto"></div>'
-    + '</div>'
-    + '<div id="wlStockList" style="padding:0 16px 8px">' + itemsHtml + '</div>';
 }
+
+
+// ── wlAddFromInput：「＋」按鈕或 Enter 加入 ────────────
+function wlAddFromInput(){
+  const inp = document.getElementById('wlAddInput');
+  if(!inp) return;
+  const val = inp.value.trim();
+  if(!val){ showToast('請輸入股票代號'); return; }
+  // 優先用代號直接加
+  const id   = val.toUpperCase();
+  const name = (typeof NAME_MAP!=='undefined' && NAME_MAP[id]) || id;
+  wlAddStock(id, name);
+  inp.value = '';
+  const res = document.getElementById('wlResults');
+  if(res) res.innerHTML = '';
+  const res2 = document.getElementById('wlSearchResults');
+  if(res2) res2.innerHTML = '';
+}
+
+// ── wlAddStock：確認代號後加入自選股 ────────────────────
+function wlAddStock(id, name){
+  if(!id) return;
+  _addOneToWatchlist(id, name||id);
+  renderWLPanel();
+  _renderStockQuickAccess();
+  showToast('✅ 已加入：'+(name||id));
+}
+
+// ── addToWatchlist：搜尋結果點擊加入 ─────────────────────
+function addToWatchlist(id, name, sector){
+  wlAddStock(id, name);
+}
+
+// ── wlRemoveStock：從自選清單移除 ────────────────────────
+function wlRemoveStock(id){
+  const wl = getMyWL().filter(s=>(s.id||s.t||String(s))!==id);
+  saveMyWL(wl);
+  renderWLPanel();
+  _renderStockQuickAccess();
+  showToast('已移除自選股');
+}
+
 let _wlST = null;
 function _wlSearch(val){
   clearTimeout(_wlST);
