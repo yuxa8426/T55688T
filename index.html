@@ -11210,22 +11210,25 @@ async function loadFundamentals(stockId){
       const v = parseFloat(r.value||0);
       byQ[key][r.type] = v;
       // 中英文對照（容錯）
-      // FinMind 財報欄位別名（中英文雙向對照，涵蓋各版本差異）
+      // FinMind 財報欄位別名（依實際回傳欄位校正）
       const alias = {
-        // 英文 → 中文
-        'Revenue':'營業收入', 'GrossProfit':'毛利',
-        'CostOfGoodsSold':'營業成本', 'OperatingIncome':'營業利益',
-        'OperatingExpense':'營業費用', 'NetIncome':'本期淨利', 'EPS':'每股盈餘',
-        // 中文 → 統一 key（FinMind 實際回傳的中文欄位）
+        // 英文 → 統一 key
+        'Revenue':'Revenue', 'GrossProfit':'GrossProfit',
+        'CostOfGoodsSold':'CostOfGoodsSold', 'OperatingIncome':'OperatingIncome',
+        'NetIncome':'NetIncome', 'EPS':'EPS',
+        // ★ 實際回傳的英文欄位（Console 確認）
+        'IncomeAfterTaxes':'NetIncome',                          // 稅後淨利
+        'EquityAttributableToOwnersOfParent':'NetIncome',        // 歸屬母公司淨利
+        'TotalConsolidatedProfitForThePeriod':'NetIncome',       // 本期綜合損益
+        // 中文 → 統一 key
         '營業收入淨額':'Revenue', '合併營業收入淨額':'Revenue',
-        '營業毛利（毛損）':'GrossProfit', '營業毛利':'GrossProfit',
-        '營業毛損':'GrossProfit',
-        '營業利益（損失）':'OperatingIncome', '繼續營業單位稅前淨利（損）':'OperatingIncome',
-        '本期淨利（損）':'NetIncome', '本期稅後淨利':'NetIncome',
+        '營業收入':'Revenue',
+        '營業毛利（毛損）':'GrossProfit', '營業毛利':'GrossProfit', '營業毛損':'GrossProfit',
+        '營業利益（損失）':'OperatingIncome', '營業利益':'OperatingIncome',
+        '本期淨利（損）':'NetIncome', '本期稅後淨利':'NetIncome', '本期淨利':'NetIncome',
         '歸屬於母公司業主之本期淨利（損）':'NetIncome',
         '綜合損益總額（含非控制權益）':'NetIncome',
-        '基本每股盈餘（元）':'EPS', '每股盈餘(元)':'EPS',
-        '稀釋每股盈餘（元）':'EPS',
+        '基本每股盈餘（元）':'EPS', '每股盈餘(元)':'EPS', '稀釋每股盈餘（元）':'EPS',
       };
       if(alias[r.type]) byQ[key][alias[r.type]] = v;
       // 直接用中文 key 也存一份（多路徑備援）
@@ -11251,7 +11254,9 @@ async function loadFundamentals(stockId){
       ? +((eps-epsYr)/Math.abs(epsYr)*100).toFixed(1) : null;
 
     // ── 毛利率：GrossProfit/Revenue（英文），毛利/營業收入（中文）
-    const rev    = last['Revenue'] ?? last['營業收入'] ?? last['營業收入淨額'] ?? 0;
+    // Revenue：直接欄位或月營收資料（FinMind 財報可能無此欄）
+    const rev = last['Revenue'] ?? last['營業收入'] ?? last['營業收入淨額']
+              ?? last['合併營業收入淨額'] ?? 0;
     const gp     = last['GrossProfit'] ?? last['毛利']
                 ?? last['營業毛利'] ?? last['營業毛利（毛損）'] ?? last['營業毛損']
                 ?? (rev && last['CostOfGoodsSold'] ? rev - last['CostOfGoodsSold'] : null);
@@ -11266,6 +11271,9 @@ async function loadFundamentals(stockId){
     // NetIncome 可能欄位名稱（FinMind 各版本不同）
     const _findNI = (q) =>
       q['NetIncome'] ??
+      q['IncomeAfterTaxes'] ??                          // ★ FinMind 實際欄位
+      q['EquityAttributableToOwnersOfParent'] ??        // ★ 歸屬母公司
+      q['TotalConsolidatedProfitForThePeriod'] ??       // ★ 本期綜合損益
       q['本期淨利'] ?? q['本期淨利（損）'] ?? q['本期稅後淨利'] ??
       q['歸屬於母公司業主之本期淨利'] ?? q['歸屬於母公司業主之本期淨利（損）'] ??
       q['綜合損益總額'] ?? q['綜合損益總額（含非控制權益）'] ??
@@ -15876,7 +15884,7 @@ window.addEventListener('load', async ()=>{
   scheduleAutoRefresh();
 });
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(()=>{});
 
 // ── PWA 安裝提示（Android Chrome）────────────────────────
 (function(){
