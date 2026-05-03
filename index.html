@@ -10189,6 +10189,95 @@ async function buildFullMarketQuant(){
   return scoreMap;
 }
 
+// ════════════════════════════════════════════════════════
+// 三角色評分系統（研究員 + 分析師 + 交易員）
+// ════════════════════════════════════════════════════════
+
+function calcResearcherScore(data){
+  let score = 50;
+  const { pe, pb, yield: yld, ret5 } = data;
+  if(pe!=null && pe>0){
+    if(pe<10) score+=25; else if(pe<15) score+=18;
+    else if(pe<20) score+=10; else if(pe<30) score+=2; else score-=15;
+  } else if(pe!=null && pe<=0){ score-=20; }
+  if(pb!=null && pb>0){
+    if(pb<1) score+=15; else if(pb<1.5) score+=10;
+    else if(pb<3) score+=3; else if(pb>5) score-=10;
+  }
+  if(yld!=null && yld>0){
+    if(yld>=6) score+=15; else if(yld>=4) score+=10; else if(yld>=2) score+=5;
+  }
+  if(ret5!=null){
+    if(ret5>15) score-=5; else if(ret5>0) score+=3; else if(ret5<-15) score-=8;
+  }
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function calcAnalystScore(data){
+  let score = 50;
+  const { instScore, volRatio, ret5, pe, pb } = data;
+  if(instScore!=null){
+    if(instScore>=3) score+=30; else if(instScore>=1) score+=18;
+    else if(instScore>=0) score+=5; else if(instScore>=-1) score-=10; else score-=25;
+  }
+  if(volRatio!=null){
+    if(volRatio>=2.5) score+=15; else if(volRatio>=1.5) score+=10;
+    else if(volRatio>=0.8) score+=3; else score-=10;
+  }
+  if(pe!=null && pe>40) score-=15;
+  if(pb!=null && pb>8)  score-=10;
+  if(instScore>0 && ret5>0) score+=8;
+  if(instScore<0 && ret5<0) score-=10;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function calcTraderScore(data){
+  let score = 50;
+  const { ret5, volRatio, changePct, instScore, closes } = data;
+  if(closes && closes.length>=15){
+    const rsi = calcRSI(closes);
+    if(rsi!=null){
+      if(rsi<30) score+=25; else if(rsi<40) score+=15;
+      else if(rsi<=60) score+=10; else if(rsi<=70) score+=2;
+      else if(rsi<=80) score-=10; else score-=25;
+      data._rsi = Math.round(rsi);
+    }
+  }
+  if(ret5!=null){
+    if(ret5>=10&&ret5<=20) score+=15; else if(ret5>=3) score+=10;
+    else if(ret5>=0) score+=3; else if(ret5>=-5) score-=5;
+    else if(ret5>=-15) score-=12; else score-=20;
+  }
+  if(volRatio!=null){
+    if(volRatio>=1.5&&ret5>0) score+=12;
+    else if(volRatio>=1.2) score+=6;
+    else if(volRatio<0.5) score-=15;
+  }
+  if(changePct!=null){
+    if(changePct>=3) score+=8; else if(changePct>=0) score+=3; else if(changePct<-3) score-=8;
+  }
+  if(instScore>0&&ret5>3&&volRatio>1.2) score+=10;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function calcThreeLayerScore(data){
+  const rScore = calcResearcherScore(data);
+  const aScore = calcAnalystScore(data);
+  const tScore = calcTraderScore(data);
+  if(rScore<40||aScore<40||tScore<40){
+    return {
+      total:null, researcher:rScore, analyst:aScore, trader:tScore,
+      eliminated:true,
+      reason: rScore<40?'基本面不足':aScore<40?'籌碼風險':'時機不佳',
+    };
+  }
+  return {
+    total: Math.round(rScore*0.30+aScore*0.30+tScore*0.40),
+    researcher:rScore, analyst:aScore, trader:tScore,
+    eliminated:false, rsi:data._rsi||null,
+  };
+}
+
 // 依策略計算單支股票的加權分數
 function calcScoreForStrat(data, stratKey){
   // ret5：5日漲跌（FinMind補強的97支才有，其餘用 changePct 代替）
@@ -10667,16 +10756,32 @@ async function runStratAnalysis(){
 
     const top50 = scored.slice(0,50);
 
+    // ── 三角色評分預篩（淘汰任一項低於40分的標的）────────
+    // 為 top50 每支計算三角色分數並存入 s._3layer
+    top50.forEach(s=>{
+      s._3layer = calcThreeLayerScore(s.quant);
+    });
+    // 過濾掉被淘汰的股票（保留未淘汰或資料不足的）
+    const top50Filtered = top50.filter(s=>
+      !s._3layer || !s._3layer.eliminated
+    );
+    const eliminatedCount = top50.length - top50Filtered.length;
+    if(eliminatedCount > 0){
+      console.log(`[3Layer] 淘汰 ${eliminatedCount} 支：不符合三角色標準`);
+    }
+
     // 組合量化摘要（加入指標標示，讓 AI 有更多依據）
-    const quantSummary = top50.map(s=>{
+    const quantSummary = (top50Filtered.length >= 5 ? top50Filtered : top50).map(s=>{
       const q = s.quant;
+      const l = s._3layer;
       const tags = [];
-      if(q.instScore > 0)      tags.push('法↑');
-      if(q.instScore < 0)      tags.push('法↓');
-      if(q.ret5 >= 5)          tags.push('強');
-      if(q.ret5 <= -5)         tags.push('跌');
-      if(q.volRatio >= 1.5)    tags.push('量');
-      if(q.pe && q.pe < 12)    tags.push('低PE');
+      if(q.instScore > 0)   tags.push('法↑');
+      if(q.instScore < 0)   tags.push('法↓');
+      if(q.ret5 >= 5)       tags.push('強');
+      if(q.ret5 <= -5)      tags.push('跌');
+      if(q.volRatio >= 1.5) tags.push('量');
+      if(q.pe && q.pe < 12) tags.push('低PE');
+      if(l && !l.eliminated) tags.push(`3L:${l.total}`);
       const tag = tags.length ? '('+tags.join('/')+ ')' : '';
       return s.id+s.name+tag;
     }).join('、');
@@ -10798,16 +10903,27 @@ async function runStratAnalysis(){
     // 使用強健解析（6步容錯）
     let stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
-    // 不足10支時，從量化排名補足
+    // 不足10支時，優先從 top50Filtered 補足（已通過三角色篩選）
     if(stocks.length < 10){
       const aiIds = new Set(stocks.map(s=>s.id));
-      const extra = top50
+      const pool  = (top50Filtered.length >= 3 ? top50Filtered : top50);
+      const extra = pool
         .filter(s => !aiIds.has(s.id))
         .slice(0, 10 - stocks.length)
-        .map(s=>({ id:s.id, name:s.name, sector:s.sector||'—',
-                   winRate:58, risk:5, reason:'量化補入' }));
+        .map(s=>({
+          id:s.id, name:s.name, sector:s.sector||'—',
+          winRate:58, risk:5, reason:'量化補入',
+          _3layer: s._3layer, _quant: s.quant,
+        }));
       stocks = [...stocks, ...extra];
     }
+    // 所有股票補全三角色分數
+    stocks.forEach(s=>{
+      if(!s._3layer){
+        const found = top50.find(t=>t.id===s.id);
+        if(found) s._3layer = found._3layer || calcThreeLayerScore(found.quant);
+      }
+    });
 
     // 記錄到回測系統（背景執行，不阻塞渲染）
     recordStratRecommend(key, stocks).catch(e=>console.warn('[BT record]',e));
@@ -10817,7 +10933,8 @@ async function runStratAnalysis(){
     setTimeout(()=>{ _stratProgressHide(); }, 800);
 
     // 渲染結果
-    titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選（掃描${quantScopeLabel}）`;
+    const elimMsg = eliminatedCount > 0 ? `，淘汰${eliminatedCount}支不合格` : '';
+    titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選（掃描${quantScopeLabel}${elimMsg}）`;
     listEl.innerHTML = stocks.slice(0,10).map((s,i)=>{
       const risk = Math.min(10, Math.max(1, Math.round(s.risk||5)));
       const riskColor = risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
@@ -10847,6 +10964,39 @@ async function runStratAnalysis(){
         <div class="sstock-info">
           <div class="sstock-name">${s.id||''} ${s.name||''} <span style="font-size:10px;color:var(--text3);font-weight:400">${s.sector||''}</span></div>
           <div class="sstock-reason">${colorSentiment(s.reason||'')}</div>
+
+          <!-- 三角色評分列 -->
+          ${(()=>{
+            const L = s._3layer;
+            if(!L) return '';
+            const bar = (val, color) =>
+              `<div style="display:flex;align-items:center;gap:3px">
+                <div style="width:32px;height:3px;background:rgba(255,255,255,.1);border-radius:2px">
+                  <div style="width:${val}%;height:100%;background:${color};border-radius:2px"></div>
+                </div>
+                <span style="font-size:9px;color:${color};font-weight:700;min-width:18px">${val}</span>
+              </div>`;
+            const rColor = L.researcher>=70?'#ff4c6a':L.researcher>=50?'#f5c842':'#00d4aa';
+            const aColor = L.analyst>=70?'#ff4c6a':L.analyst>=50?'#f5c842':'#00d4aa';
+            const tColor = L.trader>=70?'#ff4c6a':L.trader>=50?'#f5c842':'#00d4aa';
+            return `<div style="margin-top:5px;padding:5px 7px;background:rgba(255,255,255,.04);
+                               border-radius:6px;display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:9px;color:var(--text3);width:36px">研究員</span>
+                ${bar(L.researcher, rColor)}
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:9px;color:var(--text3);width:36px">分析師</span>
+                ${bar(L.analyst, aColor)}
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:9px;color:var(--text3);width:36px">交易員</span>
+                ${bar(L.trader, tColor)}
+              </div>
+              ${L.rsi!=null?`<div style="font-size:9px;color:var(--text3);margin-top:1px">RSI ${L.rsi} · ${L.rsi<40?'低檔':L.rsi>70?'超買':'正常'}</div>`:''}
+            </div>`;
+          })()}
+
           ${(()=>{
             const q = top50.find(t=>t.id===s.id)?.quant;
             if(!q) return '';
@@ -11011,13 +11161,26 @@ async function loadFundamentals(stockId){
       const v = parseFloat(r.value||0);
       byQ[key][r.type] = v;
       // 中英文對照（容錯）
+      // FinMind 財報欄位別名（中英文雙向對照，涵蓋各版本差異）
       const alias = {
-        'Revenue':'營業收入', '營業收入淨額':'Revenue',
-        'GrossProfit':'毛利', 'CostOfGoodsSold':'營業成本',
-        'OperatingIncome':'營業利益', 'OperatingExpense':'營業費用',
-        'NetIncome':'本期淨利', 'EPS':'每股盈餘',
+        // 英文 → 中文
+        'Revenue':'營業收入', 'GrossProfit':'毛利',
+        'CostOfGoodsSold':'營業成本', 'OperatingIncome':'營業利益',
+        'OperatingExpense':'營業費用', 'NetIncome':'本期淨利', 'EPS':'每股盈餘',
+        // 中文 → 統一 key（FinMind 實際回傳的中文欄位）
+        '營業收入淨額':'Revenue', '合併營業收入淨額':'Revenue',
+        '營業毛利（毛損）':'GrossProfit', '營業毛利':'GrossProfit',
+        '營業毛損':'GrossProfit',
+        '營業利益（損失）':'OperatingIncome', '繼續營業單位稅前淨利（損）':'OperatingIncome',
+        '本期淨利（損）':'NetIncome', '本期稅後淨利':'NetIncome',
+        '歸屬於母公司業主之本期淨利（損）':'NetIncome',
+        '綜合損益總額（含非控制權益）':'NetIncome',
+        '基本每股盈餘（元）':'EPS', '每股盈餘(元)':'EPS',
+        '稀釋每股盈餘（元）':'EPS',
       };
       if(alias[r.type]) byQ[key][alias[r.type]] = v;
+      // 直接用中文 key 也存一份（多路徑備援）
+      byQ[key][r.type] = v;
     });
 
     //.slice(-4));
@@ -11027,17 +11190,22 @@ async function loadFundamentals(stockId){
     const last   = byQ[quarters[quarters.length-1]] || {};
     const lastQ2 = byQ[quarters[quarters.length-2]] || {}; // 上季
     const prevY  = byQ[quarters[quarters.length-5]] || {}; // 去年同期
+    // 除錯：顯示實際欄位（確認 FinMind 回傳格式）
+    if(quarters.length) console.log('[Fund] '+stockId+' keys:', Object.keys(last).slice(0,12));
 
     // ── EPS ──────────────────────────────────────────────
-    const eps   = last['EPS'] ?? last['每股盈餘'] ?? null;
+    const eps   = last['EPS'] ?? last['每股盈餘']
+                ?? last['基本每股盈餘（元）'] ?? last['每股盈餘(元)']
+                ?? last['稀釋每股盈餘（元）'] ?? null;
     const epsYr = prevY['EPS'] ?? prevY['每股盈餘'] ?? null;
     const epsYoY= (eps!=null && epsYr!=null && epsYr!==0)
       ? +((eps-epsYr)/Math.abs(epsYr)*100).toFixed(1) : null;
 
     // ── 毛利率：GrossProfit/Revenue（英文），毛利/營業收入（中文）
     const rev    = last['Revenue'] ?? last['營業收入'] ?? last['營業收入淨額'] ?? 0;
-    const gp     = last['GrossProfit'] ?? last['毛利'] ?? last['營業毛利'] ??
-                   (rev && last['CostOfGoodsSold'] ? rev - last['CostOfGoodsSold'] : null);
+    const gp     = last['GrossProfit'] ?? last['毛利']
+                ?? last['營業毛利'] ?? last['營業毛利（毛損）'] ?? last['營業毛損']
+                ?? (rev && last['CostOfGoodsSold'] ? rev - last['CostOfGoodsSold'] : null);
     const gpm    = (gp!=null && rev>0) ? +(gp/rev*100).toFixed(1) : null;
 
     const revQ2  = lastQ2['Revenue'] ?? lastQ2['營業收入'] ?? 0;
@@ -11049,11 +11217,10 @@ async function loadFundamentals(stockId){
     // NetIncome 可能欄位名稱（FinMind 各版本不同）
     const _findNI = (q) =>
       q['NetIncome'] ??
-      q['本期淨利'] ??
-      q['歸屬於母公司業主之本期淨利'] ??
-      q['綜合損益總額'] ??
-      q['ContinuingOperationsAfterTax'] ??
-      q['AfterTaxProfit'] ?? null;
+      q['本期淨利'] ?? q['本期淨利（損）'] ?? q['本期稅後淨利'] ??
+      q['歸屬於母公司業主之本期淨利'] ?? q['歸屬於母公司業主之本期淨利（損）'] ??
+      q['綜合損益總額'] ?? q['綜合損益總額（含非控制權益）'] ??
+      q['ContinuingOperationsAfterTax'] ?? q['AfterTaxProfit'] ?? null;
 
     const ni     = _findNI(last);
     // 若找不到淨利，用毛利-費用估算（有毛利和營業利益則用營業利益）
@@ -11132,9 +11299,11 @@ async function loadFundamentals(stockId){
     if(revMonthEl && latest)
       revMonthEl.textContent = latest.date.slice(0,7);
 
-    const rev  = parseFloat(latest?.revenue||0);
-    const revPM= parseFloat(prevM?.revenue||0);
-    const revPY= parseFloat(prevY?.revenue||0);
+    // FinMind 月營收欄位：revenue 或 Revenue 或 revenue（小寫）
+    const _getRevenue = r => parseFloat(r?.revenue || r?.Revenue || r?.revenue_total || 0);
+    const rev  = _getRevenue(latest);
+    const revPM= _getRevenue(prevM);
+    const revPY= _getRevenue(prevY);
 
     if(revMoMEl && rev && revPM){
       const mom = +((rev-revPM)/revPM*100).toFixed(1);
