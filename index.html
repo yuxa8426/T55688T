@@ -6223,16 +6223,25 @@ async function loadMarketVolume(){
         var isDark2 = document.documentElement.getAttribute('data-theme')!=='light';
         var barDataB = barData.map(function(v){ return Math.round((v||0)/1e8); });
         var barMaxB  = Math.max.apply(null, barDataB.concat([1]));
+        var barMinB  = Math.min.apply(null, barDataB.filter(function(v){ return v>0; }).concat([barMaxB]));
         var svgW=360, svgH=90, padL=46, padR=6, padT=8, padB=0;
         var chartW = svgW-padL-padR, chartH = svgH-padT-padB;
         var barCnt = barDataB.length, gap=2;
         var bw = Math.max(4, Math.floor((chartW - gap*(barCnt-1)) / barCnt));
-        var yMax2 = barMaxB * 1.1;
-        var yTicks2 = [0, Math.round(yMax2/2), Math.round(yMax2)];
+        // 動態 Y 軸起始點（讓成交量差異可視化，如同 K 線圖）
+        var yBase = Math.max(0, Math.floor(barMinB * 0.85));
+        var yTop  = Math.ceil(barMaxB  * 1.05);
+        var yRange = yTop - yBase || 1;
+        // Y 軸三刻度：底部、中間、頂部
+        var yTicks2 = [yBase, Math.round(yBase + yRange/2), yTop];
         function yLbl(v){ return v>=10000?(v/10000).toFixed(1)+'萬億':v>=1000?(v/1000).toFixed(1)+'千億':v+'億'; }
         function fmtDate(d){
           if(!d) return '';
-          if(d.length===7) return d.slice(3,5)+'/'+d.slice(5,7);
+          // TWSE FMTQIK: '113/04/30' (民國年/MM/DD)
+          if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);  // → '04/30'
+          // 7位無斜線: '1130430' → '04/30'
+          if(d.length===7 && /^\d{7}$/.test(d)) return d.slice(3,5)+'/'+d.slice(5,7);
+          // ISO: '2024-04-30' → '04/30'
           var m=d.match(/-(\d{2})-(\d{2})$/); return m?m[1]+'/'+m[2]:d.slice(-5);
         }
         var sg = '<svg width="100%" viewBox="0 0 360 90" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;display:block">';
@@ -6240,17 +6249,17 @@ async function loadMarketVolume(){
         var txtColor  = isDark2?'rgba(255,255,255,.45)':'rgba(0,0,0,.4)';
         // Y 軸刻度線 + 標籤
         yTicks2.forEach(function(tick){
-          var y = (padT + chartH*(1 - tick/yMax2)).toFixed(1);
+          var y = (padT + chartH*(1 - (tick-yBase)/yRange)).toFixed(1);
           sg += '<line x1="'+padL+'" y1="'+y+'" x2="'+(svgW-padR)+'" y2="'+y+'" stroke="'+gridColor+'" stroke-width="1"/>';
           sg += '<text x="'+(padL-4)+'" y="'+(parseFloat(y)+3.5)+'" text-anchor="end" font-size="9" fill="'+txtColor+'">'+yLbl(tick)+'</text>';
         });
         // 長條
         barDataB.forEach(function(v, i){
-          var bh  = yMax2>0 ? Math.max(2,(v/yMax2)*chartH) : 2;
+          var bh  = yRange>0 ? Math.max(2, ((v-yBase)/yRange)*chartH) : 2;
           var x   = (padL + i*(bw+gap)).toFixed(1);
           var y   = (padT + chartH - bh).toFixed(1);
           var isLast = i===barDataB.length-1;
-          var isHigh = v/barMaxB > 0.65;
+          var isHigh = yRange>0 && (v-yBase)/yRange > 0.65;
           var fill = isLast?'#00d4aa': isHigh?'#7c5cfc': (isDark2?'rgba(255,255,255,.22)':'rgba(0,0,0,.15)');
           var dateLabel = fmtDate((slice20[i]||{}).date||'');
           sg += '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bh.toFixed(1)+'" rx="2" fill="'+fill+'" data-val="'+v+'" data-date="'+dateLabel+'" style="cursor:pointer"/>';
@@ -6308,9 +6317,9 @@ async function loadMarketVolume(){
         // 日期格式：TWSE 民國年 1130401 → 04/01，或 ISO YYYY-MM-DD → MM/DD
         const fmtD = d => {
           if(!d) return '';
-          if(d.length===7) return d.slice(3,5)+'/'+d.slice(5,7);        // 民國年
-          return (d.match(/-(\d{2})-(\d{2})$/)||['','',''])[0]         // ISO
-                   .replace(/^-/,'').replace('-','/') || d.slice(-5);
+          if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);       // 113/04/30
+          if(d.length===7 && /^\d{7}$/.test(d)) return d.slice(3,5)+'/'+d.slice(5,7); // 1130430
+          const m = d.match(/-(\d{2})-(\d{2})$/); return m ? m[1]+'/'+m[2] : d.slice(-5);
         };
         const ds  = slice20.map(r=>fmtD(r.date||''));
         const mid = ds[Math.floor(ds.length/2)]||'';
@@ -6378,15 +6387,10 @@ function _estimateMktBreakdown(todayB, yesterB){
 
 // 方案B：示意柱狀圖（API全失效時）
 function renderMktBarsStatic(){
-  const v=[18,32,48,55,62,44,30,28,38,52,72,68,60,55,70,85,78,90,100,88];
-  const c=document.getElementById('mktBars'); if(!c) return;
+  // 方案B（MIS）：只有今日資料，顯示說明文字
+  const el = document.getElementById('mktBars'); if(!el) return;
   const isDark = document.documentElement.getAttribute('data-theme')!=='light';
-  c.innerHTML='';
-  v.forEach((n,i)=>{
-    const d=document.createElement('div'); d.className='mb';
-    d.style.background=i===v.length-1?'#00d4aa':n>65?'#7c5cfc':isDark?'rgba(255,255,255,.18)':'rgba(0,0,0,.13)';
-    d.style.height=Math.round(n/100*60)+'px'; c.appendChild(d);
-  });
+  el.innerHTML = '<div style="width:100%;padding:12px 0;text-align:center;font-size:11px;color:var(--text3)">盤中即時模式：歷史圖表無法顯示</div>';
 }
 
 function renderMktBars(){ renderMktBarsStatic(); }
