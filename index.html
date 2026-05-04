@@ -87,7 +87,7 @@
 <!-- ═══ PAGE: 總覽 ═══ -->
 <div class="page active" id="page-home">
   <!-- 加權指數走勢圖 + 成交量 -->
-  <div class="chart-card" style="margin:0 0 14px">
+  <div class="chart-card" style="margin:12px 0 14px">
     <!-- 標題列 -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
       <div>
@@ -6175,7 +6175,7 @@ async function loadMarketVolume(){
 
   try{
     // ── 呼叫 Worker /marketvol ─────────────────────────
-    const res = await fetchWithTimeout(`${API}/marketvol`, 10000);
+    const res = await fetchWithTimeout(`${API}/marketvol`, 15000);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const json = await res.json();
 
@@ -15792,20 +15792,29 @@ function updatePulse(instData, indexData, txfData){
 
   // 判斷市場情緒
   let title='', body='', chips=[];
+  // 依資料來源判斷評論語氣（盤中 vs 收盤後）
+  const inSession = typeof _isTradingHour === 'function' && _isTradingHour();
+  const timeDesc  = inSession ? '今日盤中' : '最近一交易日';
+
   if(idxChg >= 2){
-    title='🚀 大盤強勢大漲'; body='加權指數今日大幅上揚，多頭氣氛濃厚。';
+    title='🚀 大盤強勢大漲';
+    body=`加權指數${timeDesc}大幅上揚，多頭氣氛濃厚。`;
     chips = [['偏多','up'],['強勢','up']];
   } else if(idxChg >= 0.5){
-    title='📈 指數小幅上漲'; body='市場溫和走高，整體趨向偏多。';
+    title='📈 指數小幅上漲';
+    body=`市場${timeDesc}溫和走高，整體趨向偏多。`;
     chips = [['偏多','up']];
   } else if(idxChg <= -2){
-    title='⚠️ 大盤明顯下跌'; body='加權指數今日大幅下跌，市場觀望情緒升溫。';
+    title='⚠️ 大盤明顯下跌';
+    body=`加權指數${timeDesc}大幅下跌，市場觀望情緒升溫。`;
     chips = [['偏空','dn'],['謹慎','dn']];
   } else if(idxChg <= -0.5){
-    title='📉 指數小幅下跌'; body='市場偏弱，注意風險控管。';
+    title='📉 指數小幅下跌';
+    body=`市場${timeDesc}偏弱，注意風險控管。`;
     chips = [['偏空','dn']];
   } else {
-    title='🔄 指數盤整'; body='市場觀望，成交量偏低，待方向確認。';
+    title='🔄 指數盤整';
+    body=`${timeDesc}市場觀望，成交量偏低，待方向確認。`;
     chips = [['中性','nt']];
   }
   // 法人動向說明
@@ -15813,7 +15822,15 @@ function updatePulse(instData, indexData, txfData){
   else if(foreign < 0) chips.push(['外資賣超','dn']);
 
   if(titleEl) titleEl.textContent = title;
-  if(bodyEl)  bodyEl.textContent  = body;
+  // 加入資料日期說明（避免誤認為今日即時）
+  const dataDate = indexData?.date || '';
+  const isToday  = dataDate && dataDate.replace(/-/g,'') === new Date(new Date()
+    .toLocaleString('en-US',{timeZone:'Asia/Taipei'}))
+    .toISOString().slice(0,10).replace(/-/g,'');
+  const dateNote = dataDate
+    ? `（${dataDate.slice(5)} ${isToday?'今日':'前日'}收盤數據）`
+    : '';
+  if(bodyEl)  bodyEl.textContent  = body + dateNote;
   if(chipsEl) chipsEl.innerHTML   = chips.map(([t,c])=>`<span class="chip ${c}">${t}</span>`).join('');
 }
 
@@ -15822,10 +15839,12 @@ async function refreshPulse(){
   clearTimeout(_pulseTimer);
   try{
     const [instData, indexData, txfData] = await Promise.all([
-      loadInstitutional().catch(()=>null),
-      fmTWSEIndex().catch(()=>null),
-      fetchTxfAfterHours().catch(()=>null),
+      loadInstitutional().catch(e=>{console.warn('[Pulse] inst fail:',e.message);return null;}),
+      fmTWSEIndex().catch(e=>{console.warn('[Pulse] taiex fail:',e.message);return null;}),
+      fetchTxfAfterHours().catch(e=>{console.warn('[Pulse] txf fail:',e.message);return null;}),
     ]);
+    console.log('[Pulse] data:', {inst:!!instData, index:!!indexData, txf:!!txfData,
+      idxChg:indexData?.changePct, idxDate:indexData?.date});
     updatePulse(instData, indexData, txfData);
 
     // 市場進場訊號（功能四）
@@ -15852,6 +15871,15 @@ async function refreshPulse(){
     _pulseTimer = setTimeout(refreshPulse, inSess ? 5*60*1000 : 30*60*1000);
   }catch(e){
     console.error('[refreshPulse]', e.message);
+    // 失敗時更新 UI，避免一直顯示「資料載入中…」
+    const titleEl = document.getElementById('pulseTitle');
+    const chipsEl = document.getElementById('pulseChips');
+    if(titleEl && titleEl.textContent === '資料載入中…'){
+      titleEl.textContent = '⚠️ 大盤資料暫時無法取得';
+    }
+    if(chipsEl && chipsEl.innerHTML.includes('載入中')){
+      chipsEl.innerHTML = '<span class="chip nt">稍後重試</span>';
+    }
     _pulseTimer = setTimeout(refreshPulse, 10*60*1000);
   }
 }
