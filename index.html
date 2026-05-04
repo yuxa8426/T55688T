@@ -86,6 +86,80 @@
 
 <!-- ═══ PAGE: 總覽 ═══ -->
 <div class="page active" id="page-home">
+  <!-- 加權指數走勢圖 + 成交量 -->
+  <div class="chart-card" style="margin:0 0 14px">
+    <!-- 標題列 -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:15px;font-weight:800">加權指數</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
+          <span id="taiexChartPrice" style="font-size:22px;font-weight:800">—</span>
+          <span id="taiexChartChg" style="font-size:13px;font-weight:700">—</span>
+          <div id="taiexChartDate" style="font-size:10px;color:var(--text3);margin-top:3px">—</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px" id="taiexPeriodTabs">
+        <button onclick="_taiexTab('1D',this)" class="tab active" style="font-size:11px;padding:4px 8px">今日</button>
+        <button onclick="_taiexTab('1M',this)" class="tab" style="font-size:11px;padding:4px 8px">月</button>
+        <button onclick="_taiexTab('3M',this)" class="tab" style="font-size:11px;padding:4px 8px">季</button>
+      </div>
+    </div>
+
+    <!-- 走勢圖 SVG -->
+    <div style="position:relative">
+      <svg id="taiexChartArea" width="100%" height="155"
+           viewBox="0 0 400 155" preserveAspectRatio="none"
+           style="display:block;overflow:visible">
+        <defs>
+          <linearGradient id="taiexGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- 格線 -->
+        <line x1="0" x2="400" y1="52" y2="52" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <line x1="0" x2="400" y1="104" y2="104" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        <!-- 填充 + 折線（JS 填入）-->
+        <path id="taiexFill" fill="url(#taiexGrad)"/>
+        <path id="taiexLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
+        <circle id="taiexDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
+        <!-- tooltip 準線 -->
+        <line id="taiexTipLine" y1="0" y2="155" stroke="rgba(255,255,255,.3)"
+              stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
+        <circle id="taiexTipDot" r="4" fill="#ff4c6a" style="display:none"/>
+      </svg>
+      <!-- HTML tooltip -->
+      <div id="taiexHtmlTip" style="display:none;position:absolute;pointer-events:none;z-index:10;
+           background:rgba(12,12,24,.96);border:1.5px solid #ff4c6a;border-radius:8px;
+           padding:5px 10px;font-size:11px;color:#fff;white-space:nowrap;font-weight:700"></div>
+      <!-- 載入中 -->
+      <div id="taiexChartLoading" style="position:absolute;inset:0;display:flex;align-items:center;
+           justify-content:center;color:var(--text3);font-size:12px;background:transparent">
+        載入中…
+      </div>
+    </div>
+
+    <!-- 時間軸 -->
+    <div id="taiexTimeAxis" style="display:flex;justify-content:space-between;
+         font-size:9px;color:var(--text3);margin-top:3px;padding:0 2px"></div>
+
+    <!-- 成交量 -->
+    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px">成交量</span>
+        <span id="taiexVolLabel" style="font-size:12px;font-weight:700">—</span>
+      </div>
+      <div id="taiexVolBars" style="display:flex;align-items:flex-end;gap:2px;height:40px"></div>
+      <div id="taiexVolAxis" style="display:flex;justify-content:space-between;
+           font-size:9px;color:var(--text3);margin-top:2px"></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <span id="taiexUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+      <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
+    </div>
+  </div>
+
   <!-- 累積戰績橫幅（有資料才顯示）-->
   <div id="battleBanner" style="display:none;margin:12px 16px 0;padding:10px 14px;background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,170,.1));border:1px solid rgba(124,92,252,.3);border-radius:12px;cursor:pointer" onclick="switchPage('watchlist')">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -146,79 +220,6 @@
         <div style="font-size:9px;color:rgba(0,212,170,.6);margin-bottom:2px">投信</div>
         <div style="font-size:13px;font-weight:700" id="pmTrust">—</div>
       </div>
-    </div>
-  </div>
-  <!-- 加權指數走勢圖 + 成交量 -->
-  <div class="chart-card" style="margin-bottom:14px">
-    <!-- 標題列 -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-      <div>
-        <div style="font-size:15px;font-weight:800">加權指數</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
-          <span id="taiexChartPrice" style="font-size:22px;font-weight:800">—</span>
-          <span id="taiexChartChg" style="font-size:13px;font-weight:700">—</span>
-          <div id="taiexChartDate" style="font-size:10px;color:var(--text3);margin-top:3px">—</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:4px" id="taiexPeriodTabs">
-        <button onclick="_taiexTab('1D',this)" class="tab active" style="font-size:11px;padding:4px 8px">今日</button>
-        <button onclick="_taiexTab('1M',this)" class="tab" style="font-size:11px;padding:4px 8px">月</button>
-        <button onclick="_taiexTab('3M',this)" class="tab" style="font-size:11px;padding:4px 8px">季</button>
-      </div>
-    </div>
-
-    <!-- 走勢圖 SVG -->
-    <div style="position:relative">
-      <svg id="taiexChartArea" width="100%" height="120"
-           viewBox="0 0 400 120" preserveAspectRatio="none"
-           style="display:block;overflow:visible">
-        <defs>
-          <linearGradient id="taiexGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#ff4c6a" stop-opacity=".25"/>
-            <stop offset="100%" stop-color="#ff4c6a" stop-opacity="0"/>
-          </linearGradient>
-        </defs>
-        <!-- 格線 -->
-        <line x1="0" x2="400" y1="40" y2="40" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
-        <line x1="0" x2="400" y1="80" y2="80" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
-        <!-- 填充 + 折線（JS 填入）-->
-        <path id="taiexFill" fill="url(#taiexGrad)"/>
-        <path id="taiexLine" fill="none" stroke="#ff4c6a" stroke-width="2" stroke-linejoin="round"/>
-        <circle id="taiexDot" r="4" fill="#ff4c6a" stroke="rgba(255,255,255,.3)" stroke-width="1.5"/>
-        <!-- tooltip 準線 -->
-        <line id="taiexTipLine" y1="0" y2="120" stroke="rgba(255,255,255,.3)"
-              stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
-        <circle id="taiexTipDot" r="4" fill="#ff4c6a" style="display:none"/>
-      </svg>
-      <!-- HTML tooltip -->
-      <div id="taiexHtmlTip" style="display:none;position:absolute;pointer-events:none;z-index:10;
-           background:rgba(12,12,24,.96);border:1.5px solid #ff4c6a;border-radius:8px;
-           padding:5px 10px;font-size:11px;color:#fff;white-space:nowrap;font-weight:700"></div>
-      <!-- 載入中 -->
-      <div id="taiexChartLoading" style="position:absolute;inset:0;display:flex;align-items:center;
-           justify-content:center;color:var(--text3);font-size:12px;background:transparent">
-        載入中…
-      </div>
-    </div>
-
-    <!-- 時間軸 -->
-    <div id="taiexTimeAxis" style="display:flex;justify-content:space-between;
-         font-size:9px;color:var(--text3);margin-top:3px;padding:0 2px"></div>
-
-    <!-- 成交量 -->
-    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px">成交量</span>
-        <span id="taiexVolLabel" style="font-size:12px;font-weight:700">—</span>
-      </div>
-      <div id="taiexVolBars" style="display:flex;align-items:flex-end;gap:2px;height:40px"></div>
-      <div id="taiexVolAxis" style="display:flex;justify-content:space-between;
-           font-size:9px;color:var(--text3);margin-top:2px"></div>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-      <span id="taiexUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
-      <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
     </div>
   </div>
 
@@ -1301,8 +1302,15 @@
 
   <!-- 個股消息（直接關聯當前個股）-->
 
-
-
+  <!-- ══ 個股相關新聞連結 ══ -->
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <h2>📰 個股相關新聞</h2>
+    <span id="stockNewsNameTag" style="font-size:11px;color:var(--text3)">台積電</span>
+  </div>
+  <div id="stockNewsLinks" style="margin:0 16px 20px;display:flex;flex-direction:column;gap:8px">
+    <!-- JS 動態產生 -->
+    <div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">載入中…</div>
+  </div>
 
 <!-- ═══ PAGE: 探索 ═══ -->
 </div>
@@ -2335,6 +2343,75 @@
 //    const API = 'https://xxx.workers.dev';
 
 const API = 'https://stockai-proxy.yuxa8426.workers.dev';  // Cloudflare Worker 代理
+
+// ════════════════════════════════════════════════════════
+// 個股相關新聞外部連結
+// ════════════════════════════════════════════════════════
+function updateStockNewsLinks(stockId, stockName){
+  const el      = document.getElementById('stockNewsLinks');
+  const nameTag = document.getElementById('stockNewsNameTag');
+  if(!el) return;
+
+  // 更新標題的股票名稱
+  if(nameTag) nameTag.textContent = stockName || stockId;
+
+  // 搜尋關鍵字（去掉 .TW）
+  const id   = (stockId||'').replace('.TW','').replace('.TWO','');
+  const name = stockName || id;
+  const q    = encodeURIComponent(name + ' ' + id);
+  const qName= encodeURIComponent(name);
+
+  const sources = [
+    {
+      name:  'Yahoo Finance 台灣',
+      icon:  '🔍',
+      desc:  '即時股價、新聞、財報',
+      color: '#5f70d4',
+      url:   `https://tw.finance.yahoo.com/quote/${id}.TW`,
+    },
+    {
+      name:  'Anue 鉅亨',
+      icon:  '📊',
+      desc:  '台股深度分析、法人報告',
+      color: '#e06c1a',
+      url:   `https://www.cnyes.com/twstock/${id}`,
+    },
+    {
+      name:  'Google 新聞',
+      icon:  '📰',
+      desc:  `搜尋「${name}」最新報導`,
+      color: '#4285f4',
+      url:   `https://news.google.com/search?q=${q}&hl=zh-TW&gl=TW`,
+    },
+    {
+      name:  'MoneyDJ 理財網',
+      icon:  '💹',
+      desc:  '技術分析、籌碼資訊',
+      color: '#2e7d32',
+      url:   `https://www.moneydj.com/ETF/X/Basic/Basic0001.xdjhtm?etfid=${id}.TW`,
+    },
+  ];
+
+  el.innerHTML = sources.map(s => `
+    <a href="${s.url}" target="_blank" rel="noopener noreferrer"
+       style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+              background:var(--card);border:1px solid var(--border);border-radius:12px;
+              text-decoration:none;color:var(--text);transition:border-color .15s;
+              -webkit-tap-highlight-color:transparent"
+       onmouseover="this.style.borderColor='${s.color}40'"
+       onmouseout="this.style.borderColor='var(--border)'">
+      <div style="width:36px;height:36px;border-radius:10px;background:${s.color}18;
+                  display:flex;align-items:center;justify-content:center;
+                  font-size:18px;flex-shrink:0">${s.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${s.name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:1px;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.desc}</div>
+      </div>
+      <div style="color:var(--text3);font-size:14px;flex-shrink:0">↗</div>
+    </a>`
+  ).join('');
+}
 
 // ── 全域常數 ──────────────────────────────────────────────
 const MY_WL_KEY  = 'stockai_mywatchlist';  // 自選股 localStorage key
@@ -3514,6 +3591,7 @@ function scheduleAutoRefresh(){
               // 重新渲染標頭
               renderStockHeader(name, currentTicker, _fbLast,
                 quoteData.changePct, quoteData.changePct>=0, quoteData.date);
+              updateStockNewsLinks(currentTicker.replace('.TW',''), name);
                           }
             drawChart(_fb5, quoteData.changePct>=0?'#ff4c6a':'#00d4aa', _fbd);
           }
@@ -15953,6 +16031,7 @@ window.addEventListener('load', async ()=>{
 
   // 第 1 波：主圖表（台積電）
   await selectStock(null,'台積電','2330.TW');
+  updateStockNewsLinks('2330', '台積電');  // 初始新聞連結
 
   // 第 3 波：先行指標 + 市場脈動 + VIX + 指數 + 加權指數圖（全部同時非阻塞發出）
   refreshPulse();
