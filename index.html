@@ -86,6 +86,28 @@
 
 <!-- ═══ PAGE: 總覽 ═══ -->
 <div class="page active" id="page-home">
+
+  <!-- 累積戰績橫幅（有資料才顯示）-->
+  <div id="battleBanner" style="display:none;margin:12px 16px 0;padding:10px 14px;background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,170,.1));border:1px solid rgba(124,92,252,.3);border-radius:12px;cursor:pointer" onclick="switchPage('watchlist')">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px">📊</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--purple)">AI 策略實測戰績</div>
+          <div style="font-size:12px;color:var(--text2)" id="battleBannerText">累積中…</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:22px;font-weight:900" id="battleBannerWR">—</div>
+        <div style="font-size:9px;color:var(--text3)">整體勝率</div>
+      </div>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:4px" id="battleBannerBars"></div>
+  </div>
+  <div class="header">
+    <div><h1>股析</h1><p id="hdr-sub">載入中…</p></div>
+  </div>
+
   <!-- 加權指數走勢圖 + 成交量 -->
   <div class="chart-card" style="margin:12px 0 14px">
     <!-- 標題列 -->
@@ -159,26 +181,6 @@
       <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
     </div>
   </div>
-
-  <!-- 累積戰績橫幅（有資料才顯示）-->
-  <div id="battleBanner" style="display:none;margin:12px 16px 0;padding:10px 14px;background:linear-gradient(135deg,rgba(124,92,252,.15),rgba(0,212,170,.1));border:1px solid rgba(124,92,252,.3);border-radius:12px;cursor:pointer" onclick="switchPage('watchlist')">
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:18px">📊</span>
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--purple)">AI 策略實測戰績</div>
-          <div style="font-size:12px;color:var(--text2)" id="battleBannerText">累積中…</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:22px;font-weight:900" id="battleBannerWR">—</div>
-        <div style="font-size:9px;color:var(--text3)">整體勝率</div>
-      </div>
-    </div>
-    <div style="margin-top:6px;display:flex;gap:4px" id="battleBannerBars"></div>
-  </div>
-  <div class="header">
-    <div><h1>股析</h1><p id="hdr-sub">載入中…</p></div>
     <div class="avatar" id="headerAvatar">股</div>
   </div>
   <!-- 常駐免責聲明 -->
@@ -640,7 +642,7 @@
 </div>
 <div class="page" id="page-stock">
   <!-- 個股搜尋欄（fixed 固定頂部，完全不被遮擋）-->
-  <div id="stockSearchBar" style="position:fixed;top:0;left:50%;
+  <div id="stockSearchBar" style="display:none;position:fixed;top:0;left:50%;
        transform:translateX(-50%);width:100%;max-width:480px;
        z-index:200;background:var(--bg);
        padding:max(10px,env(safe-area-inset-top,10px)) 16px 8px;
@@ -3376,6 +3378,10 @@ function switchPage(n){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   // 個股頁特殊處理：用同一個 nav-btn nb-stock 對應
   const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
+  // stockSearchBar：個股頁才顯示，其他頁面隱藏
+  const _sb = document.getElementById('stockSearchBar');
+  if(_sb) _sb.style.display = (n==='stock') ? 'block' : 'none';
+
   // 切換到個股頁時初始化自選快捷列 + 同步清單名稱
   if(n==='stock'){   setTimeout(()=>{ _renderStockQuickAccess(); _syncWLNameDisplay(); }, 50); }
   if(n==='profile'){ setTimeout(_refreshPortfolio, 100); }
