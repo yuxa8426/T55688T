@@ -3992,7 +3992,7 @@ async function fetchIntraday(stockId){
   }
 
   // ── 來源2：allorigins proxy 備援 ─────────────────────
-  try{
+  if(false)   try{
     const res  = await fetchWithTimeout(
       `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`, 6000);
     const wrap = await res.json();
@@ -6192,8 +6192,8 @@ async function loadMarketVolume(){
 
       // TradeValue 單位：元 → 億
       const toB    = v => Math.round((v||0) / 1e8);
-      const todayB = toB(latest.value);
-      const yesterB= toB(prev.value);
+      const todayB = toB(latest?.value);
+      const yesterB= toB(prev?.value);
       const slice20= rows.slice(-20);
       const avgB   = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0) / slice20.length / 1e8);
 
@@ -16092,7 +16092,11 @@ window.addEventListener('load', async ()=>{
   scheduleAutoRefresh();
 });
 
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(()=>{});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js', {scope: '/'})
+    .then(reg => { if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); })
+    .catch(e => console.warn('[SW] 註冊失敗:', e.message));
+}
 
 // ── PWA 安裝提示（Android Chrome）────────────────────────
 (function(){
