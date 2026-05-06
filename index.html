@@ -6481,6 +6481,27 @@ async function refreshMktVolAI(){
 }
 
 // 相容舊呼叫
+// 上市/上櫃/興櫃比例估算（無分項 API 時使用）
+function _estimateMktBreakdown(todayB, yesterB){
+  const tseB  = Math.round(todayB * 0.75);
+  const otcB  = Math.round(todayB * 0.20);
+  const emgB  = Math.round(todayB * 0.05);
+  const setChg = (id, now, prev) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const pct = prev>0 ? (now-prev)/prev*100 : 0;
+    el.textContent = (pct>=0?'+':'')+pct.toFixed(1)+'%';
+    el.className = 'bdc '+(pct>=0?'up':'dn');
+  };
+  const s = id => document.getElementById(id);
+  if(s('mktVolTSE'))  s('mktVolTSE').textContent  = tseB+'億';
+  if(s('mktVolOTC'))  s('mktVolOTC').textContent  = otcB+'億';
+  if(s('mktVolEMG'))  s('mktVolEMG').textContent  = emgB+'億';
+  setChg('mktVolTSEChg', tseB, Math.round(yesterB*0.75));
+  setChg('mktVolOTCChg', otcB, Math.round(yesterB*0.20));
+  setChg('mktVolEMGChg', emgB, Math.round(yesterB*0.05));
+}
+
 function renderMktBarsStatic(){ _renderMktVolSVG([],0); }
 function renderMktBars(){ renderMktBarsStatic(); }
 
