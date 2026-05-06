@@ -6198,10 +6198,10 @@ async function loadMarketVolume(){
   try{
     let rows=[], source='';
 
-    // 優先用 Worker 回傳（若≥14筆才用，否則用TWSE直抓）
+    // 優先用 Worker 回傳
     if(volRes?.ok){
       const json=await volRes.json();
-      if(json.source==='TWSE_FMTQIK'&&json.rows?.length>=14){
+      if(json.source==='TWSE_FMTQIK'&&json.rows?.length>=1){
         rows=json.rows; source='worker';
       } else if(json.source==='TWSE_MIS'&&json.today){
         // 盤中：用TWSE直抓歷史 + 今日盤中值
@@ -6269,52 +6269,57 @@ async function loadMarketVolume(){
   }
 }
 
-// ── 直接抓 TWSE FMTQIK 確保≥20筆（本月+上月合併）──────
+// ── 透過 Worker proxy 抓 TWSE FMTQIK 多月資料 ──────────
 async function _fetchTWSEHistory(){
-  function fmtDate(d){ // Date → YYYYMMDD
+  function fmtYMD(d){
     return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
   }
   function parseRows(data){
-    if(!data?.data) return [];
+    if(!data?.data||!Array.isArray(data.data)) return [];
+    // FMTQIK 欄位：[0]民國日期 [1]成交股數 [2]成交筆數 [3]成交金額(元) [4]加權指數 [5]漲跌
     return data.data.map(r=>{
-      // r[0]=民國日期 "113/05/05", r[2]=成交股數, r[4]=成交金額(元)
-      const raw=r[0]||'';
-      // 轉成 YYYYMMDD 格式存 date
-      const dateStr = raw; // 保留原格式，fmtD 函式會處理
-      const val=parseFloat((r[4]||'0').replace(/,/g,''))||0;
-      return {date:dateStr, value:val};
+      const val=parseInt((r[3]||'0').replace(/,/g,''))||0;  // ← r[3] 成交金額
+      return {date:r[0]||'', value:val};
     }).filter(r=>r.value>0);
   }
   try{
     const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const thisMonth=fmtDate(tw);
-    // 上月
-    const lastMonthD=new Date(tw.getFullYear(), tw.getMonth()-1, 1);
-    const lastMonth=fmtDate(lastMonthD);
+    const dates=[
+      new Date(tw.getFullYear(), tw.getMonth()-2, 1),
+      new Date(tw.getFullYear(), tw.getMonth()-1, 1),
+      tw,
+    ].map(fmtYMD);
 
-    const [r1,r2]=await Promise.all([
-      fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${thisMonth}`,
-        {headers:{'Referer':'https://www.twse.com.tw/'}}).catch(()=>null),
-      fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${lastMonth}`,
-        {headers:{'Referer':'https://www.twse.com.tw/'}}).catch(()=>null),
-    ]);
-
+    // 透過 Worker proxy 避免 CORS
+    const base=API.replace(/\/$/,'');
+    const fetches=dates.map(d=>
+      fetchWithTimeout(`${base}/twse?path=rwd/zh/afterTrading/FMTQIK&response=json&date=${d}`,10000)
+        .then(r=>r.ok?r.json():null).catch(()=>null)
+    );
+    const results=await Promise.all(fetches);
     let rows=[];
-    if(r2?.ok){ const d=await r2.json(); rows=rows.concat(parseRows(d)); }
-    if(r1?.ok){ const d=await r1.json(); rows=rows.concat(parseRows(d)); }
+    results.forEach(d=>{if(d) rows=rows.concat(parseRows(d));});
 
-    // 若還不夠，再抓上上月
-    if(rows.length<20){
-      const m2=new Date(tw.getFullYear(), tw.getMonth()-2, 1);
-      const r3=await fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${fmtDate(m2)}`,
-        {headers:{'Referer':'https://www.twse.com.tw/'}}).catch(()=>null);
-      if(r3?.ok){ const d=await r3.json(); rows=[...parseRows(d),...rows]; }
+    // 若 Worker proxy /twse 路由不存在（404），直接抓 TWSE（備援）
+    if(!rows.length){
+      console.warn('[MktVol] Worker proxy failed, fallback to direct TWSE');
+      const direct = await Promise.all(dates.map(d=>
+        fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${d}`,
+          {headers:{'User-Agent':'Mozilla/5.0'}})
+          .then(r=>r.ok?r.json():null).catch(()=>null)
+      ));
+      direct.forEach(d=>{if(d) rows=rows.concat(parseRows(d));});
     }
 
-    console.log(`[MktVol] TWSE直抓 ${rows.length} 筆`);
-    return rows.length?rows:null;
+    // 去重並排序
+    const merged={};
+    rows.forEach(r=>{if(r.date) merged[r.date]=r;});
+    rows=Object.values(merged).sort((a,b)=>a.date>b.date?1:-1);
+
+    console.log(`[MktVol] FMTQIK ${rows.length} 筆`);
+    return rows.length>=3?rows:null;
   }catch(e){
-    console.warn('[MktVol] TWSE直抓失敗:',e.message);
+    console.warn('[MktVol] _fetchTWSEHistory:',e.message);
     return null;
   }
 }
@@ -6467,6 +6472,12 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
   if(!box) return;
   if(_mktAICache&&Date.now()-_mktAICache.ts<5*60*1000&&_mktAICache.todayB===todayB){box.innerHTML=_mktAICache.html;return;}
   if(_mktAIRunning) return;
+  // 未開市時 todayB 用最後一筆交易日資料
+  if(!todayB||todayB<=0){
+    const lastVal=rows?.length?Math.round((rows[rows.length-1].value||0)/1e8):0;
+    if(!lastVal){box.innerHTML='<span style="color:var(--text3)">⚠️ 成交量資料不足</span>';return;}
+    todayB=lastVal;
+  }
   _mktAIRunning=true;
   box.innerHTML='<span style="color:var(--text3)">⏳ AI 分析中…</span>';
   try{
