@@ -6194,29 +6194,77 @@ async function loadMarketVolume(){
     _fetchMarketTurnover().catch(()=>null),
   ]);
 
-  let rows=[],todayB=0,yesterB=0,avgB=0;
   try{
     if(!volRes?.ok) throw new Error('HTTP '+(volRes?.status||'err'));
     const json=await volRes.json();
+
     if(json.source==='TWSE_FMTQIK'&&json.rows?.length>=1){
+      // ── FMTQIK 歷史資料（Worker 已排序，直接用）──────
       if(noteEl) noteEl.style.display='none';
-      const sorted=[...json.rows].sort((a,b)=>a.date>b.date?1:-1);
-      rows=sorted.filter(r=>(r.value||0)>0).slice(-20);
-      todayB=rows.length?Math.round(rows[rows.length-1].value/1e8):0;
-      yesterB=rows.length>1?Math.round(rows[rows.length-2].value/1e8):0;
-      avgB=rows.length?Math.round(rows.reduce((s,r)=>s+r.value,0)/rows.length/1e8):0;
+      const rows   = json.rows;               // Worker 回傳的 rows 已按日期排序
+      const latest = rows[rows.length-1];
+      const prev   = rows[rows.length-2];
+      const slice20= rows.slice(-20);
+
+      // value 單位：元 → 億
+      const toB   = v=>Math.round((v||0)/1e8);
+      const todayB = toB(latest?.value);
+      const yesterB= toB(prev?.value);
+      const avgB   = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
+      const vsYest = yesterB>0?(todayB-yesterB)/yesterB*100:0;
+      const vsAvg  = avgB>0?(todayB-avgB)/avgB*100:0;
+      const ratio  = avgB>0?todayB/avgB:1;
+
+      if(bigEl) bigEl.innerHTML=`${todayB.toLocaleString()} <span>億元</span>`;
+      sh('mktVolCompare',
+        `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
+        +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
+      se('mktVolYest',yesterB+'億');
+      se('mktVolAvg',avgB+'億');
+
+      if(chipEl){
+        if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
+        else if(ratio>=1.1){chipEl.textContent='放量';chipEl.className='chip up';}
+        else if(ratio<=0.7){chipEl.textContent='縮量';chipEl.className='chip dn';}
+        else{chipEl.textContent='正常';chipEl.className='chip';}
+      }
+
+      // SVG 20日柱狀圖
+      _renderMktVolSVG(slice20, avgB);
+
+      // 換手率
+      _setTurnoverDOM(turnoverData);
+
+      // 上市/上櫃/興櫃估算
+      _estimateMktBreakdown(todayB, yesterB);
+
+      // 時間戳
+      se('mktVolUpdateTime',`${latest.date||''} · ${nowStr}`);
+
+      // AI 分析（非同步，不阻塞）
+      _runMktVolAI(slice20, todayB, yesterB, avgB, ratio, turnoverData);
+
     } else if(json.source==='TWSE_MIS'&&json.today){
-      todayB=Math.round((json.today.value||0)/10000);
+      // ── MIS 盤中即時 ─────────────────────────────────
+      if(noteEl) noteEl.style.display='none';
+      const t=json.today;
+      const todayB=Math.round((t.value||0)/10000);
       if(bigEl) bigEl.innerHTML=`${todayB>0?todayB.toLocaleString():'—'} <span>億元</span>`;
       sh('mktVolCompare','<span style="color:var(--text3)">盤中即時（截至 '+nowStr+'）</span>');
       if(chipEl){chipEl.textContent='盤中';chipEl.className='chip';}
-      se('mktVolUpdateTime','盤中 · '+nowStr);
+      se('mktVolUpdateTime',`盤中 · ${nowStr}`);
       se('mktVolYest','—億');se('mktVolAvg','—億');
       _setTurnoverDOM(turnoverData);
-      _renderMktVolSVG([],0);
       _estimateMktBreakdown(todayB,0);
+      _renderMktVolSVG([],0);
       return;
-    } else { throw new Error('unknown source'); }
+
+    } else {
+      console.warn('[MktVol] unknown source:',json?.source,JSON.stringify(json)?.slice(0,100));
+      if(noteEl){noteEl.style.display='block';noteEl.textContent='⚠️ 成交量資料格式異常';}
+      if(bigEl) bigEl.innerHTML='— <span>億元</span>';
+    }
+
   }catch(e){
     console.warn('[MktVol]',e.message);
     if(noteEl) noteEl.style.display='block';
@@ -6225,68 +6273,38 @@ async function loadMarketVolume(){
     if(chipEl){chipEl.textContent='—';chipEl.className='chip';}
     _renderMktVolSVG([],0);
     _setTurnoverDOM(turnoverData);
-    return;
   }
-
-  const vsYest=yesterB>0?(todayB-yesterB)/yesterB*100:0;
-  const vsAvg=avgB>0?(todayB-avgB)/avgB*100:0;
-  const ratio=avgB>0?todayB/avgB:1;
-
-  if(chipEl){
-    if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
-    else if(ratio>=1.1){chipEl.textContent='放量';chipEl.className='chip up';}
-    else if(ratio<=0.7){chipEl.textContent='縮量';chipEl.className='chip dn';}
-    else{chipEl.textContent='正常';chipEl.className='chip';}
-  }
-  if(bigEl) bigEl.innerHTML=`${todayB.toLocaleString()} <span>億元</span>`;
-  sh('mktVolCompare',
-    `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
-    +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
-  se('mktVolYest',yesterB+'億');
-  se('mktVolAvg',avgB+'億');
-
-  function fmtD(d){
-    if(!d) return '';
-    if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);
-    const m=d.match(/-(\d{2})-(\d{2})$/);return m?m[1]+'/'+m[2]:d.slice(-5);
-  }
-  const rowEl=document.getElementById('mktVolTimeRow');
-  if(rowEl&&rows.length){
-    const ds=rows.map(r=>fmtD(r.date||''));
-    const n=ds.length;
-    const picks=[0,Math.floor(n/4),Math.floor(n/2),Math.floor(n*3/4),n-1];
-    rowEl.innerHTML=picks.map(i=>`<span>${ds[Math.min(i,n-1)]||''}</span>`).join('');
-  }
-  _estimateMktBreakdown(todayB,yesterB);
-  se('mktVolUpdateTime',`${rows[rows.length-1]?.date||''} · ${nowStr}`);
-  _renderMktVolSVG(rows,avgB);
-  _setTurnoverDOM(turnoverData);
-  // AI分析（非同步，不阻塞）
-  _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData);
 }
 
-// ── SVG 20天成交量圖（動態Y軸刻度）────────────────────────
+// ── SVG 20日成交量圖（動態Y軸，保留原版邏輯）────────────
 function _renderMktVolSVG(rows,avgB){
   const barEl=document.getElementById('mktBars');
   if(!barEl) return;
-  if(!rows.length){
-    barEl.innerHTML='<div style="width:100%;text-align:center;padding:20px 0;font-size:11px;color:var(--text3)">暫無資料</div>';
+  if(!rows||!rows.length){
+    barEl.innerHTML='<div style="width:100%;padding:12px 0;text-align:center;font-size:11px;color:var(--text3)">盤中即時模式：歷史圖表無法顯示</div>';
+    const rowEl=document.getElementById('mktVolTimeRow');
+    if(rowEl) rowEl.innerHTML='<span>—</span><span>—</span><span>—</span><span>—</span><span>—</span>';
     return;
   }
   const isDark=document.documentElement.getAttribute('data-theme')!=='light';
-  const vals=rows.map(r=>Math.round((r.value||0)/1e8));
-  const valid=vals.filter(v=>v>0);
-  const vMax=valid.length?Math.max(...valid):1;
-  const vMin=valid.length?Math.min(...valid):0;
-  const n=vals.length;
-  const svgW=380,svgH=105,padL=52,padR=8,padT=8,padB=2;
-  const cW=svgW-padL-padR,cH=svgH-padT-padB;
-  const gap=n>15?1:2;
-  const bw=Math.max(3,Math.floor((cW-gap*(n-1))/n));
-  const yBase=vMin>0?Math.floor(vMin*0.88):0;
-  const yTop=Math.ceil(vMax*1.06);
-  const yRng=yTop-yBase||1;
-  const ticks=[yBase,Math.round(yBase+yRng*0.5),yTop];
+
+  // value 單位：元 → 億（與 Worker 原始格式一致）
+  const barDataB=rows.map(r=>Math.round((r.value||0)/1e8));
+  const validB=barDataB.filter(v=>v>0);
+  const barMaxB=validB.length?Math.max(...validB):1;
+  const barMinB=validB.length?Math.min(...validB):0;
+
+  const svgW=380,svgH=100,padL=52,padR=8,padT=8,padB=0;
+  const chartW=svgW-padL-padR,chartH=svgH-padT-padB;
+  const barCnt=barDataB.length;
+  const gap=barCnt>15?1:2;
+  const bw=Math.max(3,Math.floor((chartW-gap*(barCnt-1))/barCnt));
+
+  const yBase=barMinB>0?Math.floor(barMinB*0.88):0;
+  const yTop=Math.ceil(barMaxB*1.06);
+  const yRange=yTop-yBase||1;
+  const yT0=yBase,yT1=Math.round(yBase+yRange*0.5),yT2=yTop;
+
   function yLbl(v){
     if(v>=10000) return (v/10000).toFixed(1)+'萬億';
     if(v>=1000)  return (v/1000).toFixed(1)+'千億';
@@ -6294,48 +6312,57 @@ function _renderMktVolSVG(rows,avgB){
   }
   function fmtD(d){
     if(!d) return '';
-    if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);
+    if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);       // 113/05/05 → 05/05
+    if(/^\d{7}$/.test(d)) return d.slice(3,5)+'/'+d.slice(5,7);  // 1130505  → 05/05
     const m=d.match(/-(\d{2})-(\d{2})$/);return m?m[1]+'/'+m[2]:d.slice(-5);
   }
-  const gc=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.07)';
-  const tc=isDark?'rgba(255,255,255,.42)':'rgba(0,0,0,.35)';
+
+  const gc=isDark?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)';
+  const tc=isDark?'rgba(255,255,255,.40)':'rgba(0,0,0,.35)';
   let sg=`<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">`;
-  // Y軸
-  ticks.forEach(t=>{
-    const ry=(padT+cH*(1-(t-yBase)/yRng)).toFixed(1);
-    sg+=`<line x1="${padL}" y1="${ry}" x2="${svgW-padR}" y2="${ry}" stroke="${gc}" stroke-width="1" stroke-dasharray="${t===yBase?'':'3,3'}"/>`;
-    sg+=`<text x="${padL-4}" y="${(parseFloat(ry)+3.5).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${tc}">${yLbl(t)}</text>`;
+
+  // Y軸刻度線 + 標籤
+  [yT0,yT1,yT2].forEach(tick=>{
+    const ry=(padT+chartH*(1-(tick-yBase)/yRange)).toFixed(1);
+    sg+=`<line x1="${padL}" y1="${ry}" x2="${svgW-padR}" y2="${ry}" stroke="${gc}" stroke-width="1" stroke-dasharray="${tick===yT0?'':'3,3'}"/>`;
+    sg+=`<text x="${padL-4}" y="${(parseFloat(ry)+3.5).toFixed(1)}" text-anchor="end" font-size="8.5" fill="${tc}">${yLbl(tick)}</text>`;
   });
-  // 月均線
-  if(avgB>yBase){
-    const avgY=(padT+cH*(1-(avgB-yBase)/yRng)).toFixed(1);
+
+  // 月均線（虛線）
+  if(avgB>yBase&&avgB<yTop){
+    const avgY=(padT+chartH*(1-(avgB-yBase)/yRange)).toFixed(1);
     sg+=`<line x1="${padL}" y1="${avgY}" x2="${svgW-padR}" y2="${avgY}" stroke="rgba(155,127,254,.6)" stroke-width="1.2" stroke-dasharray="5,3"/>`;
     sg+=`<text x="${svgW-padR+3}" y="${(parseFloat(avgY)+3).toFixed(1)}" font-size="8" fill="rgba(155,127,254,.8)">均</text>`;
   }
+
   // 基準線
-  sg+=`<line x1="${padL}" y1="${(padT+cH).toFixed(1)}" x2="${svgW-padR}" y2="${(padT+cH).toFixed(1)}" stroke="${gc}" stroke-width="1"/>`;
+  sg+=`<line x1="${padL}" y1="${(padT+chartH).toFixed(1)}" x2="${svgW-padR}" y2="${(padT+chartH).toFixed(1)}" stroke="${gc}" stroke-width="1"/>`;
+
   // 長條
-  vals.forEach((v,i)=>{
+  barDataB.forEach((v,i)=>{
     if(v<=0) return;
-    const bh=Math.max(2,((v-yBase)/yRng)*cH);
+    const bh=Math.max(2,((v-yBase)/yRange)*chartH);
     const rx=(padL+i*(bw+gap)).toFixed(1);
-    const ry2=(padT+cH-bh).toFixed(1);
-    const isLast=i===vals.length-1;
+    const ry2=(padT+chartH-bh).toFixed(1);
+    const isLast=i===barDataB.length-1;
     const isHigh=v>avgB*1.3;
-    const fill=isLast?'#00d4aa':isHigh?'#7c5cfc':isDark?'rgba(255,255,255,.22)':'rgba(0,0,0,.18)';
+    const fill=isLast?'#00d4aa':isHigh?'#7c5cfc':isDark?'rgba(255,255,255,.25)':'rgba(0,0,0,.18)';
     const dl=fmtD((rows[i]||{}).date||'');
     sg+=`<rect x="${rx}" y="${ry2}" width="${bw}" height="${bh.toFixed(1)}" rx="1.5" fill="${fill}" data-val="${v}" data-date="${dl}" style="cursor:pointer"/>`;
   });
   sg+='</svg>';
   barEl.innerHTML=sg;
-  // 時間軸（5點）
+
+  // X軸時間標籤
   const rowEl=document.getElementById('mktVolTimeRow');
-  if(rowEl&&rows.length){
+  if(rowEl){
     const ds=rows.map(r=>fmtD(r.date||''));
-    const cnt=ds.length;
-    const picks=[0,Math.floor(cnt/4),Math.floor(cnt/2),Math.floor(cnt*3/4),cnt-1];
-    rowEl.innerHTML=picks.map(i=>`<span>${ds[Math.min(i,cnt-1)]||''}</span>`).join('');
+    const mid=ds[Math.floor(ds.length/2)]||'';
+    const q1=ds[Math.floor(ds.length/4)]||'';
+    const q3=ds[Math.floor(ds.length*3/4)]||'';
+    rowEl.innerHTML=`<span>${ds[0]||''}</span><span>${q1}</span><span>${mid}</span><span>${q3}</span><span>${ds[ds.length-1]||''}</span>`;
   }
+
   // Hover tooltip
   const svgEl=barEl.querySelector('svg');
   if(svgEl){
@@ -6350,6 +6377,7 @@ function _renderMktVolSVG(rows,avgB){
     const hideT=()=>tip.style.display='none';
     svgEl.addEventListener('mousemove',e=>{const el=e.target.closest('rect');if(el)showT(el,e.clientX,e.clientY);else hideT();});
     svgEl.addEventListener('mouseleave',hideT);
+    svgEl.addEventListener('click',e=>{const el=e.target.closest('rect');if(el)showT(el,e.clientX,e.clientY);});
     svgEl.addEventListener('touchstart',e=>{const t=e.touches[0];const el=document.elementFromPoint(t.clientX,t.clientY)?.closest('rect');if(el)showT(el,t.clientX,t.clientY);},{passive:true});
     svgEl.addEventListener('touchend',()=>setTimeout(hideT,1500));
   }
@@ -6358,10 +6386,12 @@ function _renderMktVolSVG(rows,avgB){
 // ── 換手率 API ─────────────────────────────────────────
 async function _fetchMarketTurnover(){
   if(!API) return null;
+  // 先嘗試 Worker /turnover（選配路由）
   try{
     const r=await fetchWithTimeout(`${API}/turnover`,8000);
     if(r.ok){const d=await r.json();if(d?.turnover!=null)return d;}
   }catch(e){}
+  // Fallback：直接抓 TWSE FMTQIK 最後一筆的換手率欄位[9]
   try{
     const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
     const ds=tw.getFullYear()+String(tw.getMonth()+1).padStart(2,'0')+String(tw.getDate()).padStart(2,'0');
@@ -6378,8 +6408,8 @@ async function _fetchMarketTurnover(){
 function _setTurnoverDOM(data){
   const el=document.getElementById('mktVolTurnover');
   if(!el) return;
-  try{if(data?.turnover!=null&&data.turnover>0)el.textContent=data.turnover.toFixed(2)+'%';
-  else el.textContent='—%';}catch(e){el.textContent='—%';}
+  if(data?.turnover!=null&&data.turnover>0) el.textContent=data.turnover.toFixed(2)+'%';
+  else el.textContent='—%';
 }
 
 // ── AI 市場行情分析 ────────────────────────────────────
@@ -6394,7 +6424,13 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
   _mktAIRunning=true;
   box.innerHTML='<span style="color:var(--text3)">⏳ AI 分析中…</span>';
   try{
-    const last5=rows.slice(-5).map(r=>`${(r.date||'').slice(-5)} ${Math.round((r.value||0)/1e8)}億`).join('、');
+    function fmtD2(d){
+      if(!d) return '';
+      if(/^\d{3}\/\d{2}\/\d{2}$/.test(d)) return d.slice(4);
+      if(/^\d{7}$/.test(d)) return d.slice(3,5)+'/'+d.slice(5,7);
+      const m=d.match(/-(\d{2})-(\d{2})$/);return m?m[1]+'/'+m[2]:d.slice(-5);
+    }
+    const last5=rows.slice(-5).map(r=>`${fmtD2(r.date||'')} ${Math.round((r.value||0)/1e8)}億`).join('、');
     const vsYestStr=yesterB>0?(todayB>=yesterB?`較昨日放量+${((todayB-yesterB)/yesterB*100).toFixed(1)}%`:`較昨日縮量${((todayB-yesterB)/yesterB*100).toFixed(1)}%`):'';
     const trStr=turnoverData?.turnover?`換手率 ${turnoverData.turnover.toFixed(2)}%`:'';
     let streak=0,streakDir=0;
@@ -6413,7 +6449,7 @@ ${streakStr}
 
 【要求】
 請輸出3句話，用①②③開頭，每句不超過35字：
-① 量能現況：今日量能評價（放量/縮量/爆量程度，偏多/偏空含義）
+① 量能現況：今日量能評價（放量/縮量/爆量，偏多/偏空含義）
 ② 趨勢研判：近期量能趨勢代表什麼（主力動向、市場信心）
 ③ 操作建議：散戶投資人應如何因應（具體可操作）
 
@@ -6426,11 +6462,11 @@ ${streakStr}
     const data=await resp.json();
     const text=(data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
     if(!text) throw new Error('empty');
-    const html=colorSentiment(text)
+    const aiHtml=colorSentiment(text)
       .replace(/[①②③]/g,m=>`<span style="color:var(--purple);font-weight:700">${m}</span>`)
       .replace(/\n/g,'<br>');
-    box.innerHTML=html;
-    _mktAICache={html,ts:Date.now(),todayB};
+    box.innerHTML=aiHtml;
+    _mktAICache={html:aiHtml,ts:Date.now(),todayB};
   }catch(e){
     const is429=(e.message||'').includes('429');
     box.innerHTML=is429
@@ -6444,6 +6480,7 @@ async function refreshMktVolAI(){
   await loadMarketVolume();
 }
 
+// 相容舊呼叫
 function renderMktBarsStatic(){ _renderMktVolSVG([],0); }
 function renderMktBars(){ renderMktBarsStatic(); }
 
