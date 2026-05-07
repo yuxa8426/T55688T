@@ -11794,15 +11794,36 @@ async function loadFundamentals(stockId){
     const latest = sorted[sorted.length-1];
     const prev   = sorted[sorted.length-2];
     if(latest){
-      const mBal  = parseFloat(latest.MarginPurchase||latest.margin_purchase||latest.MarginPurchaseBalance||0);
-      const sBal  = parseFloat(latest.ShortSale||latest.short_sale||latest.ShortSaleBalance||0);
-      const mPrev = parseFloat(prev?.MarginPurchase||prev?.margin_purchase||prev?.MarginPurchaseBalance||0);
-      const sPrev = parseFloat(prev?.ShortSale||prev?.short_sale||prev?.ShortSaleBalance||0);
+      // FinMind TaiwanStockMarginPurchaseShortSale 正確欄位名稱：
+      // MarginPurchaseTodayBalance（融資餘額）、ShortSaleTodayBalance（融券餘額）
+      // MarginPurchaseBuy（融資買進）、MarginPurchaseSell（融資賣出）
+      // ShortSaleBuy（融券回補）、ShortSaleSell（融券賣出）
+      const getMargin = r => parseFloat(
+        r?.MarginPurchaseTodayBalance || r?.MarginPurchaseBalance ||
+        r?.MarginPurchase || r?.margin_purchase_today_balance || 0);
+      const getShort  = r => parseFloat(
+        r?.ShortSaleTodayBalance || r?.ShortSaleBalance ||
+        r?.ShortSale || r?.short_sale_today_balance || 0);
+
+      const mBal  = getMargin(latest);
+      const sBal  = getShort(latest);
+      const mPrev = getMargin(prev);
+      const sPrev = getShort(prev);
       const mChg  = mBal - mPrev;
       const sChg  = sBal - sPrev;
       const ratio = mBal > 0 ? (sBal/mBal*100) : 0;
-      const fmtK  = v => v >= 1000 ? (v/1000).toFixed(1)+'千張' : v.toFixed(0)+'張';
-      const se2   = (id,txt,col)=>{ const e=document.getElementById(id); if(e){e.textContent=txt;if(col)e.style.color=col;} };
+
+      // 張 / 千張 自動單位
+      const fmtK = v => {
+        if(v >= 10000) return (v/1000).toFixed(0)+'千張';
+        if(v >= 1000)  return (v/1000).toFixed(1)+'千張';
+        return v.toFixed(0)+'張';
+      };
+      const se2 = (id,txt,col)=>{
+        const e=document.getElementById(id);
+        if(e){ e.textContent=txt; if(col) e.style.color=col; }
+      };
+
       se2('stockMarginBal',  fmtK(mBal),  mChg>=0?'var(--red)':'var(--green)');
       se2('stockMarginChg',  (mChg>=0?'▲+':'▼')+fmtK(Math.abs(mChg)), mChg>=0?'var(--red)':'var(--green)');
       se2('stockShortBal',   fmtK(sBal),  sChg>=0?'var(--green)':'var(--red)');
@@ -11811,9 +11832,14 @@ async function loadFundamentals(stockId){
           ratio>20?'var(--green)':ratio<8?'var(--red)':'var(--gold)');
       se2('stockMarginSignal',
           ratio>20?'空頭力道強':ratio>12?'偏空觀察':ratio<5?'多頭無壓':'中性', null);
+
       const dateEl = document.getElementById('stockMarginDate');
       if(dateEl) dateEl.textContent = latest.date?.slice(0,10)||'';
       marginCard.style.display = 'block';
+
+      // debug log（確認欄位）
+      console.log('[Margin]', latest.date, '融資:', mBal, '融券:', sBal,
+        '欄位:', Object.keys(latest).filter(k=>k.toLowerCase().includes('margin')||k.toLowerCase().includes('short')));
     }
   }
 
