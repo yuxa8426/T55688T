@@ -1050,8 +1050,16 @@
         </div>
       </div>
 
-      <!-- AI 基本面評語（頂部，有資料才顯示）-->
-      <div id="fund-ai-note" style="font-size:12px;color:var(--text2);line-height:1.6;padding:8px 10px;background:rgba(124,92,252,.08);border-radius:8px;border-left:3px solid var(--purple);margin-bottom:10px;display:none"></div>
+      <!-- AI 財報深度解讀（有資料才顯示）-->
+      <div id="fund-ai-note" style="display:none;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.5px">🤖 AI 財報解讀</span>
+          <button onclick="refreshFundAI()" style="font-size:10px;padding:2px 8px;background:rgba(155,127,254,.12);border:1px solid rgba(155,127,254,.3);border-radius:6px;color:var(--purple);cursor:pointer;font-family:inherit">重新分析</button>
+        </div>
+        <div id="fund-ai-content" style="font-size:12px;color:var(--text2);line-height:1.75;padding:10px 12px;background:rgba(124,92,254,.06);border-radius:10px;border:1px solid rgba(124,92,254,.18);min-height:48px">
+          <span style="color:var(--text3)">載入財報資料後自動分析…</span>
+        </div>
+      </div>
 
       <!-- EPS + 毛利率 + 營益率 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
@@ -1116,6 +1124,11 @@
           <div style="font-size:16px;font-weight:800;color:var(--gold)" id="fund-div-yield">—</div>
           <div style="font-size:9px;color:var(--text3)" id="fund-div-years">—</div>
         </div>
+      </div>
+
+      <!-- 籌碼異常偵測提示 -->
+      <div id="chipAlertCard" style="display:none;margin-bottom:8px">
+        <div id="chipAlertList"></div>
       </div>
 
       <!-- AI 評語已移至頂部 -->
@@ -5600,6 +5613,11 @@ function updateAI(name, q){
     mom5Pct, instScore, finalScore,
     foreignStreak: inst?.foreignStreak ?? null,
   });
+
+  // 籌碼異常偵測（用 fmShareholder 資料）
+  if(inst && typeof _detectChipAnomaly === 'function'){
+    _detectChipAnomaly(inst);
+  }
   // 換股票：清除此股的深度分析快取，關閉結果面板
   ['causal','stress','altdata','dynrisk'].forEach(m=>{
     _deepResultCache.delete(`${currentTicker}:${m}`); // currentTicker 此時已是新股票
@@ -11473,6 +11491,12 @@ function fundReset(){
   });
   const aiNote = document.getElementById('fund-ai-note');
   if(aiNote) aiNote.style.display='none';
+  const aiContent = document.getElementById('fund-ai-content');
+  if(aiContent) aiContent.innerHTML='<span style="color:var(--text3)">載入財報資料後自動分析…</span>';
+  const chipAlert = document.getElementById('chipAlertCard');
+  if(chipAlert) chipAlert.style.display='none';
+  const stockMarginCard = document.getElementById('stockMarginCard');
+  if(stockMarginCard) stockMarginCard.style.display='none';
   const spinner = document.getElementById('fundLoadSpinner');
   if(spinner) spinner.style.display='inline';
 }
@@ -11823,41 +11847,215 @@ function _drawFundRevChart(pts){
 }
 
 // AI 基本面簡短評語
-async function _genFundAINote(stockId){
-  // 只在資料充分時才呼叫 AI（節省配額）
-  const epsEl  = document.getElementById('fund-eps');
-  const revEl  = document.getElementById('fund-rev-yoy');
-  const noteEl = document.getElementById('fund-ai-note');
-  if(!noteEl) return;
+// ── 財報 AI 解讀快取 ──────────────────────────────────
+let _fundAICache = {};  // { stockId: { html, ts } }
 
-  const eps    = epsEl?.textContent||'—';
-  const revYoY = revEl?.textContent||'—';
-  const pe     = document.getElementById('fund-pe')?.textContent||'—';
-  const yield_ = document.getElementById('fund-div-yield')?.textContent||'—';
-  // 任一欄位有資料就呼叫（不需全部都有）
-  const hasData = [eps, revYoY, pe, yield_].some(v => v && v!=='—' && v!=='虧損');
-  if(!hasData) return;
+async function _genFundAINote(stockId){
+  const noteEl    = document.getElementById('fund-ai-note');
+  const contentEl = document.getElementById('fund-ai-content');
+  if(!noteEl || !contentEl) return;
+
+  // 收集所有可用財報數據
+  const g = id => document.getElementById(id)?.textContent?.trim()||'—';
+  const eps      = g('fund-eps');
+  const epsYoY   = g('fund-eps-yoy');
+  const gpm      = g('fund-gpm');
+  const gpmTrend = g('fund-gpm-trend');
+  const npm      = g('fund-npm');
+  const revMonth = g('fund-rev-month');
+  const revMom   = g('fund-rev-mom');
+  const revYoY   = g('fund-rev-yoy');
+  const revStreak= g('fund-rev-streak');
+  const pe       = g('fund-pe');
+  const peJudge  = g('fund-pe-judge');
+  const pb       = g('fund-pb');
+  const divYield = g('fund-div-yield');
+  const divYears = g('fund-div-years');
+  // 個股融資融券
+  const mBal     = g('stockMarginBal');
+  const sBal     = g('stockShortBal');
+  const mRatio   = g('stockMarginRatio');
+  const mSignal  = g('stockMarginSignal');
+
+  // 有資料才執行
+  const hasData = [eps,revYoY,pe,divYield].some(v=>v&&v!=='—'&&v!=='N/A');
+  if(!hasData){ noteEl.style.display='none'; return; }
+
+  // 快取 30 分鐘
+  const cached = _fundAICache[stockId];
+  if(cached && Date.now()-cached.ts < 30*60*1000){
+    noteEl.style.display='block';
+    contentEl.innerHTML = cached.html;
+    return;
+  }
+
+  noteEl.style.display='block';
+  contentEl.innerHTML = '<span style="color:var(--text3)">⏳ AI 解讀財報中…</span>';
 
   const name = currentName || stockId;
-  const prompt = `台股${name}(${stockId})基本面：EPS=${eps}，月營收年增=${revYoY}，PE=${pe}，殖利率=${yield_}。
-用25字以內繁體中文點出最關鍵的基本面特徵（優勢或風險），不要說廢話。`;
+
+  const prompt = `你是專業台股基本面分析師。請根據以下${name}(${stockId})的財報數據，用繁體中文輸出4句話分析（①②③④開頭，每句≤40字）：
+
+【財報數據】
+EPS：${eps}（${epsYoY}）
+毛利率：${gpm}（${gpmTrend}）
+淨利率：${npm}
+月營收：${revMonth} 月增${revMom} 年增${revYoY}（${revStreak}）
+本益比：${pe}（${peJudge}）股價淨值比：${pb}
+殖利率：${divYield}（${divYears}）
+融資餘額：${mBal} 融券：${sBal} 券資比：${mRatio}（${mSignal}）
+
+① 【本季表現】這季財報整體表現如何？有無超越預期？
+② 【核心優勢/風險】最值得注意的一個優勢或風險是什麼？
+③ 【估值分析】目前本益比和殖利率代表股價是便宜還是昂貴？
+④ 【操作建議】基本面角度，現在適合買進、持有還是觀望？
+
+直接輸出4句，不加標題說明、不加免責聲明。`;
 
   try{
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) return;
-    const resp = await fetchWithTimeout(WORKER, 15000, {
+    const resp = await fetchWithTimeout(WORKER, 25000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:80,
-        messages:[{role:'user', content:prompt}] })
+      body: JSON.stringify({ max_tokens:400, messages:[{role:'user', content:prompt}] })
     });
-    if(!resp.ok) return;
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
     const data = await resp.json();
     const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-    if(text && noteEl){
-      noteEl.style.display='block';
-      noteEl.innerHTML = `<strong class="purple">🤖 AI：</strong>${colorSentiment(text)}`;
-    }
-  }catch(e){}
+    if(!text) throw new Error('empty');
+    const html = colorSentiment(text)
+      .replace(/[①②③④]/g, m=>`<span style="color:var(--purple);font-weight:700">${m}</span>`)
+      .replace(/【([^】]+)】/g,'<span style="color:var(--gold);font-size:10px;font-weight:700">【$1】</span>')
+      .replace(/\n/g,'<br>');
+    contentEl.innerHTML = html;
+    _fundAICache[stockId] = { html, ts:Date.now() };
+  }catch(e){
+    contentEl.innerHTML = '<span style="color:var(--text3)">⚠️ 財報 AI 解讀暫時無法取得</span>';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// 籌碼異常偵測
+// 輸入：chipData（fmShareholder 回傳）
+// 偵測6種常見異常組合，顯示警示卡片
+// ══════════════════════════════════════════════════════
+function _detectChipAnomaly(chipData){
+  const card = document.getElementById('chipAlertCard');
+  const list = document.getElementById('chipAlertList');
+  if(!card || !list || !chipData) return;
+
+  const alerts = [];
+
+  // 取近期數據
+  const {
+    foreignNet, trustNet, dealerNet,
+    todayForeign, todayTrust,
+    foreignNetArr = [], trustNetArr = [],
+    marginBal, shortBal, marginChg,
+    foreignPct, foreignChg,
+  } = chipData;
+
+  // 外資連買天數
+  const fArr = foreignNetArr.slice(-10);
+  let fBuyStreak = 0, fSellStreak = 0;
+  for(let i=fArr.length-1;i>=0;i--){
+    if(fArr[i]>0) fBuyStreak++; else break;
+  }
+  for(let i=fArr.length-1;i>=0;i--){
+    if(fArr[i]<0) fSellStreak++; else break;
+  }
+
+  // 投信連買天數
+  const tArr = trustNetArr.slice(-10);
+  let tBuyStreak = 0;
+  for(let i=tArr.length-1;i>=0;i--){
+    if(tArr[i]>0) tBuyStreak++; else break;
+  }
+
+  // 融資張數
+  const marginK = marginBal/1000;
+  const shortK  = shortBal/1000;
+  const ratio   = marginBal>0 ? shortBal/marginBal*100 : 0;
+
+  // ── 偵測規則 ─────────────────────────────────────────
+  // 1. 外資連買 ≥ 5 日（強烈多頭訊號）
+  if(fBuyStreak >= 5)
+    alerts.push({ level:'bull', icon:'🔴',
+      title:`外資連買 ${fBuyStreak} 日`,
+      desc:'主力資金持續流入，籌碼面偏多' });
+
+  // 2. 外資連賣 ≥ 5 日（警示）
+  if(fSellStreak >= 5)
+    alerts.push({ level:'bear', icon:'🟢',
+      title:`外資連賣 ${fSellStreak} 日`,
+      desc:'主力資金持續撤退，需留意下檔風險' });
+
+  // 3. 外資買超 + 融券增加（軋空格局）
+  if(fBuyStreak >= 3 && marginChg > 0 && shortK > 5)
+    alerts.push({ level:'bull', icon:'⚡',
+      title:'外資買超 + 融券增加',
+      desc:`潛在軋空格局，融券${shortK.toFixed(0)}千張，若持續恐引發回補` });
+
+  // 4. 外資 + 投信同步買超（雙法人共鳴）
+  if(fBuyStreak >= 3 && tBuyStreak >= 3)
+    alerts.push({ level:'bull', icon:'💎',
+      title:`外資投信共同買超（${fBuyStreak}日 / ${tBuyStreak}日）`,
+      desc:'雙法人同向加碼，籌碼集中訊號強烈' });
+
+  // 5. 外資持股比例明顯下降（≥ -1%）
+  if(foreignChg <= -1)
+    alerts.push({ level:'bear', icon:'⚠️',
+      title:`外資持股比例降低 ${foreignChg}%`,
+      desc:`目前持股 ${foreignPct.toFixed(1)}%，大幅減碼需謹慎` });
+
+  // 6. 券資比偏高（>20%，空頭集中）
+  if(ratio > 20)
+    alerts.push({ level:'bear', icon:'🎯',
+      title:`券資比偏高 ${ratio.toFixed(1)}%`,
+      desc:'空頭力道顯著，需觀察是否引發強制回補或加速下跌' });
+
+  // 7. 融資大增（前日比 > +20%，散戶追高風險）
+  const marginChgPct = marginBal>0 ? marginChg/(marginBal-marginChg)*100 : 0;
+  if(marginChgPct > 20)
+    alerts.push({ level:'warn', icon:'📊',
+      title:`融資單日暴增 +${marginChgPct.toFixed(0)}%`,
+      desc:'散戶追高訊號，高槓桿風險上升，留意反轉' });
+
+  // 沒有異常
+  if(!alerts.length){
+    card.style.display = 'none';
+    return;
+  }
+
+  // 渲染警示卡
+  card.style.display = 'block';
+  const colorMap = {
+    bull: { bg:'rgba(255,76,106,.06)', border:'rgba(255,76,106,.25)', tag:'var(--red)',   label:'偏多' },
+    bear: { bg:'rgba(0,212,170,.06)',  border:'rgba(0,212,170,.25)',  tag:'var(--green)', label:'偏空' },
+    warn: { bg:'rgba(245,200,66,.06)', border:'rgba(245,200,66,.25)', tag:'var(--gold)',  label:'注意' },
+  };
+
+  list.innerHTML = alerts.map(a=>{
+    const c = colorMap[a.level] || colorMap.warn;
+    return `<div style="background:${c.bg};border:1px solid ${c.border};border-radius:10px;padding:9px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:16px;flex-shrink:0;line-height:1.3">${a.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:12px;font-weight:700;color:var(--text)">${a.title}</span>
+          <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:5px;background:${c.border};color:${c.tag}">${c.label}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">${a.desc}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 手動重新分析財報
+function refreshFundAI(){
+  const id = currentTicker?.replace('.TW','') || '';
+  if(!id) return;
+  delete _fundAICache[id];
+  _genFundAINote(id);
 }
 
 // ════════════════════════════════════════════════════
