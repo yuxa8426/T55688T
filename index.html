@@ -594,6 +594,7 @@
     <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
     <div class="idx"><div class="n">那斯達克</div><div class="v" id="idx-nasdaq">—</div><div class="c" id="idx-nasdaq-c">—</div></div>
     <div class="idx"><div class="n">費城半導</div><div class="v" id="idx-sox">—</div><div class="c" id="idx-sox-c">—</div></div>
+    <div class="idx"><div class="n">道瓊</div><div class="v" id="idx-dji">—</div><div class="c" id="idx-dji-c">—</div></div>
     <div class="idx"><div class="n">VIX</div><div class="v" id="idx-vix">—</div><div class="c" id="idx-vix-c">—</div></div>
   
 
@@ -1118,6 +1119,31 @@
       </div>
 
       <!-- AI 評語已移至頂部 -->
+
+      <!-- 融資融券（個股）-->
+      <div id="stockMarginCard" style="background:var(--surface);border-radius:10px;padding:10px 12px;border:1px solid var(--border);margin-bottom:8px;display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--text2)">💳 融資融券（個股）</div>
+          <div style="font-size:10px;color:var(--text3)" id="stockMarginDate">—</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">融資餘額</div>
+            <div style="font-size:13px;font-weight:700;color:var(--red)" id="stockMarginBal">—</div>
+            <div style="font-size:9px;color:var(--text3)" id="stockMarginChg">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">融券餘額</div>
+            <div style="font-size:13px;font-weight:700;color:var(--green)" id="stockShortBal">—</div>
+            <div style="font-size:9px;color:var(--text3)" id="stockShortChg">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">券資比</div>
+            <div style="font-size:13px;font-weight:700;color:var(--purple)" id="stockMarginRatio">—</div>
+            <div style="font-size:9px;color:var(--text3)" id="stockMarginSignal">—</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ 四大深度分析模組 ═══ -->
@@ -4412,30 +4438,30 @@ async function yahooDirectQuote(symbol){
     const id = symbol.replace('.TW','');
     return await fmQuote(id);
   }
-  // 美股指數 / ^VIX 走 Worker /intraday（Yahoo Finance）
+  // 美股指數 / ^VIX 走 Worker /intraday
+  // 用 range=5d&interval=1d 確保非交易時間也有收盤價
   if(API){
     try{
       const res = await fetchWithTimeout(
-        `${API}/intraday?symbol=${encodeURIComponent(symbol)}`, 8000);
+        `${API}/intraday?symbol=${encodeURIComponent(symbol)}&range=5d&interval=1d`, 8000);
       if(res.ok){
         const body = await res.json();
         const result = body?.chart?.result?.[0];
         if(result){
-          const meta  = result.meta || {};
-          const price = meta.regularMarketPrice || meta.chartPreviousClose || 0;
-          const prev  = meta.chartPreviousClose || meta.previousClose || price;
+          const meta   = result.meta || {};
+          const closes = (result.indicators?.quote?.[0]?.close||[]).filter(v=>v!=null&&v>0);
+          const price  = meta.regularMarketPrice || closes[closes.length-1] || 0;
+          const prev   = closes.length>=2 ? closes[closes.length-2]
+                       : (meta.chartPreviousClose || meta.previousClose || price);
           if(price > 0){
-            return {
-              price,
-              changePct: prev > 0 ? (price - prev) / prev * 100 : 0,
-              change:    price - prev,
-            };
+            const change    = price - prev;
+            const changePct = prev > 0 ? change / prev * 100 : 0;
+            return { price, change, changePct };
           }
         }
       }
     }catch(e){ console.warn('[Yahoo]', symbol, e.message); }
   }
-  // 備援：FALLBACK 靜態數值
   return FALLBACK[symbol] || null;
 }
 async function yahooDirectHistory(symbol, range, interval){
@@ -8415,7 +8441,7 @@ async function loadIndices(){
   }
 
   // [1]~[4] 美股指數 → Yahoo（循序請求，避免 proxy 限速）
-  const syms = ['^GSPC','^IXIC','^SOX','^VIX'];
+  const syms = ['^GSPC','^IXIC','^SOX','^DJI','^VIX'];
   for(let i=0; i<syms.length; i++){
     const sym  = syms[i];
     const el   = idxEls[i+1];
@@ -11464,7 +11490,7 @@ async function loadFundamentals(stockId){
   const yr5ago  = nDaysAgo(1825);  // 配息取5年
 
   // 四個資料集並行取得
-  const [fsData, revData, perData, divData] = await Promise.all([
+  const [fsData, revData, perData, divData, marginData] = await Promise.all([
     fmFetch({ dataset:'TaiwanStockFinancialStatements',
       data_id: stockId, start_date: yr2ago, end_date: today,
       _ttl: 90*24*60*60*1000 }, 15000).catch(()=>null),
@@ -11477,6 +11503,9 @@ async function loadFundamentals(stockId){
     fmFetch({ dataset:'TaiwanStockDividend',
       data_id: stockId, start_date: yr5ago, end_date: today,
       _optional: true, _ttl: 180*24*60*60*1000 }, 12000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockMarginPurchaseShortSale',
+      data_id: stockId, start_date: nDaysAgo(10), end_date: today,
+      _ttl: _msTillMidnight() }, 10000).catch(()=>null),
   ]);
 
   const spinner = document.getElementById('fundLoadSpinner');
@@ -11731,6 +11760,36 @@ async function loadFundamentals(stockId){
       const yrs = new Set(divs.map(d=>(d.date||'').slice(0,4))).size;
       const hasDiv = divs.filter(d=>parseFloat(d.CashDividend||d.cash_dividend||0)>0).length;
       divYrEl.textContent = hasDiv>0?`近${yrs}年配息`:'未配息';
+    }
+  }
+
+  // ── 個股融資融券 ──────────────────────────────────────
+  const marginCard = document.getElementById('stockMarginCard');
+  if(marginData?.length && marginCard){
+    const sorted = [...marginData].sort((a,b)=>a.date>b.date?1:-1);
+    const latest = sorted[sorted.length-1];
+    const prev   = sorted[sorted.length-2];
+    if(latest){
+      const mBal  = parseFloat(latest.MarginPurchase||latest.margin_purchase||latest.MarginPurchaseBalance||0);
+      const sBal  = parseFloat(latest.ShortSale||latest.short_sale||latest.ShortSaleBalance||0);
+      const mPrev = parseFloat(prev?.MarginPurchase||prev?.margin_purchase||prev?.MarginPurchaseBalance||0);
+      const sPrev = parseFloat(prev?.ShortSale||prev?.short_sale||prev?.ShortSaleBalance||0);
+      const mChg  = mBal - mPrev;
+      const sChg  = sBal - sPrev;
+      const ratio = mBal > 0 ? (sBal/mBal*100) : 0;
+      const fmtK  = v => v >= 1000 ? (v/1000).toFixed(1)+'千張' : v.toFixed(0)+'張';
+      const se2   = (id,txt,col)=>{ const e=document.getElementById(id); if(e){e.textContent=txt;if(col)e.style.color=col;} };
+      se2('stockMarginBal',  fmtK(mBal),  mChg>=0?'var(--red)':'var(--green)');
+      se2('stockMarginChg',  (mChg>=0?'▲+':'▼')+fmtK(Math.abs(mChg)), mChg>=0?'var(--red)':'var(--green)');
+      se2('stockShortBal',   fmtK(sBal),  sChg>=0?'var(--green)':'var(--red)');
+      se2('stockShortChg',   (sChg>=0?'+':'')+fmtK(sChg), sChg>=0?'var(--green)':'var(--red)');
+      se2('stockMarginRatio', ratio.toFixed(1)+'%',
+          ratio>20?'var(--green)':ratio<8?'var(--red)':'var(--gold)');
+      se2('stockMarginSignal',
+          ratio>20?'空頭力道強':ratio>12?'偏空觀察':ratio<5?'多頭無壓':'中性', null);
+      const dateEl = document.getElementById('stockMarginDate');
+      if(dateEl) dateEl.textContent = latest.date?.slice(0,10)||'';
+      marginCard.style.display = 'block';
     }
   }
 
