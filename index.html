@@ -6226,10 +6226,10 @@ async function loadMarketVolume(){
     const slice20 = rows.slice(-20);
     const latest  = slice20[slice20.length-1];
     const prev    = slice20[slice20.length-2];
-    const toB     = v => Math.round((v||0)/1e8);
+    const toB     = v => Math.round((v||0)/1e4);  // Worker value 單位：千元
     const todayB  = toB(latest?.value);
     const yesterB = toB(prev?.value);
-    const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
+    const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e4);
     const vsYest  = yesterB>0 ? (todayB-yesterB)/yesterB*100 : 0;
     const vsAvg   = avgB>0   ? (todayB-avgB)/avgB*100 : 0;
     const ratio   = avgB>0   ? todayB/avgB : 1;
@@ -6276,7 +6276,7 @@ function _renderMktVolSVG(rows,avgB){
     return;
   }
   const isDark=document.documentElement.getAttribute('data-theme')!=='light';
-  const barDataB=rows.map(r=>Math.round((r.value||0)/1e8));
+  const barDataB=rows.map(r=>Math.round((r.value||0)/1e4));
   const validB=barDataB.filter(v=>v>0);
   if(!validB.length){barEl.innerHTML='<div style="padding:12px;text-align:center;font-size:11px;color:var(--text3)">無有效資料</div>';return;}
   const barMaxB=Math.max(...validB);
@@ -6390,7 +6390,7 @@ async function _fetchMarketTurnover(){
         const tradeVal=parseFloat((last[3]||'0').replace(/,/g,''));
         // 台灣上市總市值約55兆，換手率≈成交金額/總市值
         const mktCap=55e12;
-        if(tradeVal>0) return {turnover:+(tradeVal/mktCap*100).toFixed(2)};
+        if(tradeVal>0) return {turnover:+(tradeVal*1000/mktCap*100).toFixed(2)};
       }
     }
   }catch(e){}
@@ -6415,7 +6415,7 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
   if(_mktAIRunning) return;
   // 未開市時 todayB 用最後一筆交易日資料
   if(!todayB||todayB<=0){
-    const lastVal=rows?.length?Math.round((rows[rows.length-1].value||0)/1e8):0;
+    const lastVal=rows?.length?Math.round((rows[rows.length-1].value||0)/1e4):0;
     if(!lastVal){box.innerHTML='<span style="color:var(--text3)">⚠️ 成交量資料不足</span>';return;}
     todayB=lastVal;
   }
@@ -6428,7 +6428,7 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
       if(/^\d{7}$/.test(d)) return d.slice(3,5)+'/'+d.slice(5,7);
       const m=d.match(/-(\d{2})-(\d{2})$/);return m?m[1]+'/'+m[2]:d.slice(-5);
     }
-    const last10=rows.slice(-10).map(r=>`${fmtD2(r.date||'')} ${Math.round((r.value||0)/1e8)}億`).join('、');
+    const last10=rows.slice(-10).map(r=>`${fmtD2(r.date||'')} ${Math.round((r.value||0)/1e4)}億`).join('、');
     const vsYestStr=yesterB>0?(todayB>=yesterB?`較昨日放量+${((todayB-yesterB)/yesterB*100).toFixed(1)}%`:`較昨日縮量${((todayB-yesterB)/yesterB*100).toFixed(1)}%`):'';
     const trStr=turnoverData?.turnover?`估算換手率 ${turnoverData.turnover.toFixed(2)}%`:'';
     // 連續放/縮量天數
@@ -6441,7 +6441,7 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
     }
     const streakStr=streak>=2?(streakDir>0?`連續放量${streak}日`:`連續縮量${streak}日`):'';
     // 近5日趨勢方向
-    const last5vals=rows.slice(-5).map(r=>(r.value||0)/1e8);
+    const last5vals=rows.slice(-5).map(r=>(r.value||0)/1e4);
     const trend5=last5vals.length>=2?(last5vals[last5vals.length-1]>last5vals[0]?'遞增':'遞減'):'';
 
     const prompt=`你是一位有15年經驗的台股量化分析師，擅長從成交量解讀市場資金動向與主力行為。
