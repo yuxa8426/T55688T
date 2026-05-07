@@ -6188,65 +6188,58 @@ async function loadMarketVolume(){
   const twNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const nowStr=String(twNow.getHours()).padStart(2,'0')+':'+String(twNow.getMinutes()).padStart(2,'0');
 
-  // 並行：Worker成交量 + TWSE直抓歷史(保底) + 換手率
-  const [volRes, twseRows, turnoverData] = await Promise.all([
+  // 並行抓：Worker多月成交量 + 換手率
+  const [volRes, turnoverData] = await Promise.all([
     fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null),
-    _fetchTWSEHistory(),          // 直抓TWSE FMTQIK確保≥20筆
     _fetchMarketTurnover().catch(()=>null),
   ]);
 
   try{
-    let rows=[], source='';
+    let rows=[];
 
-    // 優先用 Worker 回傳
-    if(volRes?.ok){
-      const json=await volRes.json();
-      if(json.source==='TWSE_FMTQIK'&&json.rows?.length>=1){
-        rows=json.rows; source='worker';
-      } else if(json.source==='TWSE_MIS'&&json.today){
-        // 盤中：用TWSE直抓歷史 + 今日盤中值
-        const todayB=Math.round((json.today.value||0)/10000);
-        if(bigEl) bigEl.innerHTML=`${todayB>0?todayB.toLocaleString():'—'} <span>億元</span>`;
-        sh('mktVolCompare','<span style="color:var(--text3)">盤中即時（截至 '+nowStr+'）</span>');
-        if(chipEl){chipEl.textContent='盤中';chipEl.className='chip';}
-        se('mktVolUpdateTime',`盤中 · ${nowStr}`);
-        se('mktVolYest','—億');se('mktVolAvg','—億');
-        _setTurnoverDOM(turnoverData);
-        _estimateMktBreakdown(todayB,0);
-        _renderMktVolSVG(twseRows||[],0);
-        if(twseRows?.length) _runMktVolAI(twseRows,todayB,0,0,1,turnoverData);
-        return;
-      }
+    if(!volRes?.ok) throw new Error('Worker HTTP '+(volRes?.status||'err'));
+    const json = await volRes.json();
+
+    if(json.source==='TWSE_FMTQIK' && json.rows?.length>=1){
+      if(noteEl) noteEl.style.display='none';
+      rows = json.rows;
+
+    } else if(json.source==='TWSE_MIS' && json.today){
+      // 盤中即時
+      const todayB=Math.round((json.today.value||0)/10000);
+      if(bigEl) bigEl.innerHTML=`${todayB>0?todayB.toLocaleString():'—'} <span>億元</span>`;
+      sh('mktVolCompare','<span style="color:var(--text3)">盤中即時（截至 '+nowStr+'）</span>');
+      if(chipEl){chipEl.textContent='盤中';chipEl.className='chip';}
+      se('mktVolUpdateTime',`盤中 · ${nowStr}`);
+      se('mktVolYest','—億'); se('mktVolAvg','—億');
+      _setTurnoverDOM(turnoverData);
+      _estimateMktBreakdown(todayB,0);
+      _renderMktVolSVG([],0);
+      return;
+
+    } else {
+      throw new Error('no valid data from Worker');
     }
 
-    // Worker 筆數不足（月初常見） → 補入 twseRows
-    if(rows.length<5 && twseRows?.length>=1){
-      rows=twseRows; source='twse_direct';
-    } else if(twseRows?.length > rows.length){
-      // twseRows 筆數更多，優先使用
-      rows=twseRows; source='twse_direct';
-    }
+    if(!rows.length) throw new Error('rows empty');
 
-    if(!rows.length) throw new Error('no data');
-    if(noteEl) noteEl.style.display='none';
-
-    const slice20=rows.slice(-20);
-    const latest=slice20[slice20.length-1];
-    const prev=slice20[slice20.length-2];
-    const toB=v=>Math.round((v||0)/1e8);
-    const todayB=toB(latest?.value);
-    const yesterB=toB(prev?.value);
-    const avgB=Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
-    const vsYest=yesterB>0?(todayB-yesterB)/yesterB*100:0;
-    const vsAvg=avgB>0?(todayB-avgB)/avgB*100:0;
-    const ratio=avgB>0?todayB/avgB:1;
+    const slice20 = rows.slice(-20);
+    const latest  = slice20[slice20.length-1];
+    const prev    = slice20[slice20.length-2];
+    const toB     = v => Math.round((v||0)/1e8);
+    const todayB  = toB(latest?.value);
+    const yesterB = toB(prev?.value);
+    const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
+    const vsYest  = yesterB>0 ? (todayB-yesterB)/yesterB*100 : 0;
+    const vsAvg   = avgB>0   ? (todayB-avgB)/avgB*100 : 0;
+    const ratio   = avgB>0   ? todayB/avgB : 1;
 
     if(bigEl) bigEl.innerHTML=`${todayB.toLocaleString()} <span>億元</span>`;
     sh('mktVolCompare',
       `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
       +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
-    se('mktVolYest',yesterB+'億');
-    se('mktVolAvg',avgB+'億');
+    se('mktVolYest', yesterB+'億');
+    se('mktVolAvg',  avgB+'億');
 
     if(chipEl){
       if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
@@ -6255,91 +6248,20 @@ async function loadMarketVolume(){
       else{chipEl.textContent='正常';chipEl.className='chip';}
     }
 
-    _renderMktVolSVG(slice20,avgB);
+    _renderMktVolSVG(slice20, avgB);
     _setTurnoverDOM(turnoverData);
-    _estimateMktBreakdown(todayB,yesterB);
-    se('mktVolUpdateTime',`${latest?.date||''} · ${nowStr}`);
-    _runMktVolAI(slice20,todayB,yesterB,avgB,ratio,turnoverData);
+    _estimateMktBreakdown(todayB, yesterB);
+    se('mktVolUpdateTime', `${latest?.date||''} · ${nowStr}`);
+    _runMktVolAI(slice20, todayB, yesterB, avgB, ratio, turnoverData);
 
   }catch(e){
-    console.warn('[MktVol]',e.message);
+    console.warn('[MktVol]', e.message);
     if(noteEl) noteEl.style.display='block';
     if(bigEl) bigEl.innerHTML='— <span>億元</span>';
     sh('mktVolCompare','<span style="color:var(--text3)">暫無即時資料</span>');
     if(chipEl){chipEl.textContent='—';chipEl.className='chip';}
     _renderMktVolSVG([],0);
     _setTurnoverDOM(turnoverData);
-  }
-}
-
-// ── TWSE FMTQIK 多月資料（直接抓，三個月合併）──────────
-async function _fetchTWSEHistory(){
-  function fmtYMD(d){
-    return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
-  }
-  // FMTQIK rwd 格式：data 陣列，每列 [日期,股數,筆數,金額,指數,漲跌]
-  function parseRwdRows(json){
-    if(!json?.data||!Array.isArray(json.data)) return [];
-    return json.data.map(r=>({
-      date:  r[0]||'',
-      value: parseInt((r[3]||'0').replace(/,/g,''))||0,
-    })).filter(r=>r.value>0);
-  }
-  // OpenAPI 格式：陣列，每個 object 有欄位名
-  function parseOpenApiRows(arr){
-    if(!Array.isArray(arr)) return [];
-    return arr.map(d=>({
-      date:  d.Date||d.date||'',
-      value: parseInt((d.TradeValue||'0').replace(/,/g,''))||0,
-    })).filter(r=>r.value>0);
-  }
-  try{
-    const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const dates=[
-      new Date(tw.getFullYear(),tw.getMonth()-2,1),
-      new Date(tw.getFullYear(),tw.getMonth()-1,1),
-      tw,
-    ].map(fmtYMD);
-
-    // 方法1：透過 Worker /twse proxy（新版 worker.js 有此路由）
-    const base=API.replace(/\/$/,'');
-    let rows=[];
-    try{
-      const res=await Promise.all(dates.map(d=>
-        fetchWithTimeout(`${base}/twse?path=rwd/zh/afterTrading/FMTQIK&response=json&date=${d}`,10000)
-          .then(r=>{
-            if(!r.ok) throw new Error('HTTP '+r.status);
-            return r.json();
-          }).catch(()=>null)
-      ));
-      res.forEach(d=>{if(d) rows=rows.concat(parseRwdRows(d));});
-      console.log('[MktVol] /twse proxy:', rows.length,'筆');
-    }catch(e){}
-
-    // 方法2：OpenAPI（只有當月，但格式不同）
-    if(rows.length<5){
-      try{
-        const r=await fetchWithTimeout(
-          'https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK',
-          {headers:{'Accept':'application/json'}},10000);
-        if(r.ok){
-          const json=await r.json();
-          const openRows=parseOpenApiRows(Array.isArray(json)?json:[]);
-          rows=[...rows,...openRows];
-          console.log('[MktVol] OpenAPI補充:', openRows.length,'筆');
-        }
-      }catch(e){}
-    }
-
-    // 去重＋排序
-    const merged={};
-    rows.forEach(r=>{if(r.date) merged[r.date]=r;});
-    rows=Object.values(merged).sort((a,b)=>a.date>b.date?1:-1);
-    console.log('[MktVol] _fetchTWSEHistory 最終:', rows.length,'筆');
-    return rows.length>=1?rows:null;
-  }catch(e){
-    console.warn('[MktVol] _fetchTWSEHistory error:',e.message);
-    return null;
   }
 }
 
