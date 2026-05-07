@@ -1769,9 +1769,9 @@
     <div id="wlPanel" style="display:none">
       <!-- 新增股票列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="wlAddInput" type="text" placeholder="輸入股票代號，例如 2330"
-          inputmode="numeric" enterkeyhint="done" autocomplete="off"
-          style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"
+        <input id="wlAddInput" type="text" placeholder="輸入代號或名稱，例如 2330 或台積電"
+          inputmode="text" enterkeyhint="done" autocomplete="off"
+          style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:16px;font-family:inherit;outline:none"
           oninput="onWlSearch(this.value)" onkeydown="if(event.key==='Enter'){wlAddFromInput();this.blur()}">
         <button onclick="wlAddFromInput()"
           style="background:var(--green);color:#000;border:none;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0">＋</button>
@@ -16482,10 +16482,25 @@ function wlAddFromInput(){
   const inp = document.getElementById('wlAddInput');
   if(!inp) return;
   const val = inp.value.trim();
-  if(!val){ showToast('請輸入股票代號'); return; }
-  // 優先用代號直接加
-  const id   = val.toUpperCase();
-  const name = (typeof NAME_MAP!=='undefined' && NAME_MAP[id]) || id;
+  if(!val){ showToast('請輸入股票代號或名稱'); return; }
+
+  // 1. 先嘗試用搜尋找到對應股票
+  const matches = (typeof searchStocks==='function') ? searchStocks(val, 1) : [];
+  let id, name;
+
+  if(matches.length){
+    // 搜尋到結果，用第一筆
+    id   = matches[0].t;
+    name = matches[0].n;
+  } else if(/^\d{4,6}$/.test(val)){
+    // 純數字代號
+    id   = val;
+    name = (typeof NAME_MAP!=='undefined' && NAME_MAP[id]) || id;
+  } else {
+    showToast('查無「'+val+'」，請確認代號或名稱');
+    return;
+  }
+
   wlAddStock(id, name);
   inp.value = '';
   const res = document.getElementById('wlResults');
