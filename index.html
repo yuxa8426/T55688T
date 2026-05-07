@@ -6219,8 +6219,11 @@ async function loadMarketVolume(){
       }
     }
 
-    // Worker不夠筆數 → 用TWSE直抓
-    if(rows.length<14 && twseRows?.length>=1){
+    // Worker 筆數不足（月初常見） → 補入 twseRows
+    if(rows.length<5 && twseRows?.length>=1){
+      rows=twseRows; source='twse_direct';
+    } else if(twseRows?.length > rows.length){
+      // twseRows 筆數更多，優先使用
       rows=twseRows; source='twse_direct';
     }
 
@@ -6269,57 +6272,73 @@ async function loadMarketVolume(){
   }
 }
 
-// ── 透過 Worker proxy 抓 TWSE FMTQIK 多月資料 ──────────
+// ── TWSE FMTQIK 多月資料（直接抓，三個月合併）──────────
 async function _fetchTWSEHistory(){
   function fmtYMD(d){
     return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
   }
-  function parseRows(data){
-    if(!data?.data||!Array.isArray(data.data)) return [];
-    // FMTQIK 欄位：[0]民國日期 [1]成交股數 [2]成交筆數 [3]成交金額(元) [4]加權指數 [5]漲跌
-    return data.data.map(r=>{
-      const val=parseInt((r[3]||'0').replace(/,/g,''))||0;  // ← r[3] 成交金額
-      return {date:r[0]||'', value:val};
-    }).filter(r=>r.value>0);
+  // FMTQIK rwd 格式：data 陣列，每列 [日期,股數,筆數,金額,指數,漲跌]
+  function parseRwdRows(json){
+    if(!json?.data||!Array.isArray(json.data)) return [];
+    return json.data.map(r=>({
+      date:  r[0]||'',
+      value: parseInt((r[3]||'0').replace(/,/g,''))||0,
+    })).filter(r=>r.value>0);
+  }
+  // OpenAPI 格式：陣列，每個 object 有欄位名
+  function parseOpenApiRows(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(d=>({
+      date:  d.Date||d.date||'',
+      value: parseInt((d.TradeValue||'0').replace(/,/g,''))||0,
+    })).filter(r=>r.value>0);
   }
   try{
     const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
     const dates=[
-      new Date(tw.getFullYear(), tw.getMonth()-2, 1),
-      new Date(tw.getFullYear(), tw.getMonth()-1, 1),
+      new Date(tw.getFullYear(),tw.getMonth()-2,1),
+      new Date(tw.getFullYear(),tw.getMonth()-1,1),
       tw,
     ].map(fmtYMD);
 
-    // 透過 Worker proxy 避免 CORS
+    // 方法1：透過 Worker /twse proxy（新版 worker.js 有此路由）
     const base=API.replace(/\/$/,'');
-    const fetches=dates.map(d=>
-      fetchWithTimeout(`${base}/twse?path=rwd/zh/afterTrading/FMTQIK&response=json&date=${d}`,10000)
-        .then(r=>r.ok?r.json():null).catch(()=>null)
-    );
-    const results=await Promise.all(fetches);
     let rows=[];
-    results.forEach(d=>{if(d) rows=rows.concat(parseRows(d));});
-
-    // 若 Worker proxy /twse 路由不存在（404），直接抓 TWSE（備援）
-    if(!rows.length){
-      console.warn('[MktVol] Worker proxy failed, fallback to direct TWSE');
-      const direct = await Promise.all(dates.map(d=>
-        fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${d}`,
-          {headers:{'User-Agent':'Mozilla/5.0'}})
-          .then(r=>r.ok?r.json():null).catch(()=>null)
+    try{
+      const res=await Promise.all(dates.map(d=>
+        fetchWithTimeout(`${base}/twse?path=rwd/zh/afterTrading/FMTQIK&response=json&date=${d}`,10000)
+          .then(r=>{
+            if(!r.ok) throw new Error('HTTP '+r.status);
+            return r.json();
+          }).catch(()=>null)
       ));
-      direct.forEach(d=>{if(d) rows=rows.concat(parseRows(d));});
+      res.forEach(d=>{if(d) rows=rows.concat(parseRwdRows(d));});
+      console.log('[MktVol] /twse proxy:', rows.length,'筆');
+    }catch(e){}
+
+    // 方法2：OpenAPI（只有當月，但格式不同）
+    if(rows.length<5){
+      try{
+        const r=await fetchWithTimeout(
+          'https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK',
+          {headers:{'Accept':'application/json'}},10000);
+        if(r.ok){
+          const json=await r.json();
+          const openRows=parseOpenApiRows(Array.isArray(json)?json:[]);
+          rows=[...rows,...openRows];
+          console.log('[MktVol] OpenAPI補充:', openRows.length,'筆');
+        }
+      }catch(e){}
     }
 
-    // 去重並排序
+    // 去重＋排序
     const merged={};
     rows.forEach(r=>{if(r.date) merged[r.date]=r;});
     rows=Object.values(merged).sort((a,b)=>a.date>b.date?1:-1);
-
-    console.log(`[MktVol] FMTQIK ${rows.length} 筆`);
-    return rows.length>=3?rows:null;
+    console.log('[MktVol] _fetchTWSEHistory 最終:', rows.length,'筆');
+    return rows.length>=1?rows:null;
   }catch(e){
-    console.warn('[MktVol] _fetchTWSEHistory:',e.message);
+    console.warn('[MktVol] _fetchTWSEHistory error:',e.message);
     return null;
   }
 }
