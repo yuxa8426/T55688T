@@ -8528,12 +8528,30 @@ async function loadStockList(){
 // ── 共用搜尋邏輯 ─────────────────────────────────────
 function searchStocks(v, limit=8){
   if(!v || !v.trim()) return [];
-  const q = v.trim();
-  // 精確代號優先，然後名稱包含
-  const exact  = STOCKS.filter(s => s.t === q);
-  const byCode = STOCKS.filter(s => s.t.startsWith(q) && s.t !== q);
-  const byName = STOCKS.filter(s => s.n.includes(q) && !s.t.startsWith(q));
-  return [...exact, ...byCode, ...byName].slice(0, limit);
+  const q  = v.trim();
+  const ql = q.toLowerCase();
+
+  // 1. 精確代號
+  const exact   = STOCKS.filter(s => s.t === q);
+  // 2. 代號前綴
+  const byCode  = STOCKS.filter(s => s.t.startsWith(q) && s.t !== q);
+  // 3. 名稱完全包含（如「台積電」）
+  const byName  = STOCKS.filter(s => s.n.includes(q) && !s.t.startsWith(q));
+  // 4. 名稱去掉常見後綴再比對（如輸入「聯發」→「聯發科」）
+  const byPart  = STOCKS.filter(s =>
+    !s.t.startsWith(q) && !s.n.includes(q) &&
+    s.n.replace(/[-－]KY$|控股|投控|電子|科技|工業|國際|半導體|集團/,'').includes(q)
+  );
+  // 5. NAME_MAP 補充搜尋（整合 NAME_MAP 裡的股票名稱）
+  const seen = new Set([...exact,...byCode,...byName,...byPart].map(s=>s.t));
+  const byNM = typeof NAME_MAP!=='undefined'
+    ? Object.entries(NAME_MAP)
+        .filter(([id,nm])=>!seen.has(id)&&(id.startsWith(ql)||nm.includes(q)))
+        .slice(0,4)
+        .map(([id,nm])=>({t:id,n:nm,s:''}))
+    : [];
+
+  return [...exact,...byCode,...byName,...byPart,...byNM].slice(0,limit);
 }
 
 // ── 主搜尋框（首頁）────────────────────────────────
