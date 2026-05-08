@@ -12123,68 +12123,99 @@ async function loadFundamentals(stockId){
     }
   }
 
-  // ── 現金流量表渲染 ────────────────────────────────────
+  // ── 現金流量表渲染（FinMind 長格式：每列一個 type）──────
   const cashCard = document.getElementById('fundCashBalCard');
   if(cashData?.length){
-    const sorted = [...cashData].sort((a,b)=>a.date>b.date?1:-1);
-    const latest = sorted[sorted.length-1];
-    if(latest && cashCard){
-      const toHun = v => v!=null ? (parseFloat(v)/1e8).toFixed(1) : null;
-      // 欄位：CashFlowsFromOperatingActivities, PurchaseOfPropertyPlantAndEquipment
-      const opCash  = toHun(latest.CashFlowsFromOperatingActivities || latest.cash_flows_from_operating_activities);
-      const capex   = toHun(latest.PurchaseOfPropertyPlantAndEquipment || latest.purchase_of_property_plant_and_equipment);
-      const freeCash = (opCash!=null && capex!=null) ? (parseFloat(opCash)-Math.abs(parseFloat(capex))).toFixed(1) : null;
-      const se3 = (id,val,col)=>{ const e=document.getElementById(id); if(e){e.textContent=val??'—';if(col)e.style.color=col;} };
-      se3('fundCashOp',   opCash,   opCash>0?'var(--red)':'var(--green)');
-      se3('fundCashFree', freeCash, freeCash>0?'var(--red)':'var(--green)');
-      se3('fundCashCapex',capex!=null?Math.abs(parseFloat(capex)).toFixed(1):null, null);
-      const dateEl=document.getElementById('fundCashDate');
-      if(dateEl) dateEl.textContent = latest.date?.slice(0,7)||'';
-      // 現金流品質判斷
-      const qualEl=document.getElementById('fundCashQuality');
-      if(qualEl){
-        if(freeCash!=null){
-          const fcf=parseFloat(freeCash);
-          if(fcf>0) qualEl.innerHTML=`<span style="color:var(--red)">✅ 自由現金流為正（${freeCash}億），企業自給自足，無需對外融資</span>`;
-          else qualEl.innerHTML=`<span style="color:var(--green)">⚠️ 自由現金流為負（${freeCash}億），資本支出大，需注意現金消耗速度</span>`;
-        }
-      }
-      cashCard.style.display='block';
+    // 取最新季度（最大日期）
+    const latestDate = cashData.reduce((mx,r)=>r.date>mx?r.date:mx,'');
+    const latestRows = cashData.filter(r=>r.date===latestDate);
+
+    // 用 type 欄位或 origin_name 找對應科目
+    const findVal = (keywords) => {
+      const row = latestRows.find(r=>
+        keywords.some(k=>(r.type||'').includes(k)||(r.origin_name||'').includes(k))
+      );
+      return row ? parseFloat(row.value||0) : null;
+    };
+
+    // 營業活動現金流
+    const opRaw   = findVal(['Operating','operating','營業活動']);
+    // 資本支出（取絕對值，通常為負數）
+    const capexRaw = findVal(['PropertyPlantAndEquipment','Purchase','購置不動產','資本支出','購買']);
+    // 計算自由現金流
+    const opCash   = opRaw   != null ? (opRaw/1e8).toFixed(1)   : null;
+    const capexAbs = capexRaw!= null ? Math.abs(capexRaw/1e8)   : null;
+    const freeCash = (opRaw!=null && capexRaw!=null)
+      ? ((opRaw - Math.abs(capexRaw))/1e8).toFixed(1) : null;
+    const capexStr = capexAbs != null ? capexAbs.toFixed(1) : null;
+
+    const se3 = (id,val,col)=>{
+      const e=document.getElementById(id);
+      if(e){ e.textContent=val??'—'; if(col) e.style.color=col; }
+    };
+    se3('fundCashOp',    opCash,   opCash!=null?(parseFloat(opCash)>0?'var(--red)':'var(--green)'):null);
+    se3('fundCashFree',  freeCash, freeCash!=null?(parseFloat(freeCash)>0?'var(--red)':'var(--green)'):null);
+    se3('fundCashCapex', capexStr, null);
+
+    const dateEl = document.getElementById('fundCashDate');
+    if(dateEl) dateEl.textContent = latestDate.slice(0,7)||'';
+
+    const qualEl = document.getElementById('fundCashQuality');
+    if(qualEl && freeCash!=null){
+      const fcf = parseFloat(freeCash);
+      if(fcf > 50)      qualEl.innerHTML=`<span style="color:var(--red)">✅ 自由現金流強勁（+${freeCash}億），企業高度自給自足</span>`;
+      else if(fcf > 0)  qualEl.innerHTML=`<span style="color:var(--red)">✅ 自由現金流為正（+${freeCash}億），本業獲利轉為現金</span>`;
+      else              qualEl.innerHTML=`<span style="color:var(--green)">⚠️ 自由現金流為負（${freeCash}億），資本支出大，留意燒錢速度</span>`;
     }
+
+    if(cashCard) cashCard.style.display='block';
+    console.log('[CashFlow] opCash:', opCash, 'capex:', capexStr, 'free:', freeCash, 'rows:', latestRows.map(r=>r.type||r.origin_name));
   }
 
-  // ── 資產負債表渲染 ──────────────────────────────────────
+  // ── 資產負債表渲染（FinMind 長格式：每列一個 type）────────
   if(balData?.length){
-    const sorted=[...balData].sort((a,b)=>a.date>b.date?1:-1);
-    const latest=sorted[sorted.length-1];
-    if(latest){
-      const toHun=v=>v!=null?(parseFloat(v)/1e8).toFixed(0):null;
-      const toPct=v=>v!=null?(parseFloat(v)*100).toFixed(1):null;
-      // 欄位：CashAndCashEquivalents, TotalDebt, TotalAssets, CurrentAssets, CurrentLiabilities
-      const cash   = toHun(latest.CashAndCashEquivalents || latest.cash_and_cash_equivalents);
-      const totAsset=parseFloat(latest.TotalAssets||latest.total_assets||0);
-      const totDebt =parseFloat(latest.TotalDebt||latest.total_debt||latest.TotalLiabilities||0);
-      const curAsset=parseFloat(latest.CurrentAssets||latest.current_assets||0);
-      const curLiab =parseFloat(latest.CurrentLiabilities||latest.current_liabilities||0);
-      const debtRatio = totAsset>0 ? (totDebt/totAsset*100).toFixed(1) : null;
-      const currRatio  = curLiab>0  ? (curAsset/curLiab*100).toFixed(1)  : null;
-      const se3=(id,val,col)=>{const e=document.getElementById(id);if(e){e.textContent=val??'—';if(col)e.style.color=col;}};
-      se3('fundBalCash',    cash,      null);
-      se3('fundBalDebtRatio',debtRatio,
-          debtRatio<40?'var(--red)':debtRatio<60?'var(--gold)':'var(--green)');
-      se3('fundBalCurrent', currRatio,
-          currRatio>200?'var(--red)':currRatio>100?'var(--gold)':'var(--green)');
-      const dateEl=document.getElementById('fundBalDate');
-      if(dateEl) dateEl.textContent=latest.date?.slice(0,7)||'';
-      const healthEl=document.getElementById('fundBalHealth');
-      if(healthEl && debtRatio!=null){
-        const dr=parseFloat(debtRatio);
-        if(dr<40)      healthEl.innerHTML=`<span style="color:var(--red)">🏦 財務結構穩健：負債比 ${debtRatio}%，屬低風險水位</span>`;
-        else if(dr<60) healthEl.innerHTML=`<span style="color:var(--gold)">⚖️ 財務結構普通：負債比 ${debtRatio}%，需持續追蹤</span>`;
-        else           healthEl.innerHTML=`<span style="color:var(--green)">⚠️ 財務結構偏重：負債比 ${debtRatio}%，高槓桿風險</span>`;
-      }
-      if(cashCard) cashCard.style.display='block';
+    const balLatestDate = balData.reduce((mx,r)=>r.date>mx?r.date:mx,'');
+    const balRows = balData.filter(r=>r.date===balLatestDate);
+
+    const findBal = (keywords) => {
+      const row = balRows.find(r=>
+        keywords.some(k=>(r.type||'').includes(k)||(r.origin_name||'').includes(k))
+      );
+      return row ? parseFloat(row.value||0) : null;
+    };
+
+    const cashRaw    = findBal(['CashAndCash','現金及約當現金','Cash']);
+    const totAsset   = findBal(['TotalAssets','資產總計','TotalAsset']);
+    const totLiab    = findBal(['TotalLiabilities','負債總計','TotalLiab']);
+    const curAsset   = findBal(['CurrentAssets','流動資產']);
+    const curLiab    = findBal(['CurrentLiabilities','流動負債']);
+
+    const cashStr    = cashRaw!=null ? (cashRaw/1e8).toFixed(0) : null;
+    const debtRatio  = (totAsset&&totAsset>0&&totLiab!=null)
+      ? (totLiab/totAsset*100).toFixed(1) : null;
+    const currRatio  = (curLiab&&curLiab>0&&curAsset!=null)
+      ? (curAsset/curLiab*100).toFixed(1) : null;
+
+    const se3=(id,val,col)=>{const e=document.getElementById(id);if(e){e.textContent=val??'—';if(col)e.style.color=col;}};
+    se3('fundBalCash', cashStr, null);
+    se3('fundBalDebtRatio', debtRatio,
+        debtRatio!=null?(parseFloat(debtRatio)<40?'var(--red)':parseFloat(debtRatio)<60?'var(--gold)':'var(--green)'):null);
+    se3('fundBalCurrent', currRatio,
+        currRatio!=null?(parseFloat(currRatio)>200?'var(--red)':parseFloat(currRatio)>100?'var(--gold)':'var(--green)'):null);
+
+    const dateEl=document.getElementById('fundBalDate');
+    if(dateEl) dateEl.textContent=balLatestDate.slice(0,7)||'';
+
+    const healthEl=document.getElementById('fundBalHealth');
+    if(healthEl && debtRatio!=null){
+      const dr=parseFloat(debtRatio);
+      if(dr<40)      healthEl.innerHTML=`<span style="color:var(--red)">🏦 財務結構穩健：負債比 ${debtRatio}%，低風險水位</span>`;
+      else if(dr<60) healthEl.innerHTML=`<span style="color:var(--gold)">⚖️ 財務結構普通：負債比 ${debtRatio}%，需持續追蹤</span>`;
+      else           healthEl.innerHTML=`<span style="color:var(--green)">⚠️ 財務結構偏重：負債比 ${debtRatio}%，高槓桿注意</span>`;
     }
+
+    if(cashCard) cashCard.style.display='block';
+    console.log('[Balance] cash:', cashStr, 'debtR:', debtRatio, 'currR:', currRatio, 'rows:', balRows.map(r=>r.type||r.origin_name));
   }
 
   // ── 集保大戶持股渲染 ────────────────────────────────────
