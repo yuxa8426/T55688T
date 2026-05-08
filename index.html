@@ -1167,6 +1167,81 @@
       </div>
     </div>
 
+    <!-- ── 現金流量 & 資產負債 卡片 ── -->
+    <div id="fundCashBalCard" style="display:none;margin-bottom:8px">
+      <!-- 現金流量表 -->
+      <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border);margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          💰 現金流量
+          <span style="font-size:10px;color:var(--text3);font-weight:400" id="fundCashDate"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">營業現金流</div>
+            <div style="font-size:13px;font-weight:700" id="fundCashOp">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">億元</div>
+          </div>
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">自由現金流</div>
+            <div style="font-size:13px;font-weight:700" id="fundCashFree">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">億元</div>
+          </div>
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">資本支出</div>
+            <div style="font-size:13px;font-weight:700" id="fundCashCapex">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">億元</div>
+          </div>
+        </div>
+        <div id="fundCashQuality" style="margin-top:8px;font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+      </div>
+      <!-- 資產負債表 -->
+      <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          🏦 資產負債
+          <span style="font-size:10px;color:var(--text3);font-weight:400" id="fundBalDate"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">現金及約當現金</div>
+            <div style="font-size:12px;font-weight:700" id="fundBalCash">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">億元</div>
+          </div>
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">負債比率</div>
+            <div style="font-size:13px;font-weight:700" id="fundBalDebtRatio">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+          </div>
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">流動比率</div>
+            <div style="font-size:13px;font-weight:700" id="fundBalCurrent">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+          </div>
+        </div>
+        <div id="fundBalHealth" style="font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+      </div>
+    </div>
+
+    <!-- ── 集保大戶持股 + 主力分點 卡片 ── -->
+    <div id="fundHoldDealerCard" style="display:none;margin-bottom:8px">
+      <!-- 集保大戶持股分散表 -->
+      <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border);margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+          <span>🏦 集保大戶持股（週更新）</span>
+          <span style="font-size:10px;color:var(--text3)" id="fundHoldDate"></span>
+        </div>
+        <div id="fundHoldBars" style="display:flex;flex-direction:column;gap:5px"></div>
+        <div id="fundHoldSummary" style="margin-top:8px;font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+      </div>
+      <!-- 主力券商分點 -->
+      <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">
+          🏢 近10日主力券商分點
+        </div>
+        <div id="fundDealerList" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="fundDealerSummary" style="margin-top:8px;font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+      </div>
+    </div>
+
     <!-- ═══ 四大深度分析模組 ═══ -->
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -11528,6 +11603,10 @@ function fundReset(){
   if(chipAlert) chipAlert.style.display='none';
   const stockMarginCard = document.getElementById('stockMarginCard');
   if(stockMarginCard) stockMarginCard.style.display='none';
+  const fundCashBalCard = document.getElementById('fundCashBalCard');
+  if(fundCashBalCard) fundCashBalCard.style.display='none';
+  const fundHoldDealerCard = document.getElementById('fundHoldDealerCard');
+  if(fundHoldDealerCard) fundHoldDealerCard.style.display='none';
   const spinner = document.getElementById('fundLoadSpinner');
   if(spinner) spinner.style.display='inline';
 }
@@ -11545,7 +11624,8 @@ async function loadFundamentals(stockId){
   const yr5ago  = nDaysAgo(1825);  // 配息取5年
 
   // 四個資料集並行取得
-  const [fsData, revData, perData, divData, marginData] = await Promise.all([
+  const [fsData, revData, perData, divData, marginData,
+         cashData, balData, holdData, dealerData] = await Promise.all([
     fmFetch({ dataset:'TaiwanStockFinancialStatements',
       data_id: stockId, start_date: yr2ago, end_date: today,
       _ttl: 90*24*60*60*1000 }, 15000).catch(()=>null),
@@ -11561,6 +11641,19 @@ async function loadFundamentals(stockId){
     fmFetch({ dataset:'TaiwanStockMarginPurchaseShortSale',
       data_id: stockId, start_date: nDaysAgo(10), end_date: today,
       _ttl: _msTillMidnight() }, 10000).catch(()=>null),
+    // ── 付費方案新增 ─────────────────────────────────
+    fmFetch({ dataset:'TaiwanStockCashFlowsStatement',
+      data_id: stockId, start_date: yr2ago, end_date: today,
+      _ttl: 90*24*60*60*1000 }, 12000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockBalanceSheet',
+      data_id: stockId, start_date: yr2ago, end_date: today,
+      _ttl: 90*24*60*60*1000 }, 12000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockShareholding',
+      data_id: stockId, start_date: nDaysAgo(60), end_date: today,
+      _ttl: 7*24*60*60*1000 }, 10000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockTradingDailyReport',
+      data_id: stockId, start_date: nDaysAgo(10), end_date: today,
+      _ttl: _msTillMidnight() }, 12000).catch(()=>null),
   ]);
 
   const spinner = document.getElementById('fundLoadSpinner');
@@ -11874,6 +11967,194 @@ async function loadFundamentals(stockId){
     }
   }
 
+  // ── 現金流量表渲染 ────────────────────────────────────
+  const cashCard = document.getElementById('fundCashBalCard');
+  if(cashData?.length){
+    const sorted = [...cashData].sort((a,b)=>a.date>b.date?1:-1);
+    const latest = sorted[sorted.length-1];
+    if(latest && cashCard){
+      const toHun = v => v!=null ? (parseFloat(v)/1e8).toFixed(1) : null;
+      // 欄位：CashFlowsFromOperatingActivities, PurchaseOfPropertyPlantAndEquipment
+      const opCash  = toHun(latest.CashFlowsFromOperatingActivities || latest.cash_flows_from_operating_activities);
+      const capex   = toHun(latest.PurchaseOfPropertyPlantAndEquipment || latest.purchase_of_property_plant_and_equipment);
+      const freeCash = (opCash!=null && capex!=null) ? (parseFloat(opCash)-Math.abs(parseFloat(capex))).toFixed(1) : null;
+      const se3 = (id,val,col)=>{ const e=document.getElementById(id); if(e){e.textContent=val??'—';if(col)e.style.color=col;} };
+      se3('fundCashOp',   opCash,   opCash>0?'var(--red)':'var(--green)');
+      se3('fundCashFree', freeCash, freeCash>0?'var(--red)':'var(--green)');
+      se3('fundCashCapex',capex!=null?Math.abs(parseFloat(capex)).toFixed(1):null, null);
+      const dateEl=document.getElementById('fundCashDate');
+      if(dateEl) dateEl.textContent = latest.date?.slice(0,7)||'';
+      // 現金流品質判斷
+      const qualEl=document.getElementById('fundCashQuality');
+      if(qualEl){
+        if(freeCash!=null){
+          const fcf=parseFloat(freeCash);
+          if(fcf>0) qualEl.innerHTML=`<span style="color:var(--red)">✅ 自由現金流為正（${freeCash}億），企業自給自足，無需對外融資</span>`;
+          else qualEl.innerHTML=`<span style="color:var(--green)">⚠️ 自由現金流為負（${freeCash}億），資本支出大，需注意現金消耗速度</span>`;
+        }
+      }
+      cashCard.style.display='block';
+    }
+  }
+
+  // ── 資產負債表渲染 ──────────────────────────────────────
+  if(balData?.length){
+    const sorted=[...balData].sort((a,b)=>a.date>b.date?1:-1);
+    const latest=sorted[sorted.length-1];
+    if(latest){
+      const toHun=v=>v!=null?(parseFloat(v)/1e8).toFixed(0):null;
+      const toPct=v=>v!=null?(parseFloat(v)*100).toFixed(1):null;
+      // 欄位：CashAndCashEquivalents, TotalDebt, TotalAssets, CurrentAssets, CurrentLiabilities
+      const cash   = toHun(latest.CashAndCashEquivalents || latest.cash_and_cash_equivalents);
+      const totAsset=parseFloat(latest.TotalAssets||latest.total_assets||0);
+      const totDebt =parseFloat(latest.TotalDebt||latest.total_debt||latest.TotalLiabilities||0);
+      const curAsset=parseFloat(latest.CurrentAssets||latest.current_assets||0);
+      const curLiab =parseFloat(latest.CurrentLiabilities||latest.current_liabilities||0);
+      const debtRatio = totAsset>0 ? (totDebt/totAsset*100).toFixed(1) : null;
+      const currRatio  = curLiab>0  ? (curAsset/curLiab*100).toFixed(1)  : null;
+      const se3=(id,val,col)=>{const e=document.getElementById(id);if(e){e.textContent=val??'—';if(col)e.style.color=col;}};
+      se3('fundBalCash',    cash,      null);
+      se3('fundBalDebtRatio',debtRatio,
+          debtRatio<40?'var(--red)':debtRatio<60?'var(--gold)':'var(--green)');
+      se3('fundBalCurrent', currRatio,
+          currRatio>200?'var(--red)':currRatio>100?'var(--gold)':'var(--green)');
+      const dateEl=document.getElementById('fundBalDate');
+      if(dateEl) dateEl.textContent=latest.date?.slice(0,7)||'';
+      const healthEl=document.getElementById('fundBalHealth');
+      if(healthEl && debtRatio!=null){
+        const dr=parseFloat(debtRatio);
+        if(dr<40)      healthEl.innerHTML=`<span style="color:var(--red)">🏦 財務結構穩健：負債比 ${debtRatio}%，屬低風險水位</span>`;
+        else if(dr<60) healthEl.innerHTML=`<span style="color:var(--gold)">⚖️ 財務結構普通：負債比 ${debtRatio}%，需持續追蹤</span>`;
+        else           healthEl.innerHTML=`<span style="color:var(--green)">⚠️ 財務結構偏重：負債比 ${debtRatio}%，高槓桿風險</span>`;
+      }
+      if(cashCard) cashCard.style.display='block';
+    }
+  }
+
+  // ── 集保大戶持股渲染 ────────────────────────────────────
+  const holdDealerCard=document.getElementById('fundHoldDealerCard');
+  if(holdData?.length){
+    // 取最新一週資料
+    const sorted=[...holdData].sort((a,b)=>a.date>b.date?1:-1);
+    const latestDate=sorted[0]?.date;
+    const latestRows=sorted.filter(r=>r.date===latestDate);
+    // 前一週
+    const prevDate=sorted.find(r=>r.date<latestDate)?.date;
+    const prevRows=sorted.filter(r=>r.date===prevDate);
+    const dateEl=document.getElementById('fundHoldDate');
+    if(dateEl) dateEl.textContent=latestDate?.slice(0,10)||'';
+    const barsEl=document.getElementById('fundHoldBars');
+    if(barsEl && latestRows.length){
+      // 合計各層級持股比例
+      // 欄位：HoldingSharesLevel, HolderCount, HoldingSharesPercent
+      const LEVELS=[
+        {key:'1-999張以下',    label:'散戶（<1張）'},
+        {key:'1-5張',          label:'小散（1-5張）'},
+        {key:'5-10張',         label:'小戶（5-10張）'},
+        {key:'10-15張',        label:'中戶（10-15張）'},
+        {key:'15-20張',        label:'中戶（15-20張）'},
+        {key:'20-30張',        label:'中大戶（20-30張）'},
+        {key:'30-40張',        label:'中大戶（30-40張）'},
+        {key:'40-50張',        label:'中大戶（40-50張）'},
+        {key:'50-100張',       label:'大戶（50-100張）'},
+        {key:'100-200張',      label:'大戶（100-200張）'},
+        {key:'200-400張',      label:'大戶（200-400張）'},
+        {key:'400-600張',      label:'大戶（400-600張）'},
+        {key:'600-800張',      label:'大戶（600-800張）'},
+        {key:'800-1000張',     label:'超大戶（800-1000張）'},
+        {key:'1000張以上',     label:'主力（1000張+）'},
+      ];
+      // 合計主力（800張以上）和散戶（200張以下）
+      let whaleTotal=0, retailTotal=0;
+      latestRows.forEach(r=>{
+        const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
+        const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
+        const張數=parseInt(lvl.replace(/[^0-9].*/,''))||0;
+        if(張數>=800) whaleTotal+=pct;
+        else if(張數<200) retailTotal+=pct;
+      });
+      // 前一週對比
+      let prevWhale=0;
+      prevRows.forEach(r=>{
+        const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
+        const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
+        const張數=parseInt(lvl.replace(/[^0-9].*/,''))||0;
+        if(張數>=800) prevWhale+=pct;
+      });
+      const whaleChg=prevDate?(whaleTotal-prevWhale).toFixed(1):null;
+      // 顯示主力/大戶/散戶三行
+      const groups=[
+        {label:'主力（800張+）',    pct:whaleTotal, color:'var(--red)',    chg:whaleChg},
+        {label:'大戶（50-800張）',  pct:latestRows.filter(r=>{const n=parseInt((r.HoldingSharesLevel||'').replace(/[^0-9].*/,''))||0;return n>=50&&n<800;}).reduce((s,r)=>s+parseFloat(r.HoldingSharesPercent||0),0), color:'var(--purple)', chg:null},
+        {label:'散戶（50張以下）',  pct:retailTotal, color:'var(--text3)', chg:null},
+      ];
+      barsEl.innerHTML=groups.map(g=>{
+        const pct=g.pct.toFixed(1);
+        const chgHtml=g.chg!=null?`<span style="font-size:10px;color:${parseFloat(g.chg)>0?'var(--red)':'var(--green)'}">${parseFloat(g.chg)>0?'▲+':'▼'}${g.chg}%</span>`:'';
+        return `<div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:11px;color:var(--text2)">${g.label}</span>
+            <span style="font-size:12px;font-weight:700;color:${g.color}">${pct}% ${chgHtml}</span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
+            <div style="width:${Math.min(100,pct)}%;height:100%;background:${g.color};border-radius:3px;transition:width .8s"></div>
+          </div>
+        </div>`;
+      }).join('');
+      const summEl=document.getElementById('fundHoldSummary');
+      if(summEl){
+        const chgNum=whaleChg!=null?parseFloat(whaleChg):0;
+        if(chgNum>0.5)       summEl.innerHTML=`<span style="color:var(--red)">🐋 主力持股週增 +${whaleChg}%，籌碼集中訊號，留意後續動向</span>`;
+        else if(chgNum<-0.5) summEl.innerHTML=`<span style="color:var(--green)">📤 主力持股週減 ${whaleChg}%，籌碼鬆動，需謹慎觀察</span>`;
+        else                 summEl.innerHTML=`<span style="color:var(--text3)">主力持股週變化 ${whaleChg??'—'}%，籌碼結構穩定</span>`;
+      }
+      if(holdDealerCard) holdDealerCard.style.display='block';
+    }
+  }
+
+  // ── 主力券商分點渲染 ────────────────────────────────────
+  if(dealerData?.length){
+    // 彙總近10日各券商買超/賣超張數
+    const netByDealer={};
+    dealerData.forEach(r=>{
+      const name=r.broker_name||r.BrokerName||r.name||'未知券商';
+      const buy =parseFloat(r.buy||r.Buy||0);
+      const sell=parseFloat(r.sell||r.Sell||0);
+      if(!netByDealer[name]) netByDealer[name]={name, buy:0, sell:0, net:0};
+      netByDealer[name].buy +=buy;
+      netByDealer[name].sell+=sell;
+      netByDealer[name].net +=buy-sell;
+    });
+    const dealers=Object.values(netByDealer)
+      .sort((a,b)=>Math.abs(b.net)-Math.abs(a.net))
+      .slice(0,8);
+    const listEl=document.getElementById('fundDealerList');
+    if(listEl && dealers.length){
+      const maxAbs=Math.max(...dealers.map(d=>Math.abs(d.net)),1);
+      listEl.innerHTML=dealers.map(d=>{
+        const isBull=d.net>0;
+        const pct=(Math.abs(d.net)/maxAbs*100).toFixed(0);
+        const netK=(Math.abs(d.net)/1000).toFixed(1);
+        return `<div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:11px;color:var(--text2);width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${isBull?'var(--red)':'var(--green)'};border-radius:3px;transition:width .8s"></div>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:${isBull?'var(--red)':'var(--green)'};width:52px;text-align:right;flex-shrink:0">
+            ${isBull?'買+':'賣-'}${netK}千
+          </div>
+        </div>`;
+      }).join('');
+      const summEl=document.getElementById('fundDealerSummary');
+      const bullDealer=dealers.find(d=>d.net>0);
+      if(summEl && bullDealer){
+        const netK=(bullDealer.net/1000).toFixed(1);
+        summEl.innerHTML=`<span style="color:var(--red)">🏢 最大買超主力：${bullDealer.name}（近10日淨買 +${netK}千張）</span>`;
+      }
+      if(holdDealerCard) holdDealerCard.style.display='block';
+    }
+  }
+
   // ── AI 基本面評語（等 DOM 更新後再讀取數值）─────────────
   // 用 setTimeout 確保所有 DOM 更新完成後才讀取
   setTimeout(()=>_genFundAINote(stockId), 200);
@@ -11933,6 +12214,12 @@ async function _genFundAINote(stockId){
   const sBal     = g('stockShortBal');
   const mRatio   = g('stockMarginRatio');
   const mSignal  = g('stockMarginSignal');
+  // 新增：現金流/資產負債/集保
+  const cashOp   = g('fundCashOp');
+  const cashFree = g('fundCashFree');
+  const debtRatio= g('fundBalDebtRatio');
+  const currRatio= g('fundBalCurrent');
+  const whaleHold= document.querySelector('#fundHoldBars div:first-child span:last-child')?.textContent||'—';
 
   // 有資料才執行
   const hasData = [eps,revYoY,pe,divYield].some(v=>v&&v!=='—'&&v!=='N/A');
@@ -11961,6 +12248,9 @@ EPS：${eps}（${epsYoY}）
 本益比：${pe}（${peJudge}）股價淨值比：${pb}
 殖利率：${divYield}（${divYears}）
 融資餘額：${mBal} 融券：${sBal} 券資比：${mRatio}（${mSignal}）
+營業現金流：${cashOp}億 自由現金流：${cashFree}億
+負債比率：${debtRatio}% 流動比率：${currRatio}%
+主力持股：${whaleHold}
 
 ① 【本季表現】這季財報整體表現如何？有無超越預期？
 ② 【核心優勢/風險】最值得注意的一個優勢或風險是什麼？
