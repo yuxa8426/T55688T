@@ -1711,7 +1711,8 @@
             <select id="customStratCount"
               style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:7px 8px;font-family:inherit;outline:none">
               <option value="5">5支</option>
-              <option value="10" selected>10支</option>
+              <option value="8" selected>8支（預設）</option>
+              <option value="10">10支</option>
               <option value="15">15支</option>
             </select>
           </div>
@@ -10886,7 +10887,7 @@ const STRATEGIES = {
     icon:'🚀',
     color:'#ff4c6a',
     desc:'金流（外資/投信買超）與消息面動能各佔 40% 權重，技術突破佔 20%，追求短期爆發性機會。適合積極型投資人，持有週期約 2~4 週。',
-    prompt: (market) => `台股量化分析師任務：使用「極致動能策略」從台灣上市上櫃全市場（含半導體、AI、航運、金融、生技、傳產等所有類股）選出10支最具爆發潛力的股票。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「極致動能策略」從台灣上市上櫃全市場（含半導體、AI、航運、金融、生技、傳產等所有類股）選出${n}支最具爆發潛力的股票。
 
 【市場背景】${market}
 
@@ -10896,7 +10897,7 @@ const STRATEGIES = {
 - 消息面有正向催化（法說會、新訂單、技術突破）
 - 不限定特定產業，全市場尋找最強動能
 
-【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少3種不同產業。
+【重要】必須輸出恰好${n}支股票，每支均為真實台股，需包含至少3種不同產業。
 
 ` + JSON_FORMAT
   },
@@ -10905,7 +10906,7 @@ const STRATEGIES = {
     icon:'📈',
     color:'#00d4aa',
     desc:'獲利成長能力佔 60% 權重，配合季節性週期規律避開淡季，法人動向佔 40%。適合穩健型投資人，持有週期約 1~3 個月。',
-    prompt: (market) => `台股量化分析師任務：使用「穩健成長策略」從台灣上市上櫃全市場選出10支兼顧成長與穩定的股票。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「穩健成長策略」從台灣上市上櫃全市場選出${n}支兼顧成長與穩定的股票。
 
 【市場背景】${market}
 
@@ -10915,7 +10916,7 @@ const STRATEGIES = {
 - 所屬產業景氣上行或復甦初期，非傳統淡季
 - 不限定特定產業，包含金融、電信、民生消費等穩健型均可
 
-【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少4種不同產業。
+【重要】必須輸出恰好${n}支股票，每支均為真實台股，需包含至少4種不同產業。
 
 ` + JSON_FORMAT
   },
@@ -10924,7 +10925,7 @@ const STRATEGIES = {
     icon:'💎',
     color:'#f5c842',
     desc:'專注低本益比（PE）且大戶開始建倉的標的，尋找被市場低估但籌碼開始集中的機會。適合長線價值型投資人，持有週期約 3~6 個月。',
-    prompt: (market) => `台股量化分析師任務：使用「價值發現策略」從台灣上市上櫃全市場尋找10支被低估的潛力股。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「價值發現策略」從台灣上市上櫃全市場尋找10支被低估的潛力股。
 
 【市場背景】${market}
 
@@ -10934,7 +10935,7 @@ const STRATEGIES = {
 - 股價在年線（MA250）附近或以下，基本面穩健
 - 特別關注：傳產、金融、中小型股、近期受錯殺的題材股
 
-【重要】必須輸出恰好10支股票，每支均為真實台股，需包含至少4種不同產業，避免集中半導體。
+【重要】必須輸出恰好${n}支股票，每支均為真實台股，需包含至少4種不同產業，避免集中半導體。
 
 ` + JSON_FORMAT
   },
@@ -10943,7 +10944,7 @@ const STRATEGIES = {
     icon:'🔄',
     color:'#a080ff',
     desc:'當消息面極度恐慌（VIX高、新聞負面）但金流開始止跌回升時進場，捕捉逆向反彈機會。高報酬高風險，適合專業型投資人。',
-    prompt: (market) => `台股量化分析師任務：使用「情緒反轉策略」從台灣上市上櫃全市場找出10支具反轉潛力的超跌股。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「情緒反轉策略」從台灣上市上櫃全市場找出10支具反轉潛力的超跌股。
 
 【市場背景】${market}
 
@@ -10960,7 +10961,7 @@ const STRATEGIES = {
     icon:'⚖️',
     color:'#4fc3f7',
     desc:'整合前四項策略，以最小化整體波動為目標，自動平衡動能、成長、價值、反轉四個維度。適合希望分散風險的投資人。',
-    prompt: (market) => `台股量化分析師任務：使用「風險平權策略」從台灣上市上櫃全市場建構10支低波動分散組合。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「風險平權策略」從台灣上市上櫃全市場建構10支低波動分散組合。
 
 【市場背景】${market}
 
@@ -11066,6 +11067,7 @@ async function runStratAnalysis(){
   const key  = _currentStrat;
   const strat = STRATEGIES[key];
   if(!strat) return;
+  const stratCount = parseInt(document.getElementById('customStratCount')?.value||'8');
 
   const runBtn  = document.getElementById('stratRunBtn');
   const resultEl = document.getElementById('stratResult');
@@ -11239,7 +11241,7 @@ async function runStratAnalysis(){
       ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
         +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的10支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
       : '';
-    const prompt = strat.prompt(market + btSummary + quantContext);
+    const prompt = strat.prompt(market + btSummary + quantContext, stratCount);
     const WORKER = (typeof API !== 'undefined' && API)
       ? API.replace(/\/$/, '') + '/v1/messages'
       : 'https://api.anthropic.com/v1/messages';
@@ -11275,13 +11277,14 @@ async function runStratAnalysis(){
     // 使用強健解析（6步容錯）
     let stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
-    // 不足10支時，優先從 top50Filtered 補足（已通過三角色篩選）
-    if(stocks.length < 10){
+    // 不足指定支數時，優先從 top50Filtered 補足（已通過三角色篩選）
+    const stratCount = parseInt(document.getElementById('customStratCount')?.value||'8');
+    if(stocks.length < stratCount){
       const aiIds = new Set(stocks.map(s=>s.id));
       const pool  = (top50Filtered.length >= 3 ? top50Filtered : top50);
       const extra = pool
         .filter(s => !aiIds.has(s.id))
-        .slice(0, 10 - stocks.length)
+        .slice(0, stratCount - stocks.length)
         .map(s=>({
           id:s.id, name:s.name, sector:s.sector||'—',
           winRate:58, risk:5, reason:'量化補入',
@@ -11306,8 +11309,8 @@ async function runStratAnalysis(){
 
     // 渲染結果
     const elimMsg = eliminatedCount > 0 ? `，淘汰${eliminatedCount}支不合格` : '';
-    titleEl.textContent = `${strat.icon} ${strat.name} — Top 10 精選（掃描${quantScopeLabel}${elimMsg}）`;
-    listEl.innerHTML = stocks.slice(0,10).map((s,i)=>{
+    titleEl.textContent = `${strat.icon} ${strat.name} — Top ${stratCount} 精選（掃描${quantScopeLabel}${elimMsg}）`;
+    listEl.innerHTML = stocks.slice(0,stratCount).map((s,i)=>{
       const risk = Math.min(10, Math.max(1, Math.round(s.risk||5)));
       const riskColor = risk>=8?'#ff4c6a':risk>=5?'#f5c842':'#00d4aa';
       const riskLabel = risk>=8?'高風險':risk>=5?'中風險':'低風險';
@@ -12745,7 +12748,7 @@ async function runCustomStratAnalysis(){
   const stratName  = (nameEl?.value||'').trim() || '自訂策略';
   const userPrompt = (promptEl?.value||'').trim();
   const period     = parseInt(periodEl?.value||'30');
-  const count      = parseInt(countEl?.value||'10');
+  const count      = parseInt(countEl?.value||'8');
 
   if(!userPrompt){ showToast('請輸入選股條件'); return; }
 
@@ -12880,7 +12883,7 @@ async function runCustomStratAnalysis(){
       return s.id+'('+s.name+') '+tags.join('/');
     }).join(', ');
 
-    const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+count+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
+    const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+stratCount+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
 
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
