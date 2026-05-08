@@ -11448,7 +11448,7 @@ async function runStratAnalysis(){
       '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
     ].filter(Boolean).join('；');
 
-    // quantContext：只傳前20支（避免 prompt 過長），明確要求${stratCount}支
+    // quantContext：只傳前20支（避免 prompt 過長），依 stratCount 決定支數
     const top20forCtx = top50.slice(0,20);
     const summaryShort = top20forCtx.map(s=>{
       const q = s.quant;
@@ -11466,7 +11466,7 @@ async function runStratAnalysis(){
 
     const quantContext = top20forCtx.length >= 5
       ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
-        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的${stratCount}支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
+        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的'+stratCount+'支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext, stratCount);
     const WORKER = (typeof API !== 'undefined' && API)
@@ -11723,7 +11723,7 @@ async function runStratAnalysis(){
     resultEl.style.display = 'block';
   }finally{
     runBtn.disabled = false;
-    runBtn.textContent = '🤖 AI 策略分析 → `選出${stratCount}支股票`;
+    runBtn.textContent = `🤖 AI 策略分析 → 選出${stratCount}支股票`;
     runBtn.disabled = false;
     if(runningEl) runningEl.style.display = 'none';
     if(_progTimer) clearInterval(_progTimer);
