@@ -1700,7 +1700,7 @@
     <!-- 執行按鈕 -->
     <button onclick="runStratAnalysis()" id="stratRunBtn"
       style="width:100%;padding:14px;background:linear-gradient(135deg,var(--purple),#5040c0);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px;letter-spacing:.5px">
-      🤖 AI 策略分析 → 選出10支股票
+      🤖 AI 策略分析 → 選出<span id="stratCountDisplay">5</span>支股票
     </button>
 
     <!-- 自訂策略指令區 -->
@@ -1784,11 +1784,12 @@
           <div style="flex:1">
             <div style="font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600">選股數量</div>
             <select id="customStratCount"
+              oninput="const d=document.getElementById('stratCountDisplay');if(d)d.textContent=this.value"
               style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:7px 8px;font-family:inherit;outline:none">
-              <option value="5">5支</option>
-              <option value="8" selected>8支（預設）</option>
+              <option value="3">3支（精選）</option>
+              <option value="5" selected>5支（預設）</option>
+              <option value="8">8支</option>
               <option value="10">10支</option>
-              <option value="15">15支</option>
             </select>
           </div>
         </div>
@@ -11110,7 +11111,7 @@ const JSON_FORMAT = `
 {"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
 {"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"}
 ]}
-以上10列每列一支股票，填入真實台股代號與股名，共10支不多不少。`;
+以上${n}列每列一支股票，填入真實台股代號與股名，共${n}支不多不少。`;
 
 const STRATEGIES = {
   A:{
@@ -11156,7 +11157,7 @@ const STRATEGIES = {
     icon:'💎',
     color:'#f5c842',
     desc:'專注低本益比（PE）且大戶開始建倉的標的，尋找被市場低估但籌碼開始集中的機會。適合長線價值型投資人，持有週期約 3~6 個月。',
-    prompt: (market, n=8) => `台股量化分析師任務：使用「價值發現策略」從台灣上市上櫃全市場尋找10支被低估的潛力股。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「價值發現策略」從台灣上市上櫃全市場尋找${n}支被低估的潛力股。
 
 【市場背景】${market}
 
@@ -11175,7 +11176,7 @@ const STRATEGIES = {
     icon:'🔄',
     color:'#a080ff',
     desc:'當消息面極度恐慌（VIX高、新聞負面）但金流開始止跌回升時進場，捕捉逆向反彈機會。高報酬高風險，適合專業型投資人。',
-    prompt: (market, n=8) => `台股量化分析師任務：使用「情緒反轉策略」從台灣上市上櫃全市場找出10支具反轉潛力的超跌股。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「情緒反轉策略」從台灣上市上櫃全市場找出${n}支具反轉潛力的超跌股。
 
 【市場背景】${market}
 
@@ -11192,7 +11193,7 @@ const STRATEGIES = {
     icon:'⚖️',
     color:'#4fc3f7',
     desc:'整合前四項策略，以最小化整體波動為目標，自動平衡動能、成長、價值、反轉四個維度。適合希望分散風險的投資人。',
-    prompt: (market, n=8) => `台股量化分析師任務：使用「風險平權策略」從台灣上市上櫃全市場建構10支低波動分散組合。
+    prompt: (market, n=8) => `台股量化分析師任務：使用「風險平權策略」從台灣上市上櫃全市場建構${n}支低波動分散組合。
 
 【市場背景】${market}
 
@@ -11202,7 +11203,7 @@ const STRATEGIES = {
 - 價值型 2~3支：低估值、高殖利率
 - 反轉型 1~2支：超跌但基本面穩健
 
-【分散要求】10支必須來自至少5種不同產業，整體Beta低於1.0
+【分散要求】${n}支必須來自至少${Math.max(3,Math.ceil(n/2))}種不同產業，整體Beta低於1.0
 
 ` + JSON_FORMAT
   },
@@ -11298,7 +11299,7 @@ async function runStratAnalysis(){
   const key  = _currentStrat;
   const strat = STRATEGIES[key];
   if(!strat) return;
-  const stratCount = parseInt(document.getElementById('customStratCount')?.value||'8');
+  const stratCount = parseInt(document.getElementById('customStratCount')?.value||'5');
 
   const runBtn  = document.getElementById('stratRunBtn');
   const resultEl = document.getElementById('stratResult');
@@ -11452,7 +11453,7 @@ async function runStratAnalysis(){
       '可選範圍：台灣上市上櫃全部股票（含半導體、金融、航運、電子、生技、傳產、ETF等）',
     ].filter(Boolean).join('；');
 
-    // quantContext：只傳前20支（避免 prompt 過長），明確要求10支
+    // quantContext：只傳前20支（避免 prompt 過長），明確要求${stratCount}支
     const top20forCtx = top50.slice(0,20);
     const summaryShort = top20forCtx.map(s=>{
       const q = s.quant;
@@ -11470,7 +11471,7 @@ async function runStratAnalysis(){
 
     const quantContext = top20forCtx.length >= 5
       ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
-        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的10支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
+        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的${stratCount}支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext, stratCount);
     const WORKER = (typeof API !== 'undefined' && API)
@@ -11509,7 +11510,7 @@ async function runStratAnalysis(){
     let stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
     // 不足指定支數時，優先從 top50Filtered 補足（已通過三角色篩選）
-    const stratCount = parseInt(document.getElementById('customStratCount')?.value||'8');
+    const stratCount = parseInt(document.getElementById('customStratCount')?.value||'5');
     if(stocks.length < stratCount){
       const aiIds = new Set(stocks.map(s=>s.id));
       const pool  = (top50Filtered.length >= 3 ? top50Filtered : top50);
@@ -11727,7 +11728,7 @@ async function runStratAnalysis(){
     resultEl.style.display = 'block';
   }finally{
     runBtn.disabled = false;
-    runBtn.textContent = '🤖 AI 策略分析 → 選出10支股票';
+    runBtn.textContent = '🤖 AI 策略分析 → `選出${stratCount}支股票`;
     runBtn.disabled = false;
     if(runningEl) runningEl.style.display = 'none';
     if(_progTimer) clearInterval(_progTimer);
@@ -13225,7 +13226,7 @@ async function runCustomStratAnalysis(){
   const stratName  = (nameEl?.value||'').trim() || '自訂策略';
   const userPrompt = (promptEl?.value||'').trim();
   const period     = parseInt(periodEl?.value||'30');
-  const count      = parseInt(countEl?.value||'8');
+  const count      = parseInt(countEl?.value||'5');
 
   if(!userPrompt){ showToast('請輸入選股條件'); return; }
 
