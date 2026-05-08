@@ -10561,11 +10561,20 @@ async function buildFullMarketQuant(){
     const batch = QUANT_POOL.slice(i, i+BATCH);
     await Promise.all(batch.map(async stock=>{
       try{
-        const [priceData, instData] = await Promise.all([
+        const [priceData, instData, marginData, cashData, revData, holdData] = await Promise.all([
           fmFetch({dataset:'TaiwanStockPrice', data_id:stock.id,
             start_date:weekAgo, end_date:today, _optional:true}, 8000).catch(()=>null),
           fmFetch({dataset:'TaiwanStockInstitutionalInvestorsBuySell', data_id:stock.id,
             start_date:weekAgo, end_date:today, _optional:true}, 8000).catch(()=>null),
+          // ── 付費新增 ─────────────────────────────────
+          fmFetch({dataset:'TaiwanStockMarginPurchaseShortSale', data_id:stock.id,
+            start_date:weekAgo, end_date:today, _optional:true}, 6000).catch(()=>null),
+          fmFetch({dataset:'TaiwanStockCashFlowsStatement', data_id:stock.id,
+            start_date:nDaysAgo(400), end_date:today, _optional:true}, 6000).catch(()=>null),
+          fmFetch({dataset:'TaiwanStockMonthRevenue', data_id:stock.id,
+            start_date:nDaysAgo(400), end_date:today, _optional:true}, 6000).catch(()=>null),
+          fmFetch({dataset:'TaiwanStockShareholding', data_id:stock.id,
+            start_date:nDaysAgo(30), end_date:today, _optional:true}, 6000).catch(()=>null),
         ]);
 
         // 5日漲跌幅 + 量能比
@@ -10592,17 +10601,62 @@ async function buildFullMarketQuant(){
           instScore = (foreign>0?2:foreign<0?-2:0)+(trust>0?1:0);
         }
 
-        // 更新（或新增）scoreMap
+        // ── 融資融券（付費）────────────────────────────
+        let shortRatio=null, marginChgPct=null;
+        if(marginData?.length){
+          const ms=[...marginData].sort((a,b)=>a.date>b.date?1:-1);
+          const ml=ms[ms.length-1], mp=ms[ms.length-2];
+          const mBal=parseFloat(ml?.MarginPurchaseTodayBalance||0);
+          const sBal=parseFloat(ml?.ShortSaleTodayBalance||0);
+          const mPrev=parseFloat(mp?.MarginPurchaseTodayBalance||0);
+          shortRatio = mBal>0 ? +(sBal/mBal*100).toFixed(1) : null;
+          marginChgPct = mBal>0&&mPrev>0 ? +((mBal-mPrev)/mPrev*100).toFixed(1) : null;
+        }
+
+        // ── 現金流量（付費）─────────────────────────────
+        let freeCashFlow=null;
+        if(cashData?.length){
+          const cs=[...cashData].sort((a,b)=>a.date>b.date?1:-1);
+          const cl=cs[cs.length-1];
+          const opCash=parseFloat(cl?.CashFlowsFromOperatingActivities||0);
+          const capex =parseFloat(cl?.PurchaseOfPropertyPlantAndEquipment||0);
+          freeCashFlow = !isNaN(opCash) ? +((opCash-Math.abs(capex))/1e8).toFixed(1) : null;
+        }
+
+        // ── 月營收年增率（付費）─────────────────────────
+        let revYoY=null;
+        if(revData?.length){
+          const rs=[...revData].sort((a,b)=>a.date>b.date?1:-1);
+          const rl=rs[rs.length-1];
+          revYoY = parseFloat(rl?.year_month_increase_percentage||rl?.revenue_year||0)||null;
+        }
+
+        // ── 集保大戶持股週變化（付費）───────────────────
+        let whaleChg=null;
+        if(holdData?.length){
+          const hs=[...holdData].sort((a,b)=>a.date>b.date?1:-1);
+          const dates=[...new Set(hs.map(r=>r.date))].slice(0,2);
+          if(dates.length>=2){
+            const calcWhale=d=>hs.filter(r=>r.date===d&&parseInt((r.HoldingSharesLevel||'').replace(/[^0-9].*/,''))||0 >=800)
+              .reduce((s,r)=>s+parseFloat(r.HoldingSharesPercent||0),0);
+            const w0=calcWhale(dates[0]), w1=calcWhale(dates[1]);
+            whaleChg = +(w0-w1).toFixed(2);
+          }
+        }
+
+        // ── 更新 scoreMap（加入付費新欄位）──────────────
+        const paidFields = { shortRatio, marginChgPct, freeCashFlow, revYoY, whaleChg };
         if(scoreMap[stock.id]){
-          // 用精確的5日資料覆蓋 TWSE 的當日資料
           scoreMap[stock.id].ret5      = ret5;
           scoreMap[stock.id].volRatio  = volRatio;
           scoreMap[stock.id].instScore = instScore;
           if(close) scoreMap[stock.id].close = close;
+          Object.assign(scoreMap[stock.id], paidFields);
         } else {
           scoreMap[stock.id] = {
             name:stock.name, sector:stock.s||SECTOR_MAP[stock.id]||'—',
             close, ret5, volRatio, instScore, pe:null, pb:null, market:'FM',
+            ...paidFields,
           };
         }
       }catch(e){}
@@ -10643,39 +10697,109 @@ async function buildFullMarketQuant(){
 
 function calcResearcherScore(data){
   let score = 50;
-  const { pe, pb, yield: yld, ret5 } = data;
+  const { pe, pb, yield: yld, ret5,
+          freeCashFlow,   // 自由現金流（億，正=優）
+          debtRatio,      // 負債比率（%，低=穩）
+          revYoY,         // 月營收年增率（%）
+          cashFlowScore,  // 現金流品質分（-2~+2）
+  } = data;
+
+  // ── PE 估值 ─────────────────────────────────────────
   if(pe!=null && pe>0){
     if(pe<10) score+=25; else if(pe<15) score+=18;
     else if(pe<20) score+=10; else if(pe<30) score+=2; else score-=15;
   } else if(pe!=null && pe<=0){ score-=20; }
+
+  // ── PB 淨值比 ────────────────────────────────────────
   if(pb!=null && pb>0){
     if(pb<1) score+=15; else if(pb<1.5) score+=10;
     else if(pb<3) score+=3; else if(pb>5) score-=10;
   }
+
+  // ── 殖利率 ───────────────────────────────────────────
   if(yld!=null && yld>0){
     if(yld>=6) score+=15; else if(yld>=4) score+=10; else if(yld>=2) score+=5;
   }
+
+  // ── 自由現金流（付費新增）────────────────────────────
+  if(freeCashFlow!=null){
+    if(freeCashFlow>50)       score+=18;  // 強勁正自由現金流
+    else if(freeCashFlow>10)  score+=12;
+    else if(freeCashFlow>0)   score+=6;
+    else if(freeCashFlow<-50) score-=15;  // 嚴重燒錢
+    else if(freeCashFlow<0)   score-=6;
+  }
+
+  // ── 負債比率（付費新增）─────────────────────────────
+  if(debtRatio!=null){
+    if(debtRatio<30)       score+=12;  // 財務極穩健
+    else if(debtRatio<45)  score+=6;
+    else if(debtRatio<60)  score+=0;   // 中性
+    else if(debtRatio<75)  score-=8;
+    else                   score-=18;  // 高槓桿風險
+  }
+
+  // ── 月營收年增率（付費新增）─────────────────────────
+  if(revYoY!=null){
+    if(revYoY>50)       score+=15;  // 爆發成長
+    else if(revYoY>20)  score+=10;
+    else if(revYoY>5)   score+=5;
+    else if(revYoY<-20) score-=12;  // 衰退警示
+    else if(revYoY<0)   score-=5;
+  }
+
   if(ret5!=null){
     if(ret5>15) score-=5; else if(ret5>0) score+=3; else if(ret5<-15) score-=8;
   }
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function calcAnalystScore(data){
   let score = 50;
-  const { instScore, volRatio, ret5, pe, pb } = data;
+  const { instScore, volRatio, ret5, pe, pb,
+          whaleChg,     // 主力持股週變化（%，正=集中）
+          shortRatio,   // 券資比（%，高=空頭壓力）
+          marginChgPct, // 融資週增幅（%，高=散戶追高）
+  } = data;
+
+  // ── 法人籌碼 ─────────────────────────────────────────
   if(instScore!=null){
     if(instScore>=3) score+=30; else if(instScore>=1) score+=18;
     else if(instScore>=0) score+=5; else if(instScore>=-1) score-=10; else score-=25;
   }
+
+  // ── 量能 ─────────────────────────────────────────────
   if(volRatio!=null){
     if(volRatio>=2.5) score+=15; else if(volRatio>=1.5) score+=10;
     else if(volRatio>=0.8) score+=3; else score-=10;
   }
+
+  // ── 主力持股週變化（付費新增）────────────────────────
+  if(whaleChg!=null){
+    if(whaleChg>1.0)       score+=18;  // 主力大幅加碼，籌碼集中
+    else if(whaleChg>0.3)  score+=10;
+    else if(whaleChg>0)    score+=4;
+    else if(whaleChg<-1.0) score-=15;  // 主力大幅出場
+    else if(whaleChg<-0.3) score-=8;
+  }
+
+  // ── 券資比（付費新增）───────────────────────────────
+  if(shortRatio!=null){
+    if(shortRatio>25)      score-=12;  // 空頭力道強，壓力大
+    else if(shortRatio>15) score-=5;
+    else if(shortRatio<5)  score+=8;   // 幾乎無人放空，多頭無壓
+  }
+
+  // ── 融資週增（付費新增）─────────────────────────────
+  // 融資暴增代表散戶追高，反向指標
+  if(marginChgPct!=null && marginChgPct>20) score-=8;
+
   if(pe!=null && pe>40) score-=15;
   if(pb!=null && pb>8)  score-=10;
   if(instScore>0 && ret5>0) score+=8;
   if(instScore<0 && ret5<0) score-=10;
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
@@ -10728,60 +10852,92 @@ function calcThreeLayerScore(data){
 
 // 依策略計算單支股票的加權分數
 function calcScoreForStrat(data, stratKey){
-  // ret5：5日漲跌（FinMind補強的97支才有，其餘用 changePct 代替）
-  // changePct：今日漲跌（TWSE/TPEX全市場都有）
-  // volRatio：量能比（FinMind有，TWSE無，預設1）
-  // instScore：法人分數（FinMind補強有，其餘為0）
-  // pe/yield/pb：上市股票有PE殖利率（TWSE BWIBBU_ALL）
-  const ret5      = data.ret5      || 0;
-  const changePct = data.changePct || 0;
-  const mom       = ret5 !== 0 ? ret5 : changePct; // 優先5日，無則用今日
-  const volRatio  = data.volRatio  || 1;
-  const instScore = data.instScore || 0;
-  const pe        = data.pe   || null;
-  const yld       = data.yield || null; // 殖利率（%）
-  const pb        = data.pb   || null;
-  const vol       = data.volume || 0;
-  // 成交量分位（TWSE有）：高成交量加分
+  const ret5         = data.ret5         || 0;
+  const changePct    = data.changePct    || 0;
+  const mom          = ret5 !== 0 ? ret5 : changePct;
+  const volRatio     = data.volRatio     || 1;
+  const instScore    = data.instScore    || 0;
+  const pe           = data.pe           || null;
+  const yld          = data.yield        || null;
+  const pb           = data.pb           || null;
+  const vol          = data.volume       || 0;
+  // ── 付費欄位 ──────────────────────────────────────
+  const freeCashFlow = data.freeCashFlow ?? null;  // 自由現金流（億）
+  const revYoY       = data.revYoY       ?? null;  // 月營收年增率（%）
+  const whaleChg     = data.whaleChg     ?? null;  // 主力持股週變化（%）
+  const shortRatio   = data.shortRatio   ?? null;  // 券資比（%）
+  const marginChgPct = data.marginChgPct ?? null;  // 融資週增幅（%）
+
   const volPts = vol > 100000000 ? 10 : vol > 50000000 ? 6 : vol > 10000000 ? 3 : 0;
 
+  // ── 付費通用加分計算 ──────────────────────────────
+  const fcfPts   = freeCashFlow!=null ? (freeCashFlow>30?12 : freeCashFlow>0?6 : freeCashFlow<0?-8 : 0) : 0;
+  const revPts   = revYoY!=null       ? (revYoY>30?12 : revYoY>10?6 : revYoY<-10?-8 : 0) : 0;
+  const whalePts = whaleChg!=null     ? (whaleChg>0.5?12 : whaleChg>0?5 : whaleChg<-0.5?-10 : 0) : 0;
+  const srPts    = shortRatio!=null   ? (shortRatio>20?-8 : shortRatio<5?6 : 0) : 0;
+  const mgPts    = marginChgPct!=null ? (marginChgPct>20?-6 : 0) : 0; // 散戶追高為反向
+
   let score = 50;
-  if(stratKey==='A'){ // 極致動能：漲幅+量能+法人
+
+  if(stratKey==='A'){ // 極致動能：漲幅+量能+法人+主力
     score = 50
-      + mom*3                              // 動能（+/-各方向都計）
-      + (volRatio-1)*8                     // 放量
-      + volPts                             // 絕對成交量
-      + instScore*5;                       // 法人買超
-  } else if(stratKey==='B'){ // 穩健成長：法人+估值+穩定
+      + mom*3
+      + (volRatio-1)*8
+      + volPts
+      + instScore*5
+      + whalePts*1.2   // 主力加碼更重要
+      + revPts*0.8     // 營收加速錦上添花
+      + srPts          // 空頭壓力扣分
+      + mgPts;         // 散戶追高反指標
+
+  } else if(stratKey==='B'){ // 穩健成長：法人+估值+現金流健康
     score = 50
-      + instScore*10                       // 法人最重要
-      + mom*1                              // 小幅動能
-      + (pe&&pe>0&&pe<25 ? 8:0)           // 合理PE
-      + (yld&&yld>3 ? 6:0)               // 有殖利率
-      + volPts*0.5;
-  } else if(stratKey==='C'){ // 價值發現：低估值+法人轉買
+      + instScore*10
+      + mom*1
+      + (pe&&pe>0&&pe<25 ? 8:0)
+      + (yld&&yld>3 ? 6:0)
+      + volPts*0.5
+      + fcfPts*1.5     // 現金流最重要
+      + revPts         // 營收成長
+      + whalePts       // 主力持倉穩定
+      + srPts;
+
+  } else if(stratKey==='C'){ // 價值發現：低估值+財務穩健+主力默默買
     const pePts = pe&&pe>0&&pe<12?20 : pe&&pe<18?12 : pe&&pe<25?5 : 0;
     const pbPts = pb&&pb>0&&pb<1?15  : pb&&pb<1.5?8 : 0;
     const yldPts= yld&&yld>5?12 : yld&&yld>3?6 : 0;
     score = 50
-      + pePts + pbPts + yldPts            // 估值加分
-      - Math.max(0,mom)*0.5               // 漲太多扣分
-      + Math.max(0,-mom)*1               // 超跌加分
-      + instScore*4;                      // 法人轉買
-  } else if(stratKey==='D'){ // 情緒反轉：超跌+法人止跌
+      + pePts + pbPts + yldPts
+      - Math.max(0,mom)*0.5
+      + Math.max(0,-mom)*1
+      + instScore*4
+      + fcfPts*2       // 價值股最重視現金流
+      + whalePts*1.5   // 主力悄悄買是關鍵
+      + srPts;
+
+  } else if(stratKey==='D'){ // 情緒反轉：超跌+法人止跌+空單回補
     const dropPts = mom<-10?25 : mom<-5?15 : mom<-2?5 : 0;
+    // 反轉策略：高券資比反而是軋空機會
+    const sqzPts = shortRatio!=null && shortRatio>20 ? 10 : 0; // 高空單 = 潛在軋空
     score = 50
-      + dropPts                           // 跌越多加分越多
-      + instScore*3                       // 法人開始買
-      + volPts*0.5;
-  } else { // E 風險平權：低波動+有殖利率
+      + dropPts
+      + instScore*3
+      + volPts*0.5
+      + sqzPts          // 軋空潛力
+      + whalePts*0.8;   // 主力是否開始布局
+
+  } else { // E 風險平權：低波動+殖利率+財務穩健
     const stabPts = Math.abs(mom)<2?12 : Math.abs(mom)<5?6 : 0;
     score = 50
       + instScore*5
-      + stabPts                           // 穩定加分
-      + (yld&&yld>4?10 : yld&&yld>2?5:0) // 殖利率
-      + (pe&&pe>0&&pe<30?5:0);
+      + stabPts
+      + (yld&&yld>4?10 : yld&&yld>2?5:0)
+      + (pe&&pe>0&&pe<30?5:0)
+      + fcfPts*1.5      // 穩健型最重視現金流
+      + (freeCashFlow!=null&&freeCashFlow>0?5:0) // 正現金流加分
+      + srPts*0.5;
   }
+
   return Math.min(99, Math.max(1, Math.round(score)));
 }
 
@@ -13128,6 +13284,8 @@ async function runCustomStratAnalysis(){
             pe:       data.pe||null,
             pb:       data.pb||null,
             close:    data.close||null,
+            // 付費欄位直接帶入
+            _raw:     data,  // 完整 scoreMap 資料（含付費欄位）
           };
         })
         // 保留有名稱的（NAME_MAP/DEFAULT_STOCKS覆蓋）+ 有基本量化資料的
@@ -13164,13 +13322,24 @@ async function runCustomStratAnalysis(){
     // 把候選資料格式化（含量化指標，讓 AI 有依據）
     const candLines = candidates.slice(0, Math.min(candidates.length, 80)).map(s=>{
       const tags = [];
-      if(s.inst > 0)      tags.push('法人買');
-      if(s.inst < 0)      tags.push('法人賣');
-      if(s.ret5 >= 5)     tags.push('強勢');
-      if(s.ret5 <= -5)    tags.push('超跌');
-      if(s.volRatio>=1.5) tags.push('放量');
-      if(s.pe && s.pe<12) tags.push('低PE');
-      return s.id+'('+s.name+') '+tags.join('/');
+      // 基本籌碼
+      if(s.inst > 0)         tags.push('法人買');
+      if(s.inst < 0)         tags.push('法人賣');
+      if(s.ret5 >= 5)        tags.push('強勢');
+      if(s.ret5 <= -5)       tags.push('超跌');
+      if(s.volRatio>=1.5)    tags.push('放量');
+      if(s.pe && s.pe<12)    tags.push('低PE');
+      // 付費資料標籤
+      const d = s._raw || {};
+      if(d.freeCashFlow!=null && d.freeCashFlow>0)  tags.push('正現金流');
+      if(d.freeCashFlow!=null && d.freeCashFlow<-20) tags.push('燒錢');
+      if(d.whaleChg!=null && d.whaleChg>0.5)        tags.push('主力加碼');
+      if(d.whaleChg!=null && d.whaleChg<-0.5)       tags.push('主力出場');
+      if(d.shortRatio!=null && d.shortRatio>20)      tags.push('高空單');
+      if(d.revYoY!=null && d.revYoY>20)             tags.push('營收爆發');
+      if(d.revYoY!=null && d.revYoY<-10)            tags.push('營收衰退');
+      if(d.marginChgPct!=null && d.marginChgPct>20) tags.push('散戶追高⚠️');
+      return s.id+'('+s.name+') ['+tags.join('/')+']';
     }).join(', ');
 
     const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+stratCount+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
