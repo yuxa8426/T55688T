@@ -12035,35 +12035,42 @@ async function loadFundamentals(stockId){
     }
   }
 
-  // ── 解析配息 ──────────────────────────────────────────
+  // ── 解析配息與殖利率 ──────────────────────────────────
+  // 優先直接用 TaiwanStockPER 的 dividend_yield 欄位（最準確）
+  const _perLatest = (perData||[]).slice(-1)[0];
+  const _perYield  = parseFloat(_perLatest?.dividend_yield||0)||null;
+  const divYieldEl = document.getElementById('fund-div-yield');
+  if(_perYield!=null && _perYield>0 && divYieldEl){
+    divYieldEl.textContent = _perYield.toFixed(2)+'%';
+    divYieldEl.style.color = _perYield>=5?'var(--red)':_perYield>=3?'var(--gold)':'var(--text)';
+  }
+
   if(divData?.length){
-    const divs = divData.sort((a,b)=>a.date>b.date?1:-1);
-    // 最近一年現金股利
-    const recent = divs.slice(-4);  // 台積電每季配息，取近4筆 = 近一年
-    // FinMind TaiwanStockDividend 欄位：CashDividend 或 cash_dividend 或 StockDividend
-    // 付費版可能用 cash_earnings_distribution 或直接是 value 欄位
-    // FinMind TaiwanStockDividend 正確欄位：CashEarningsDistribution（現金股利）
-    const getCashDiv = r => parseFloat(r.CashEarningsDistribution || r.CashDividend || r.cash_dividend || 0);
-    const cashDiv = recent.reduce((sum,r)=>sum+getCashDiv(r), 0);
+    const divs = [...divData].sort((a,b)=>a.date>b.date?1:-1);
+    const getCashDiv = r => parseFloat(r.CashEarningsDistribution||r.CashDividend||r.cash_dividend||0);
+    const recent4 = divs.slice(-4);
+    const cashDiv = recent4.reduce((sum,r)=>sum+getCashDiv(r), 0);
 
-    // 從 PER 資料拿目前股價計算殖利率
-    const perLatest = (perData||[]).slice(-1)[0];
-    const price     = parseFloat(perLatest?.closing_price||perLatest?.close||0)||null;
-
-    const divYieldEl = document.getElementById('fund-div-yield');
-    if(divYieldEl && cashDiv > 0 && price && price > 0){
-      const yield_ = +(cashDiv/price*100).toFixed(1);
-      divYieldEl.textContent = yield_+'%';
-      divYieldEl.style.color = yield_>=5?'var(--red)':yield_>=3?'var(--gold)':'var(--text)';
-    } else if(divYieldEl && cashDiv > 0){
-      divYieldEl.textContent = '$'+cashDiv.toFixed(1);
+    // 若 PER 沒有殖利率才用股利估算
+    if((_perYield==null||_perYield<=0) && divYieldEl && cashDiv>0){
+      const _price = parseFloat(_perLatest?.closing_price||_perLatest?.close||0)||null;
+      if(_price && _price>0){
+        const y = +(cashDiv/_price*100).toFixed(2);
+        divYieldEl.textContent = y+'%';
+        divYieldEl.style.color = y>=5?'var(--red)':y>=3?'var(--gold)':'var(--text)';
+      } else {
+        divYieldEl.textContent = cashDiv.toFixed(2)+' 元/年';
+        divYieldEl.style.color = 'var(--gold)';
+      }
     }
 
+    // 配息年數 + 年股利金額
     const divYrEl = document.getElementById('fund-div-years');
     if(divYrEl){
-      const yrs = new Set(divs.map(d=>(d.date||'').slice(0,4))).size;
-      const hasDiv = divs.filter(d=>parseFloat(d.CashDividend||d.cash_dividend||0)>0).length;
-      divYrEl.textContent = hasDiv>0?`近${yrs}年配息`:'未配息';
+      const yrs    = new Set(divs.map(d=>(d.date||'').slice(0,4))).size;
+      const hasDiv = divs.filter(d=>getCashDiv(d)>0).length;
+      const annualStr = cashDiv>0 ? `・年配 ${cashDiv.toFixed(2)} 元` : '';
+      divYrEl.textContent = hasDiv>0 ? `近${yrs}年配息${annualStr}` : '未配息';
     }
   }
 
