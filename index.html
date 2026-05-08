@@ -105,7 +105,7 @@
     <div style="margin-top:6px;display:flex;gap:4px" id="battleBannerBars"></div>
   </div>
   <div class="header">
-    <div><h1>股析</h1><p id="hdr-sub">載入中…</p></div>
+    <div><h1>市場總覽</h1><p id="hdr-sub">載入中…</p></div>
     <div class="avatar" id="headerAvatar">股</div>
   </div>
 
@@ -509,6 +509,54 @@
       </div>
     </div>
   </div>
+<div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
+  <div class="index-row">
+    <div class="idx"><div class="n">加權指數</div><div class="v" id="idx-taiex">—</div><div class="c" id="idx-taiex-c">—</div></div>
+    <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
+    <div class="idx"><div class="n">那斯達克</div><div class="v" id="idx-nasdaq">—</div><div class="c" id="idx-nasdaq-c">—</div></div>
+    <div class="idx"><div class="n">費城半導</div><div class="v" id="idx-sox">—</div><div class="c" id="idx-sox-c">—</div></div>
+    <div class="idx"><div class="n">道瓊</div><div class="v" id="idx-dji">—</div><div class="c" id="idx-dji-c">—</div></div>
+    <div class="idx"><div class="n">VIX</div><div class="v" id="idx-vix">—</div><div class="c" id="idx-vix-c">—</div></div>
+  
+
+
+</div>
+
+  <!-- VIX 恐慌指數 -->
+  <div class="sec" style="padding-bottom:6px"><h2>😨 VIX 恐慌指數</h2></div>
+<div class="vix-wrap">
+    <div class="vix-top">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">CBOE VIX · 美股恐慌指標</div>
+          <div class="vix-num" id="vixNum">—<span class="vix-unit" id="vixDec"></span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <span id="vixChg" style="font-size:14px;font-weight:700;color:var(--text3)">—</span>
+            <span style="font-size:11px;color:var(--text3)" id="vixDataDate">載入中…</span>
+          </div>
+        </div>
+        <span class="vix-badge" id="vixBadge">—</span>
+      </div>
+      <div class="gauge-track"><div class="gauge-needle" id="vixNeedle" style="left:0%"></div></div>
+      <div class="gauge-labels"><span>0</span><span>15</span><span>25</span><span>35</span><span>50+</span></div>
+      <div class="vix-zones">
+        <div class="vzone z1" id="vz1">😌<br>低波動<br><small>&lt;15</small></div>
+        <div class="vzone z2" id="vz2">😐<br>正常<br><small>15~25</small></div>
+        <div class="vzone z3" id="vz3">😰<br>緊張<br><small>25~35</small></div>
+        <div class="vzone z4" id="vz4">😱<br>恐慌<br><small>&gt;35</small></div>
+      </div>
+    </div>
+    <div class="vix-bottom">
+      <div class="vix-stats">
+        <div class="vstat"><div class="vl">近5日均</div><div class="vv" id="vixAvg">—</div></div>
+        <div class="vstat"><div class="vl">近月高</div><div class="vv" id="vixHi">—</div></div>
+        <div class="vstat"><div class="vl">近月低</div><div class="vv" id="vixLo">—</div></div>
+        <div class="vstat"><div class="vl">月百分位</div><div class="vv gold" id="vixPct">—</div></div>
+      </div>
+      <div class="vix-note" id="vixNote"><strong class="purple">🤖 AI 解讀：</strong>資料載入中…</div>
+    </div>
+  </div>
+  
 
 
   
@@ -571,70 +619,30 @@
         <div class="bdc" id="mktVolEMGChg">—</div>
       </div>
     </div>
-    <!-- AI 市場行情分析 -->
+    <!-- AI 市場行情分析（預設收合）-->
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.8px">🤖 AI 市場行情分析</span>
-        <button onclick="refreshMktVolAI()"
-          style="font-size:10px;padding:3px 8px;background:rgba(155,127,254,.12);
-                 border:1px solid rgba(155,127,254,.3);border-radius:6px;
-                 color:var(--purple);cursor:pointer;font-family:inherit">重新分析</button>
-      </div>
-      <div id="mktVolAiBox"
-        style="font-size:12px;color:var(--text2);line-height:1.8;
-               background:rgba(155,127,254,.06);border-radius:10px;
-               border:1px solid rgba(155,127,254,.18);padding:10px 12px;min-height:52px">
-        <span style="color:var(--text3)">成交量資料載入後自動分析…</span>
-      </div>
-    </div>
-  </div>
-<div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
-  <div class="index-row">
-    <div class="idx"><div class="n">加權指數</div><div class="v" id="idx-taiex">—</div><div class="c" id="idx-taiex-c">—</div></div>
-    <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
-    <div class="idx"><div class="n">那斯達克</div><div class="v" id="idx-nasdaq">—</div><div class="c" id="idx-nasdaq-c">—</div></div>
-    <div class="idx"><div class="n">費城半導</div><div class="v" id="idx-sox">—</div><div class="c" id="idx-sox-c">—</div></div>
-    <div class="idx"><div class="n">道瓊</div><div class="v" id="idx-dji">—</div><div class="c" id="idx-dji-c">—</div></div>
-    <div class="idx"><div class="n">VIX</div><div class="v" id="idx-vix">—</div><div class="c" id="idx-vix-c">—</div></div>
-  
-
-
-</div>
-
-  <!-- VIX 恐慌指數 -->
-  <div class="sec" style="padding-bottom:6px"><h2>😨 VIX 恐慌指數</h2></div>
-<div class="vix-wrap">
-    <div class="vix-top">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
-        <div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">CBOE VIX · 美股恐慌指標</div>
-          <div class="vix-num" id="vixNum">—<span class="vix-unit" id="vixDec"></span></div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
-            <span id="vixChg" style="font-size:14px;font-weight:700;color:var(--text3)">—</span>
-            <span style="font-size:11px;color:var(--text3)" id="vixDataDate">載入中…</span>
-          </div>
+      <div style="display:flex;justify-content:space-between;align-items:center"
+           onclick="toggleMktVolAI()" style="cursor:pointer">
+        <span style="font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.8px;cursor:pointer"
+              onclick="toggleMktVolAI()">🤖 AI 市場行情分析 <span id="mktVolAiArrow" style="font-size:10px">▸</span></span>
+        <div style="display:flex;gap:6px">
+          <button onclick="event.stopPropagation();refreshMktVolAI()"
+            style="font-size:10px;padding:3px 8px;background:rgba(155,127,254,.12);
+                   border:1px solid rgba(155,127,254,.3);border-radius:6px;
+                   color:var(--purple);cursor:pointer;font-family:inherit">重新分析</button>
         </div>
-        <span class="vix-badge" id="vixBadge">—</span>
       </div>
-      <div class="gauge-track"><div class="gauge-needle" id="vixNeedle" style="left:0%"></div></div>
-      <div class="gauge-labels"><span>0</span><span>15</span><span>25</span><span>35</span><span>50+</span></div>
-      <div class="vix-zones">
-        <div class="vzone z1" id="vz1">😌<br>低波動<br><small>&lt;15</small></div>
-        <div class="vzone z2" id="vz2">😐<br>正常<br><small>15~25</small></div>
-        <div class="vzone z3" id="vz3">😰<br>緊張<br><small>25~35</small></div>
-        <div class="vzone z4" id="vz4">😱<br>恐慌<br><small>&gt;35</small></div>
+      <div id="mktVolAiPanel" style="display:none;margin-top:8px">
+        <div id="mktVolAiBox"
+          style="font-size:12px;color:var(--text2);line-height:1.8;
+                 background:rgba(155,127,254,.06);border-radius:10px;
+                 border:1px solid rgba(155,127,254,.18);padding:10px 12px;min-height:52px">
+          <span style="color:var(--text3)">成交量資料載入後自動分析…</span>
+        </div>
       </div>
-    </div>
-    <div class="vix-bottom">
-      <div class="vix-stats">
-        <div class="vstat"><div class="vl">近5日均</div><div class="vv" id="vixAvg">—</div></div>
-        <div class="vstat"><div class="vl">近月高</div><div class="vv" id="vixHi">—</div></div>
-        <div class="vstat"><div class="vl">近月低</div><div class="vv" id="vixLo">—</div></div>
-        <div class="vstat"><div class="vl">月百分位</div><div class="vv gold" id="vixPct">—</div></div>
-      </div>
-      <div class="vix-note" id="vixNote"><strong class="purple">🤖 AI 解讀：</strong>資料載入中…</div>
     </div>
   </div>
+
   <!-- 市場總覽新聞（大盤相關，可收合）-->
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <h2>📰 市場總覽新聞</h2>
@@ -1370,7 +1378,7 @@
 </div>
 
 <div class="page" id="page-explore">
-  <div class="header"><div><h1>探索</h1><p>市場全覽與族群分析</p></div></div>
+  <div class="header"><div><h1>探索</h1><p>國際財經・趨勢股・族群分析</p></div></div>
   <div style="padding:0 16px">
 
     <!-- ═══ 國際財經 ═══ -->
@@ -1559,7 +1567,7 @@
 <!-- ═══ PAGE: 策略選股 ═══ -->
 <div class="page" id="page-watchlist">
   <div class="header">
-    <div><h1>AI 選股</h1><p id="wl-subtitle">AI 驅動 · 五大策略模組</p></div>
+    <div><h1>AI 選股</h1><p id="wl-subtitle">五大策略 · 法人籌碼 · 勝率統計</p></div>
     <span id="stratRunning" style="font-size:11px;color:var(--text3);display:none">⏳ 分析中…</span>
   </div>
 
@@ -1571,11 +1579,6 @@
 
   <!-- 策略卡片列 -->
   <div style="padding:0 16px 100px">
-
-    <!-- 免責聲明 -->
-    <div style="margin-bottom:14px;padding:8px 12px;background:rgba(245,200,66,.07);border:1px solid rgba(245,200,66,.2);border-radius:10px;font-size:11px;color:rgba(245,200,66,.8);line-height:1.5">
-      ⚠️ 策略選股僅供參考，不構成投資建議。勝率為技術統計估算，投資風險自負。
-    </div>
 
     <!-- 策略選擇按鈕 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="stratBtns">
@@ -1808,7 +1811,7 @@
     <div id="wlPanel" style="display:none">
       <!-- 新增股票列 -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="wlAddInput" type="text" placeholder="輸入代號或名稱，例如 2330 或台積電"
+        <input id="wlAddInput" type="text" placeholder="代號或名稱，如 2330 台積電" enterkeyhint="search"
           inputmode="text" enterkeyhint="done" autocomplete="off"
           style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:16px;font-family:inherit;outline:none"
           oninput="onWlSearch(this.value)" onkeydown="if(event.key==='Enter'){wlAddFromInput();this.blur()}">
@@ -1827,6 +1830,10 @@
       <div id="wlBacktestSummary" style="display:none;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:12px;margin-bottom:8px"></div>
     </div>
 
+    <!-- 免責聲明（底部）-->
+    <div style="margin:4px 0 16px;padding:8px 12px;background:rgba(245,200,66,.05);border:1px solid rgba(245,200,66,.15);border-radius:10px;font-size:10px;color:rgba(245,200,66,.6);line-height:1.5;text-align:center">
+      ⚠️ 策略選股僅供參考，不構成投資建議。勝率為技術統計估算，投資風險自負。
+    </div>
   </div>
 </div>
 
@@ -1902,15 +1909,23 @@
           <span style="font-size:10px;color:var(--text3)">或使用裝置 ID</span>
           <div style="flex:1;height:1px;background:var(--border)"></div>
         </div>
-        <!-- 裝置 ID（備援）-->
-        <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:8px">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">裝置 ID（備援同步）</div>
-          <div style="font-size:11px;color:var(--text2);word-break:break-all;font-family:monospace" id="kvUidDisplay">載入中…</div>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="copyUID()" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📋 複製 ID</button>
-          <button onclick="document.getElementById('importUidArea').style.display=document.getElementById('importUidArea').style.display==='none'?'block':'none'"
-            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📱 換裝置</button>
+        <!-- 裝置 ID（備援，預設收合）-->
+        <div style="margin-bottom:8px">
+          <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent.includes('展開')?'▴ 收合裝置ID':'▾ 進階：裝置ID備援同步'"
+            style="width:100%;background:none;border:none;color:var(--text3);font-size:10px;text-align:left;cursor:pointer;padding:4px 0;font-family:inherit">
+            ▾ 進階：裝置ID備援同步
+          </button>
+          <div style="display:none">
+            <div style="background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:8px;margin-top:6px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px">裝置 ID</div>
+              <div style="font-size:11px;color:var(--text2);word-break:break-all;font-family:monospace" id="kvUidDisplay">載入中…</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button onclick="copyUID()" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📋 複製 ID</button>
+              <button onclick="document.getElementById('importUidArea').style.display=document.getElementById('importUidArea').style.display==='none'?'block':'none'"
+                style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;padding:7px;cursor:pointer;font-family:inherit">📱 換裝置</button>
+            </div>
+          </div>
         </div>
         <div id="importUidArea" style="display:none;margin-top:8px">
           <div style="display:flex;gap:6px">
@@ -2306,10 +2321,10 @@
 </div><!-- /app -->
 
 <nav class="nav">
-  <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>📊</span><span>分析</span></button>
+  <button class="nav-btn active" id="nb-home" onclick="switchPage('home')"><span>🏠</span><span>總覽</span></button>
   <button class="nav-btn" id="nb-explore" onclick="switchPage('explore')"><span>🔍</span><span>探索</span></button>
-  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>AI 選股</span></button>
   <button class="nav-btn" id="nb-stock" onclick="switchPage('stock')"><span>📈</span><span>個股</span></button>
+  <button class="nav-btn" id="nb-watchlist" onclick="switchPage('watchlist')"><span>🤖</span><span>AI 選股</span></button>
   <button class="nav-btn" id="nb-profile" onclick="switchPage('profile')"><span>👤</span><span>我的</span></button>
 </nav>
 <!-- ── 新增/編輯持倉 Modal ── -->
@@ -6518,6 +6533,19 @@ async function _runMktVolAI(rows,todayB,yesterB,avgB,ratio,turnoverData){
 async function refreshMktVolAI(){
   _mktAICache=null;_mktAIRunning=false;
   await loadMarketVolume();
+}
+
+function toggleMktVolAI(){
+  const panel = document.getElementById('mktVolAiPanel');
+  const arrow = document.getElementById('mktVolAiArrow');
+  if(!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if(arrow) arrow.textContent = isOpen ? '▸' : '▾';
+  // 第一次展開時觸發分析
+  if(!isOpen && _mktAICache === null){
+    loadMarketVolume();
+  }
 }
 
 // 上市/上櫃/興櫃比例估算
