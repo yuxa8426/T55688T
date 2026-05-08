@@ -11505,7 +11505,7 @@ async function runStratAnalysis(){
     let stocks = _parseStocksFromAI(text);
     if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
     // 不足指定支數時，優先從 top50Filtered 補足（已通過三角色篩選）
-    const stratCount = parseInt(document.getElementById('customStratCount')?.value||'5');
+    // stratCount 已在函式頂部宣告，直接使用
     if(stocks.length < stratCount){
       const aiIds = new Set(stocks.map(s=>s.id));
       const pool  = (top50Filtered.length >= 3 ? top50Filtered : top50);
