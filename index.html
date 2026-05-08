@@ -211,7 +211,13 @@
       <div style="flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.07)">
         <div style="font-size:9px;color:rgba(245,200,66,.7);margin-bottom:2px">台指期盤後</div>
         <div style="font-size:13px;font-weight:700" id="pmTxf">—</div>
-        <div style="font-size:9px;color:var(--text3)" id="pmTxfNote" style="margin-top:1px"></div>
+        <div style="font-size:9px;margin-top:2px">
+          <a href="https://www.taifex.com.tw/cht/3/futContractsDate" target="_blank"
+             style="color:rgba(245,200,66,.6);text-decoration:none">📊 期交所</a>
+          <span style="color:var(--border);margin:0 3px">|</span>
+          <a href="https://tw.tradingview.com/chart/?symbol=TAIFEX%3ATXF1%21" target="_blank"
+             style="color:rgba(245,200,66,.6);text-decoration:none">📈 TradingView</a>
+        </div>
       </div>
       <div style="flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.07)">
         <div style="font-size:9px;color:rgba(0,212,170,.6);margin-bottom:2px">外資</div>
@@ -331,6 +337,27 @@
   <!-- ② 期貨籌碼 -->
   <div id="li-futures" class="li-panel" style="display:none">
     <div class="leading-card">
+      <!-- 台指期即時報價外部連結 -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <a href="https://www.taifex.com.tw/cht/3/futContractsDate" target="_blank"
+           style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+                  padding:9px 8px;background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.25);
+                  border-radius:10px;text-decoration:none;color:rgba(245,200,66,.9);font-size:11px;font-weight:600">
+          📊 期交所官方報價
+        </a>
+        <a href="https://tw.tradingview.com/chart/?symbol=TAIFEX%3ATXF1%21" target="_blank"
+           style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+                  padding:9px 8px;background:rgba(124,92,252,.08);border:1px solid rgba(124,92,252,.25);
+                  border-radius:10px;text-decoration:none;color:var(--purple);font-size:11px;font-weight:600">
+          📈 TradingView K線
+        </a>
+        <a href="https://www.wantgoo.com/futures/TX" target="_blank"
+           style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+                  padding:9px 8px;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);
+                  border-radius:10px;text-decoration:none;color:var(--green);font-size:11px;font-weight:600">
+          🔢 玩股網報價
+        </a>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
         <div style="background:rgba(124,92,252,.06);border:1px solid rgba(124,92,252,.2);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">外資淨部位</div>
@@ -11295,6 +11322,8 @@ async function runStratAnalysis(){
   const strat = STRATEGIES[key];
   if(!strat) return;
   const stratCount = parseInt(document.getElementById('customStratCount')?.value||'5');
+  let _progTimer = null;  // 進度計時器（宣告在函式頂部，確保 finally 可存取）
+  let _progVal = 75;
 
   const runBtn  = document.getElementById('stratRunBtn');
   const resultEl = document.getElementById('stratResult');
@@ -11476,8 +11505,7 @@ async function runStratAnalysis(){
     _stratProgress(75, '步驟 3/4　AI 模型深度分析中…', '🧠', '✅ 市場背景資訊就緒');
 
     // 進度條假跑（AI 等待期間）
-    let _progTimer = null;
-    let _progVal = 75;
+    _progVal = 75;
     _progTimer = setInterval(()=>{
       _progVal = Math.min(92, _progVal + 1.5);
       _stratProgress(_progVal, 'AI 模型分析中，請稍候…', '🧠', null);
@@ -11803,9 +11831,7 @@ async function loadFundamentals(stockId){
     fmFetch({ dataset:'TaiwanStockShareholding',
       data_id: stockId, start_date: nDaysAgo(60), end_date: today,
       _ttl: 7*24*60*60*1000 }, 10000).catch(()=>null),
-    fmFetch({ dataset:'TaiwanStockTradingDailyReport',
-      data_id: stockId, start_date: nDaysAgo(10), end_date: today,
-      _ttl: _msTillMidnight() }, 12000).catch(()=>null),
+    Promise.resolve(null), // TaiwanStockTradingDailyReport 需更高付費方案，暫停
   ]);
 
   const spinner = document.getElementById('fundLoadSpinner');
@@ -12231,7 +12257,7 @@ async function loadFundamentals(stockId){
     }
 
     if(cashCard) cashCard.style.display='block';
-    console.log('[Balance] cash:', cashStr, 'debtR:', debtRatio, 'currR:', currRatio, 'rows:', balRows.map(r=>r.type||r.origin_name));
+    console.log('[Balance] cash:', cashStr, 'debtR:', debtRatio, 'currR:', currRatio, 'sample types:', balRows.slice(0,8).map(r=>(r.type||r.origin_name)+'='+r.value));
   }
 
   // ── 集保大戶持股渲染 ────────────────────────────────────
@@ -12272,17 +12298,17 @@ async function loadFundamentals(stockId){
       latestRows.forEach(r=>{
         const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
         const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
-        const張數=parseInt(lvl.replace(/[^0-9].*/,''))||0;
-        if(張數>=800) whaleTotal+=pct;
-        else if(張數<200) retailTotal+=pct;
+        const holdShares=parseInt(lvl.replace(/[^0-9].*/,''))||0;
+        if(holdShares>=800) whaleTotal+=pct;
+        else if(holdShares<200) retailTotal+=pct;
       });
       // 前一週對比
       let prevWhale=0;
       prevRows.forEach(r=>{
         const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
         const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
-        const張數=parseInt(lvl.replace(/[^0-9].*/,''))||0;
-        if(張數>=800) prevWhale+=pct;
+        const holdShares2=parseInt(lvl.replace(/[^0-9].*/,''))||0;
+        if(holdShares2>=800) prevWhale+=pct;
       });
       const whaleChg=prevDate?(whaleTotal-prevWhale).toFixed(1):null;
       // 顯示主力/大戶/散戶三行
