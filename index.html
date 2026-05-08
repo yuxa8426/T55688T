@@ -12039,8 +12039,12 @@ async function loadFundamentals(stockId){
   if(divData?.length){
     const divs = divData.sort((a,b)=>a.date>b.date?1:-1);
     // 最近一年現金股利
-    const recent = divs.slice(-3);
-    const cashDiv = recent.reduce((sum,r)=>sum+(parseFloat(r.CashDividend||r.cash_dividend||0)),0);
+    const recent = divs.slice(-4);  // 台積電每季配息，取近4筆 = 近一年
+    // FinMind TaiwanStockDividend 欄位：CashDividend 或 cash_dividend 或 StockDividend
+    // 付費版可能用 cash_earnings_distribution 或直接是 value 欄位
+    // FinMind TaiwanStockDividend 正確欄位：CashEarningsDistribution（現金股利）
+    const getCashDiv = r => parseFloat(r.CashEarningsDistribution || r.CashDividend || r.cash_dividend || 0);
+    const cashDiv = recent.reduce((sum,r)=>sum+getCashDiv(r), 0);
 
     // 從 PER 資料拿目前股價計算殖利率
     const perLatest = (perData||[]).slice(-1)[0];
@@ -12136,14 +12140,17 @@ async function loadFundamentals(stockId){
 
     // 營業活動現金流
     const opRaw   = findVal(['Operating','operating','營業活動']);
-    // 資本支出（取絕對值，通常為負數）
-    const capexRaw = findVal(['PropertyPlantAndEquipment','Purchase','購置不動產','資本支出','購買']);
+    // 資本支出（FinMind type: PropertyAndPlantAndEquipment）
+    const capexRaw = findVal(['PropertyAndPlantAndEquipment','PropertyPlantAndEquipment','Purchase','購置不動產','取得不動產']);
     // 計算自由現金流
-    const opCash   = opRaw   != null ? (opRaw/1e8).toFixed(1)   : null;
-    const capexAbs = capexRaw!= null ? Math.abs(capexRaw/1e8)   : null;
+    // 期末現金（從現金流量表取，不需要資產負債表）
+    const cashEndRaw = findVal(['CashBalancesEndOfPeriod','期末現金']);
+    const opCash   = opRaw    != null ? (opRaw/1e8).toFixed(1)    : null;
+    const capexAbs = capexRaw != null ? Math.abs(capexRaw/1e8)    : null;
     const freeCash = (opRaw!=null && capexRaw!=null)
       ? ((opRaw - Math.abs(capexRaw))/1e8).toFixed(1) : null;
     const capexStr = capexAbs != null ? capexAbs.toFixed(1) : null;
+    const cashEndStr = cashEndRaw != null ? (cashEndRaw/1e8).toFixed(0) : null;
 
     const se3 = (id,val,col)=>{
       const e=document.getElementById(id);
@@ -12155,6 +12162,12 @@ async function loadFundamentals(stockId){
 
     const dateEl = document.getElementById('fundCashDate');
     if(dateEl) dateEl.textContent = latestDate.slice(0,7)||'';
+
+    // 更新資產負債卡的「現金及約當現金」（如果資產負債表資料不完整，用現金流表補）
+    const balCashEl = document.getElementById('fundBalCash');
+    if(balCashEl && (balCashEl.textContent==='—') && cashEndStr){
+      balCashEl.textContent = cashEndStr;
+    }
 
     const qualEl = document.getElementById('fundCashQuality');
     if(qualEl && freeCash!=null){
