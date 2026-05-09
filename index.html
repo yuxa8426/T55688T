@@ -17138,25 +17138,35 @@ window.addEventListener('load', async ()=>{
     loadProfile();
     renderBacktestPanel();
   });
-  loadStockList(); // 背景載入完整台股清單（約1,800支）
+  setTimeout(()=>loadStockList(), 3000); // 延遲3秒載入完整台股清單（約1,800支）
 
-  // 第 1 波：主圖表（台積電）
-  await selectStock(null,'台積電','2330.TW');
-  updateStockNewsLinks('2330', '台積電');  // 初始新聞連結
-
-  // 第 3 波：先行指標 + 市場脈動 + VIX + 指數 + 加權指數圖（全部同時非阻塞發出）
+  // 第 1 波：市場脈動（最關鍵，立即）
   refreshPulse();
-  loadVix();
-  loadMarketNewsSection(); // 分析頁市場總覽新聞（只在此觸發一次）
-  loadLeadingIndicators();
-  loadIndices();
-  loadTaiexChart().catch(()=>{});
 
-  // 第 5 波：趨勢股（錯開 1.5s，讓主圖表先完成渲染）
-  // 趨勢股：延遲 3 秒
+  // 第 2 波：指數 + VIX（100ms 後，讓 DOM 先穩定）
+  setTimeout(()=>{
+    loadIndices();
+    loadVix();
+    loadMarketVolume();
+  }, 100);
+
+  // 第 3 波：加權指數圖 + 先行指標（300ms 後）
+  setTimeout(()=>{
+    loadTaiexChart().catch(()=>{});
+    loadLeadingIndicators();
+  }, 300);
+
+  // 第 4 波：台積電主圖（500ms 後，不阻塞啟動）
+  setTimeout(()=>{
+    selectStock(null,'台積電','2330.TW').catch(()=>{});
+    updateStockNewsLinks('2330', '台積電');
+    loadMarketNewsSection();
+  }, 500);
+
+  // 第 5 波：趨勢股（3秒後）
   setTimeout(()=>refreshTrendStocks(), 3000);
 
-  // 第 6 波：累積戰績橫幅（資料有才顯示）
+  // 第 6 波：累積戰績（2秒後）
   setTimeout(()=>renderBattleBanner(), 2000);
 
   // ── 自動定時重整（盤中1分鐘、盤外5分鐘）
