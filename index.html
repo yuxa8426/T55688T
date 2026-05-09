@@ -1250,14 +1250,34 @@
 
     <!-- ── 集保大戶持股 + 主力分點 卡片 ── -->
     <div id="fundHoldDealerCard" style="display:none;margin-bottom:8px">
-      <!-- 集保大戶持股分散表 -->
+      <!-- 外資持股比例 -->
       <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border);margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-          <span>🏦 集保大戶持股（週更新）</span>
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+          <span>🌏 外資持股比例</span>
           <span style="font-size:10px;color:var(--text3)" id="fundHoldDate"></span>
         </div>
-        <div id="fundHoldBars" style="display:flex;flex-direction:column;gap:5px"></div>
-        <div id="fundHoldSummary" style="margin-top:8px;font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">外資持股比例</div>
+            <div style="font-size:15px;font-weight:700;color:var(--purple)" id="fundForeignRatio">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+          </div>
+          <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:3px">週變化</div>
+            <div style="font-size:15px;font-weight:700" id="fundForeignChg">—</div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+          </div>
+        </div>
+        <!-- 持股比例進度條 -->
+        <div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:3px">
+            <span>外資持股</span><span id="fundForeignRatioLabel">—%</span>
+          </div>
+          <div style="height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden">
+            <div id="fundForeignBar" style="height:100%;background:var(--purple);border-radius:4px;width:0%;transition:width 1s"></div>
+          </div>
+        </div>
+        <div id="fundHoldSummary" style="font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
       </div>
       <!-- 主力券商分點 -->
       <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
@@ -11552,24 +11572,20 @@ async function runStratAnalysis(){
     ].filter(Boolean).join('；');
 
     // quantContext：只傳前20支（避免 prompt 過長），依 stratCount 決定支數
-    const top20forCtx = top50.slice(0,20);
+    const top20forCtx = top50.slice(0,12);  // 只傳12支降低 token 消耗
     const summaryShort = top20forCtx.map(s=>{
-      const q = s.quant;
-      const tags=[];
-      if(q.instScore>0)   tags.push('法↑');
-      if(q.instScore<0)   tags.push('法↓');
-      const mom = q.ret5!==0?q.ret5:(q.changePct||0);
-      if(mom>=3)          tags.push('漲'+mom.toFixed(1)+'%');
-      if(mom<=-3)         tags.push('跌'+Math.abs(mom).toFixed(1)+'%');
-      if(q.pe&&q.pe<15)   tags.push('PE'+q.pe);
-      if(q.yield&&q.yield>4) tags.push('殖'+q.yield+'%');
-      const tag=tags.length?'('+tags.join('/')+')'  :'';
-      return s.id+s.name+tag;
+      const q=s.quant,t=[];
+      if(q.instScore>0)t.push('法↑');else if(q.instScore<0)t.push('法↓');
+      const m=q.ret5||q.changePct||0;
+      if(m>=3)t.push('+'+m.toFixed(0)+'%');else if(m<=-3)t.push(m.toFixed(0)+'%');
+      if(q.freeCashFlow>0)t.push('現↑');
+      if(q.whaleChg>0.5)t.push('主↑');
+      return s.id+s.name+(t.length?'['+t.join(',')+']':'');
     }).join(' ');
 
     const quantContext = top20forCtx.length >= 5
-      ? '\n\n【量化預篩前20名（'+quantScopeLabel+'）】\n'+summaryShort
-        +'\n以上為量化排名前20，但你必須從全市場中選出最符合策略的'+stratCount+'支（可不限於此清單）。\n每支 reason 限 8 字內，直接輸出 JSON，不要多餘說明。'
+      ? '\n候選('+quantScopeLabel+'量化前12)：'+summaryShort
+        +'\n從以上選'+stratCount+'支，reason限6字，直接JSON。'
       : '';
     const prompt = strat.prompt(market + btSummary + quantContext, stratCount);
     const WORKER = (typeof API !== 'undefined' && API)
@@ -11589,8 +11605,7 @@ async function runStratAnalysis(){
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemini-2.5-flash',
-        max_tokens: 4096,
+        max_tokens: 800,  // 選股 JSON 不需要大量 token
         messages: [{ role:'user', content: prompt }],
       }),
     });
@@ -12347,88 +12362,90 @@ async function loadFundamentals(stockId){
     console.log('[Balance] cash:', cashStr, 'debtR:', debtRatio, 'currR:', currRatio, 'sample types:', balRows.slice(0,8).map(r=>(r.type||r.origin_name)+'='+r.value));
   }
 
-  // ── 集保大戶持股渲染 ────────────────────────────────────
-  const holdDealerCard=document.getElementById('fundHoldDealerCard');
+    // ── 外資持股比例渲染（TaiwanStockShareholding）────────
+  const holdDealerCard = document.getElementById('fundHoldDealerCard');
   if(holdData?.length){
-    // 取最新一週資料
-    const sorted=[...holdData].sort((a,b)=>a.date>b.date?1:-1);
-    const latestDate=sorted[0]?.date;
-    const latestRows=sorted.filter(r=>r.date===latestDate);
-    // 前一週
-    const prevDate=sorted.find(r=>r.date<latestDate)?.date;
-    const prevRows=sorted.filter(r=>r.date===prevDate);
-    const dateEl=document.getElementById('fundHoldDate');
-    if(dateEl) dateEl.textContent=latestDate?.slice(0,10)||'';
-    const barsEl=document.getElementById('fundHoldBars');
-    if(barsEl && latestRows.length){
-      // 合計各層級持股比例
-      // 欄位：HoldingSharesLevel, HolderCount, HoldingSharesPercent
-      const LEVELS=[
-        {key:'1-999張以下',    label:'散戶（<1張）'},
-        {key:'1-5張',          label:'小散（1-5張）'},
-        {key:'5-10張',         label:'小戶（5-10張）'},
-        {key:'10-15張',        label:'中戶（10-15張）'},
-        {key:'15-20張',        label:'中戶（15-20張）'},
-        {key:'20-30張',        label:'中大戶（20-30張）'},
-        {key:'30-40張',        label:'中大戶（30-40張）'},
-        {key:'40-50張',        label:'中大戶（40-50張）'},
-        {key:'50-100張',       label:'大戶（50-100張）'},
-        {key:'100-200張',      label:'大戶（100-200張）'},
-        {key:'200-400張',      label:'大戶（200-400張）'},
-        {key:'400-600張',      label:'大戶（400-600張）'},
-        {key:'600-800張',      label:'大戶（600-800張）'},
-        {key:'800-1000張',     label:'超大戶（800-1000張）'},
-        {key:'1000張以上',     label:'主力（1000張+）'},
-      ];
-      // 合計主力（800張以上）和散戶（200張以下）
-      let whaleTotal=0, retailTotal=0;
-      latestRows.forEach(r=>{
-        const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
-        const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
-        const holdShares=parseInt(lvl.replace(/[^0-9].*/,''))||0;
-        if(holdShares>=800) whaleTotal+=pct;
-        else if(holdShares<200) retailTotal+=pct;
-      });
-      // 前一週對比
-      let prevWhale=0;
-      prevRows.forEach(r=>{
-        const pct=parseFloat(r.HoldingSharesPercent||r.holding_shares_percent||0);
-        const lvl=r.HoldingSharesLevel||r.holding_shares_level||'';
-        const holdShares2=parseInt(lvl.replace(/[^0-9].*/,''))||0;
-        if(holdShares2>=800) prevWhale+=pct;
-      });
-      const whaleChg=prevDate?(whaleTotal-prevWhale).toFixed(1):null;
-      // 顯示主力/大戶/散戶三行
-      const groups=[
-        {label:'主力（800張+）',    pct:whaleTotal, color:'var(--red)',    chg:whaleChg},
-        {label:'大戶（50-800張）',  pct:latestRows.filter(r=>{const n=parseInt((r.HoldingSharesLevel||'').replace(/[^0-9].*/,''))||0;return n>=50&&n<800;}).reduce((s,r)=>s+parseFloat(r.HoldingSharesPercent||0),0), color:'var(--purple)', chg:null},
-        {label:'散戶（50張以下）',  pct:retailTotal, color:'var(--text3)', chg:null},
-      ];
-      barsEl.innerHTML=groups.map(g=>{
-        const pct=g.pct.toFixed(1);
-        const chgHtml=g.chg!=null?`<span style="font-size:10px;color:${parseFloat(g.chg)>0?'var(--red)':'var(--green)'}">${parseFloat(g.chg)>0?'▲+':'▼'}${g.chg}%</span>`:'';
-        return `<div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:11px;color:var(--text2)">${g.label}</span>
-            <span style="font-size:12px;font-weight:700;color:${g.color}">${pct}% ${chgHtml}</span>
-          </div>
-          <div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
-            <div style="width:${Math.min(100,pct)}%;height:100%;background:${g.color};border-radius:3px;transition:width .8s"></div>
-          </div>
-        </div>`;
-      }).join('');
-      const summEl=document.getElementById('fundHoldSummary');
-      if(summEl){
-        const chgNum=whaleChg!=null?parseFloat(whaleChg):0;
-        if(chgNum>0.5)       summEl.innerHTML=`<span style="color:var(--red)">🐋 主力持股週增 +${whaleChg}%，籌碼集中訊號，留意後續動向</span>`;
-        else if(chgNum<-0.5) summEl.innerHTML=`<span style="color:var(--green)">📤 主力持股週減 ${whaleChg}%，籌碼鬆動，需謹慎觀察</span>`;
-        else                 summEl.innerHTML=`<span style="color:var(--text3)">主力持股週變化 ${whaleChg??'—'}%，籌碼結構穩定</span>`;
+    const sorted = [...holdData].sort((a,b)=>a.date>b.date?1:-1);
+    const latest  = sorted[sorted.length-1];
+    const prev1   = sorted.length>=2  ? sorted[sorted.length-2]  : null; // 前1日
+    const prev5   = sorted.length>=6  ? sorted[sorted.length-6]  : null; // 近5日
+    const prev20  = sorted.length>=21 ? sorted[sorted.length-21] : sorted[0]; // 近20日
+
+    const ratio   = parseFloat(latest?.ForeignInvestmentSharesRatio||0);
+    const r1      = parseFloat(prev1?.ForeignInvestmentSharesRatio||ratio);
+    const r5      = parseFloat(prev5?.ForeignInvestmentSharesRatio||ratio);
+    const r20     = parseFloat(prev20?.ForeignInvestmentSharesRatio||ratio);
+
+    const chg1d   = +(ratio - r1).toFixed(2);   // 日變化
+    const chg5d   = +(ratio - r5).toFixed(2);   // 週變化
+    const chg20d  = +(ratio - r20).toFixed(2);  // 月變化（更重要）
+
+    const se = (id,val,col)=>{
+      const e=document.getElementById(id);
+      if(e){e.textContent=val??'—';if(col)e.style.color=col;}
+    };
+
+    // 顯示當前持股比例
+    se('fundForeignRatio', ratio.toFixed(2), 'var(--purple)');
+    se('fundForeignRatioLabel', ratio.toFixed(2)+'%', null);
+
+    // 週變化（5日）作為主要指標
+    se('fundForeignChg',
+      (chg5d>=0?'+':'')+chg5d.toFixed(2),
+      chg5d>0?'var(--red)':chg5d<0?'var(--green)':'var(--text3)');
+
+    // 進度條（滿格=上限比例，通常100%）
+    const upperLimit = parseFloat(latest?.ForeignInvestmentUpperLimitRatio||100);
+    const bar = document.getElementById('fundForeignBar');
+    if(bar) setTimeout(()=>bar.style.width=(ratio/upperLimit*100).toFixed(1)+'%', 100);
+
+    // 趨勢判斷（以月變化為主）
+    const summEl = document.getElementById('fundHoldSummary');
+    if(summEl){
+      // 連續增持/減持天數
+      let streak = 0;
+      for(let i=sorted.length-1; i>=1; i--){
+        const cur = parseFloat(sorted[i].ForeignInvestmentSharesRatio||0);
+        const prv = parseFloat(sorted[i-1].ForeignInvestmentSharesRatio||0);
+        if(chg5d>0 && cur>=prv) streak++;
+        else if(chg5d<0 && cur<=prv) streak++;
+        else break;
       }
-      if(holdDealerCard) holdDealerCard.style.display='block';
+
+      let signal='', sigColor='var(--text3)';
+      if(chg20d > 1.0){
+        signal = `📈 月增持 +${chg20d}%，外資持續加碼`;
+        sigColor = 'var(--red)';
+      } else if(chg20d > 0.3){
+        signal = `📈 月小幅增持 +${chg20d}%，外資緩步建倉`;
+        sigColor = 'var(--red)';
+      } else if(chg20d < -1.0){
+        signal = `📉 月減持 ${chg20d}%，外資持續撤退`;
+        sigColor = 'var(--green)';
+      } else if(chg20d < -0.3){
+        signal = `📉 月小幅減持 ${chg20d}%，留意外資動向`;
+        sigColor = 'var(--green)';
+      } else {
+        signal = `➡️ 外資持股月變化 ${chg20d>=0?'+':''}${chg20d}%，持股穩定`;
+        sigColor = 'var(--text3)';
+      }
+
+      summEl.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px;color:var(--text3)">
+          <span>日變化 <b style="color:${chg1d>=0?'var(--red)':'var(--green)'}">${chg1d>=0?'+':''}${chg1d}%</b></span>
+          <span>週變化 <b style="color:${chg5d>=0?'var(--red)':'var(--green)'}">${chg5d>=0?'+':''}${chg5d}%</b></span>
+          <span>月變化 <b style="color:${chg20d>=0?'var(--red)':'var(--green)'}">${chg20d>=0?'+':''}${chg20d}%</b></span>
+        </div>
+        <div style="font-size:11px;color:${sigColor}">${signal}</div>`;
     }
+
+    const dateEl = document.getElementById('fundHoldDate');
+    if(dateEl) dateEl.textContent = latest.date?.slice(0,10)||'';
+
+    if(holdDealerCard) holdDealerCard.style.display='block';
   }
 
-  // ── 主力券商分點渲染 ────────────────────────────────────
+    // ── 主力券商分點渲染 ────────────────────────────────────
   if(dealerData?.length){
     // 彙總近10日各券商買超/賣超張數
     const netByDealer={};
