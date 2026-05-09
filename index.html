@@ -7846,7 +7846,24 @@ async function loadMxfData(){
       bear:    '🔻 偏空',   // 法人淨多口為負（看空）
       neutral: '➡️ 中立',  // 法人籌碼近零
     };
-    if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
+    if(trendEl){
+      trendEl.textContent=tMap[d.trend]||'—';
+      trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)';
+    }
+    // 卡片背景跟著方向變色
+    const trendCard = trendEl?.closest('div[style*="border-radius:10px"]');
+    if(trendCard){
+      if(d.trend==='bull'){
+        trendCard.style.background='rgba(255,76,106,.08)';
+        trendCard.style.borderColor='rgba(255,76,106,.25)';
+      } else if(d.trend==='bear'){
+        trendCard.style.background='rgba(0,212,170,.08)';
+        trendCard.style.borderColor='rgba(0,212,170,.25)';
+      } else {
+        trendCard.style.background='rgba(255,255,255,.04)';
+        trendCard.style.borderColor='rgba(255,255,255,.1)';
+      }
+    }
     if(dateEl) dateEl.textContent = d.date||'—';
 
     // ── SVG 棒狀圖（含 Y 軸刻度 + hover tooltip）──────────
