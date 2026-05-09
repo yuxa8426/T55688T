@@ -8337,7 +8337,7 @@ async function loadInstitutional(){
   try{
     const mkt = await fmFetch({
       dataset:    'TaiwanStockTotalInstitutionalInvestors',
-      start_date: nDaysAgo(5),
+      start_date: nDaysAgo(15),  // 延長到15天，確保含假日也能取到最後交易日
       end_date:   nDaysAgo(0),
     }, 15000);
     if(mkt && mkt.length){
@@ -16860,9 +16860,45 @@ function updatePulse(instData, indexData, txfData){
     pmTxf.textContent  = Number(txfData.price).toLocaleString('zh-TW',{maximumFractionDigits:0});
     pmTxf.style.color  = (txfData.change>=0) ? 'var(--red)' : 'var(--green)';
   }
-  const fmtB = v => { const b=Math.abs(v)/1e8; return (v>=0?'+':'-')+(b>=1?b.toFixed(1)+'億':Math.round(Math.abs(v)/1e4)+'萬'); };
-  if(pmForeign) { pmForeign.textContent = foreign ? fmtB(foreign) : '—'; pmForeign.style.color = foreign>=0?'var(--red)':'var(--green)'; }
-  if(pmTrust)   { pmTrust.textContent   = trust   ? fmtB(trust)   : '—'; pmTrust.style.color   = trust  >=0?'var(--red)':'var(--green)'; }
+  // 格式化張數（FinMind 單位：股，÷1000=張）
+  const fmtInst = v => {
+    const張 = v / 1000;
+    const abs = Math.abs(張);
+    const s = 張 >= 0 ? '+' : '-';
+    if(abs >= 10000) return s+(abs/10000).toFixed(1)+'萬張';
+    if(abs >= 1000)  return s+(abs/1000).toFixed(1)+'千張';
+    return s+Math.round(abs)+'張';
+  };
+  // 有資料（instData 不為 null）才顯示；instData 為 null 才顯示 —
+  const hasInstData = instData !== null && instData !== undefined;
+  if(pmForeign){
+    if(hasInstData){
+      pmForeign.textContent = fmtInst(foreign);
+      pmForeign.style.color = foreign>=0?'var(--red)':'var(--green)';
+    } else {
+      pmForeign.textContent = '—';
+      pmForeign.style.color = 'var(--text3)';
+    }
+  }
+  if(pmTrust){
+    if(hasInstData){
+      pmTrust.textContent = fmtInst(trust);
+      pmTrust.style.color = trust>=0?'var(--red)':'var(--green)';
+    } else {
+      pmTrust.textContent = '—';
+      pmTrust.style.color = 'var(--text3)';
+    }
+  }
+  // 顯示資料日期（讓用戶知道是哪天的資料）
+  const instDateEl = document.getElementById('pulseInstDate');
+  if(instDateEl){
+    if(instData?.date){
+      instDateEl.textContent = instData.date+' 收盤資料';
+      instDateEl.style.display = 'block';
+    } else {
+      instDateEl.textContent = '資料載入中…';
+    }
+  }
 
   // 市場脈動主文
   const titleEl = document.getElementById('pulseTitle');
