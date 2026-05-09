@@ -4735,13 +4735,24 @@ function updateInstCard(inst, stockName){
 
   if(dateEl) dateEl.textContent = inst.date ? inst.date+' 收盤' : '最新';
 
-  // 格式化萬股
+  // 格式化張數（FinMind 單位：股，1張=1000股）
   function fmtShares(v){
-    const abs = Math.abs(v);
-    const s = v >= 0 ? '+' : '-';
-    if(abs >= 10000) return s + (abs/10000).toFixed(1) + '億股';
-    if(abs >= 1000)  return s + (abs/1000).toFixed(1)  + '千萬股';
-    return s + abs.toFixed(0) + '萬股';
+    const張 = v / 1000;  // 股 → 張
+    const abs = Math.abs(張);
+    const s = 張 >= 0 ? '+' : '-';
+    if(abs >= 10000) return s + (abs/10000).toFixed(1) + '萬張';
+    if(abs >= 1000)  return s + (abs/1000).toFixed(1)  + '千張';
+    if(abs >= 100)   return s + Math.round(abs)         + '張';
+    return s + abs.toFixed(0) + '張';
+  }
+  // 用於合計行（張）
+  function fmtSharesTotal(v){
+    const張 = v / 1000;
+    const abs = Math.abs(張);
+    const s = 張 >= 0 ? '+' : '-';
+    if(abs >= 10000) return s + (abs/10000).toFixed(2) + '萬張';
+    if(abs >= 1000)  return s + (abs/1000).toFixed(1)  + '千張';
+    return s + Math.round(abs) + '張';
   }
 
   // 連買/賣文字
