@@ -4800,40 +4800,69 @@ function updateInstCard(inst, stockName){
 }
 
 function calcInstScore(inst){
-  if(!inst) return {score:5, summary:'資料不足'};
+  if(!inst) return {score:5, summary:'資料不足', signal:'neutral'};
+
+  // ── 法人評分（1-10分，機構標準）────────────────────
+  // 外資：台股最重要的法人，權重最高
+  // 投信：中長線布局指標
+  // 自營商：短線避險，反向操作居多，權重最低
   let score = 5;
 
-  // 外資方向（最重要，±2分）
-  if(inst.foreignShares > 0)       score += 2;
-  else if(inst.foreignShares < 0)  score -= 2;
+  const fNet    = inst.foreignShares || 0;  // 外資淨買超（張）
+  const tNet    = inst.trustShares   || 0;  // 投信淨買超（張）
+  const dNet    = inst.dealerShares  || 0;  // 自營商淨買超
+  const fStreak = inst.foreignStreak || 0;  // 外資連買/賣天數
+  const tStreak = inst.trustStreak   || 0;  // 投信連買/賣天數
 
-  // 外資連買天數（±1分）
-  if(inst.foreignStreak >= 3)      score += 1;
-  else if(inst.foreignStreak <= -3) score -= 1;
+  // 外資（±3分，最重要）
+  if(fNet > 50000)       score += 3;   // 外資大買超（>5萬張）
+  else if(fNet > 10000)  score += 2;   // 中量買超
+  else if(fNet > 0)      score += 1;   // 小量買超
+  else if(fNet < -50000) score -= 3;   // 大量賣超
+  else if(fNet < -10000) score -= 2;
+  else if(fNet < 0)      score -= 1;
 
-  // 投信（±1分）
-  if(inst.trustShares > 0)         score += 1;
-  else if(inst.trustShares < 0)    score -= 1;
+  // 外資連買/賣加權
+  if(fStreak >= 5)       score += 2;   // 連買5日以上，強烈訊號
+  else if(fStreak >= 3)  score += 1;
+  else if(fStreak <= -5) score -= 2;
+  else if(fStreak <= -3) score -= 1;
 
-  // 自營商（±0.5分）
-  if(inst.dealerShares > 0)        score += 0.5;
-  else if(inst.dealerShares < 0)   score -= 0.5;
+  // 投信（±1.5分）
+  if(tNet > 5000)        score += 1.5;
+  else if(tNet > 0)      score += 0.5;
+  else if(tNet < -5000)  score -= 1.5;
+  else if(tNet < 0)      score -= 0.5;
 
-  // 三大合計方向（±0.5分）
-  if(inst.totalShares > 0)         score += 0.5;
-  else if(inst.totalShares < 0)    score -= 0.5;
+  // 雙法人共鳴（外資+投信同向，+1分）
+  if(fNet > 0 && tNet > 0)   score += 1;
+  if(fNet < 0 && tNet < 0)   score -= 1;
 
-  score = Math.max(1, Math.min(10, score));
+  // 自營商（權重低，±0.5）
+  if(dNet > 0) score += 0.3; else if(dNet < 0) score -= 0.3;
 
-  const fStr = inst.foreignStreak;
+  score = Math.max(1, Math.min(10, Math.round(score * 10) / 10));
+
+  // ── 訊號判斷 ─────────────────────────────────────
+  const signal = score >= 7 ? 'bull' : score <= 3 ? 'bear' : 'neutral';
+
+  // ── 精準說明文字 ─────────────────────────────────
+  const fK = Math.abs(Math.round(fNet/1000));
+  const tK = Math.abs(Math.round(tNet/1000));
   let summary = '';
-  if(score >= 8)      summary = `外資${fStr>0?'連買'+fStr+'日，':'買超，'}投信同步進場，法人籌碼集中度高，籌碼面偏多參考。`;
-  else if(score >= 6) summary = `外資${inst.foreignShares>=0?'買超':'賣超'}，整體法人方向${inst.totalShares>=0?'偏多':'偏空'}，籌碼面中性偏多參考。`;
-  else if(score >= 4) summary = `法人動向分歧，${inst.foreignShares>=0?'外資偏多':'外資偏空'}，整體籌碼中性，宜持續觀察。`;
-  else if(score >= 2) summary = `外資${fStr<0?'連賣'+Math.abs(fStr)+'日，':'賣超，'}法人持續流出，籌碼面偏空參考，注意風險。`;
-  else                summary = `三大法人均呈賣超，籌碼面偏空訊號較強，請自行評估風險。`;
+  if(score >= 8){
+    summary = `外資${fNet>0?'買超':'賣超'}${fK}千張${fStreak>0?'・連買'+fStreak+'日':''}${tNet>0?'，投信同步加碼'+tK+'千張':''}，雙法人共鳴，籌碼強勢集中。`;
+  } else if(score >= 6){
+    summary = `外資${fNet>0?'買超'+fK+'千張':'賣超'+fK+'千張'}，${tNet>0?'投信買超'+tK+'千張':'投信同步賣超'}，整體法人偏多，但力道尚可。`;
+  } else if(score >= 4.5){
+    summary = `法人動向分歧，外資${fNet>=0?'偏多':'偏空'}・投信${tNet>=0?'偏多':'偏空'}，整體中性，宜觀望等待方向確立。`;
+  } else if(score >= 3){
+    summary = `外資${fStreak<0?'連賣'+Math.abs(fStreak)+'日':'賣超'+fK+'千張'}，${tNet<0?'投信同步賣超，':''}法人資金持續流出，需謹慎應對。`;
+  } else {
+    summary = `三大法人齊步賣超，外資連賣${Math.abs(fStreak)}日，籌碼面偏空訊號明確，建議降低持倉或觀望。`;
+  }
 
-  return {score, summary};
+  return {score, summary, signal, fNet, tNet, fStreak, tStreak};
 }
 
 // ════════════════════════════════════════════════════
@@ -10777,7 +10806,10 @@ function calcResearcherScore(data){
   }
 
   if(ret5!=null){
-    if(ret5>15) score-=5; else if(ret5>0) score+=3; else if(ret5<-15) score-=8;
+    // 基本面評分不受短期股價太大影響
+    if(ret5>30)     score-=5;   // 極短期過熱，估值可能透支
+    else if(ret5>0) score+=2;   // 正動能，基本面有支撐
+    else if(ret5<-20) score-=5; // 大跌需確認基本面是否惡化
   }
 
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -10834,29 +10866,57 @@ function calcAnalystScore(data){
 function calcTraderScore(data){
   let score = 50;
   const { ret5, volRatio, changePct, instScore, closes } = data;
-  if(closes && closes.length>=15){
+
+  // ── RSI(14)：動量健康度 ──────────────────────────────
+  if(closes && closes.length>=14){
     const rsi = calcRSI(closes);
     if(rsi!=null){
-      if(rsi<30) score+=25; else if(rsi<40) score+=15;
-      else if(rsi<=60) score+=10; else if(rsi<=70) score+=2;
-      else if(rsi<=80) score-=10; else score-=25;
+      // 台股最佳進場區：RSI 40-60（趨勢健康），<25 超賣反彈，>75 超買風險
+      if(rsi < 25)        score += 20;  // 嚴重超賣，反彈機會高
+      else if(rsi < 35)   score += 12;  // 偏低，可逢低布局
+      else if(rsi <= 55)  score += 8;   // 健康區間，趨勢穩定
+      else if(rsi <= 65)  score += 3;   // 偏熱，可持有
+      else if(rsi <= 75)  score -= 8;   // 過熱，注意壓力
+      else                score -= 20;  // 嚴重超買，短線風險高
       data._rsi = Math.round(rsi);
     }
   }
+
+  // ── 5日動能 ─────────────────────────────────────────
   if(ret5!=null){
-    if(ret5>=10&&ret5<=20) score+=15; else if(ret5>=3) score+=10;
-    else if(ret5>=0) score+=3; else if(ret5>=-5) score-=5;
-    else if(ret5>=-15) score-=12; else score-=20;
+    // 最佳：穩健上漲3-15%；過漲>20% 反而有回調風險
+    if(ret5>20)           score -= 5;   // 漲過頭，追高風險
+    else if(ret5>=10)     score += 12;  // 強勁上漲
+    else if(ret5>=3)      score += 8;   // 健康上漲
+    else if(ret5>=0)      score += 2;   // 持平
+    else if(ret5>=-5)     score -= 5;   // 小跌
+    else if(ret5>=-15)    score -= 12;  // 明顯下跌
+    else                  score -= 20;  // 大跌，風險高
   }
+
+  // ── 量能（放量配合方向）────────────────────────────
   if(volRatio!=null){
-    if(volRatio>=1.5&&ret5>0) score+=12;
-    else if(volRatio>=1.2) score+=6;
-    else if(volRatio<0.5) score-=15;
+    if(volRatio>=2 && ret5>0)   score += 15;  // 爆量上漲，最強訊號
+    else if(volRatio>=1.5&&ret5>0) score += 10;
+    else if(volRatio>=1.2)      score += 4;
+    else if(volRatio<0.6)       score -= 10;  // 量能萎縮
+    else if(volRatio<0.4)       score -= 18;  // 嚴重無量
   }
+
+  // ── 當日強度 ────────────────────────────────────────
   if(changePct!=null){
-    if(changePct>=3) score+=8; else if(changePct>=0) score+=3; else if(changePct<-3) score-=8;
+    if(changePct>=5)      score += 10;
+    else if(changePct>=2) score += 6;
+    else if(changePct>=0) score += 2;
+    else if(changePct<-3) score -= 8;
+    else if(changePct<-6) score -= 15;
   }
-  if(instScore>0&&ret5>3&&volRatio>1.2) score+=10;
+
+  // ── 三因子共振加分（法人+動能+量能同向）────────────
+  if(instScore>0 && ret5>3  && volRatio>1.5) score += 12;
+  if(instScore>0 && ret5>0  && volRatio>1.2) score += 5;
+  if(instScore<0 && ret5<0)                  score -= 10;  // 法人賣+下跌，高風險
+
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
@@ -10871,8 +10931,10 @@ function calcThreeLayerScore(data){
       reason: rScore<40?'基本面不足':aScore<40?'籌碼風險':'時機不佳',
     };
   }
+  // 權重：基本面35% + 籌碼35% + 技術30%
+  // 基本面和籌碼是長線核心，技術面是短期擇時
   return {
-    total: Math.round(rScore*0.30+aScore*0.30+tScore*0.40),
+    total: Math.round(rScore*0.35 + aScore*0.35 + tScore*0.30),
     researcher:rScore, analyst:aScore, trader:tScore,
     eliminated:false, rsi:data._rsi||null,
   };
@@ -12567,10 +12629,12 @@ function _detectChipAnomaly(chipData){
       desc:'主力資金持續撤退，需留意下檔風險' });
 
   // 3. 外資買超 + 融券增加（軋空格局）
-  if(fBuyStreak >= 3 && marginChg > 0 && shortK > 5)
+  // sChg 是融券變化量，正數代表融券增加
+  const sChgVal = chipData?.sChg ?? 0;
+  if(fBuyStreak >= 3 && sChgVal > 0 && shortK > 2)
     alerts.push({ level:'bull', icon:'⚡',
       title:'外資買超 + 融券增加',
-      desc:`潛在軋空格局，融券${shortK.toFixed(0)}千張，若持續恐引發回補` });
+      desc:`潛在軋空格局，融券${shortK.toFixed(1)}千張且持續增加，若外資持續買超恐引發強制回補` });
 
   // 4. 外資 + 投信同步買超（雙法人共鳴）
   if(fBuyStreak >= 3 && tBuyStreak >= 3)
