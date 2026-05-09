@@ -11425,7 +11425,7 @@ async function runStratAnalysis(){
       if(!fullQuant) throw new Error('full quant returned null');
       const stockCount = Object.keys(fullQuant).length;
 
-      if(stockCount >= 100){
+      if(stockCount >= 50){
         _stratProgress(30, `步驟 2/4　量化計算 ${stockCount} 支候選股評分…`, '🔢', '✅ 取得全市場行情');
         // 全市場成功：對所有股票計算策略分數
         const allScored = Object.entries(fullQuant)
@@ -11605,7 +11605,20 @@ async function runStratAnalysis(){
     _stratProgress(96, '步驟 4/4　整理選股結果…', '✨', '✅ AI 分析完成');
     // 使用強健解析（6步容錯）
     let stocks = _parseStocksFromAI(text);
-    if(!stocks.length) throw new Error('AI 未回傳選股結果，請重試');
+    if(!stocks.length){
+      // AI 解析失敗時，直接用量化評分最高的股票作為結果
+      console.warn('[Strategy] AI parse failed, using quant top stocks');
+      stocks = (top50Filtered.length>=stratCount ? top50Filtered : top50)
+        .slice(0, stratCount)
+        .map(s=>({
+          id:s.id, name:s.name||NAME_MAP[s.id]||s.id,
+          sector:s.sector||SECTOR_MAP[s.id]||'—',
+          winRate:62, risk:5, reason:'量化優選',
+          _3layer:s._3layer, _quant:s.quant,
+        }));
+      if(!stocks.length) throw new Error('量化資料不足，請稍後重試');
+      showToast('⚠️ AI 分析異常，已改用量化排名', 4000);
+    }
     // 不足指定支數時，優先從 top50Filtered 補足（已通過三角色篩選）
     // stratCount 已在函式頂部宣告，直接使用
     if(stocks.length < stratCount){
@@ -11803,9 +11816,9 @@ async function runStratAnalysis(){
       errTitle = '📡 網路連線問題';
       errBody  = '無法連接資料來源，請確認網路後重試。';
     } else if(isNoData){
-      errTitle = '📊 資料不足';
-      errBody  = '目前市場資料不足以完成分析。';
-      errHint  = '請於盤中（09:00–13:45）或收盤後重試。';
+      errTitle = '🤖 AI 回傳格式異常';
+      errBody  = 'AI 模型未按格式輸出，正在重試...';
+      errHint  = '這是偶發性問題，點「重試」通常可解決。若持續發生請稍後再試。';
     }
 
     listEl.innerHTML = `
