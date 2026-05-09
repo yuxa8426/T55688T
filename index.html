@@ -10941,17 +10941,18 @@ function calcThreeLayerScore(data){
   const rScore = calcResearcherScore(data);
   const aScore = calcAnalystScore(data);
   const tScore = calcTraderScore(data);
-  if(rScore<40||aScore<40||tScore<40){
+  const total  = Math.round(rScore*0.35 + aScore*0.35 + tScore*0.30);
+  // 淘汰條件：總分<42 或任一維度<28（極端差才淘汰，不過度篩選）
+  if(total < 42 || rScore < 28 || aScore < 28 || tScore < 28){
     return {
       total:null, researcher:rScore, analyst:aScore, trader:tScore,
       eliminated:true,
-      reason: rScore<40?'基本面不足':aScore<40?'籌碼風險':'時機不佳',
+      reason: rScore<28?'基本面過差':aScore<28?'籌碼高風險':tScore<28?'技術面過弱':'綜合分數不足',
     };
   }
   // 權重：基本面35% + 籌碼35% + 技術30%
-  // 基本面和籌碼是長線核心，技術面是短期擇時
   return {
-    total: Math.round(rScore*0.35 + aScore*0.35 + tScore*0.30),
+    total: total,
     researcher:rScore, analyst:aScore, trader:tScore,
     eliminated:false, rsi:data._rsi||null,
   };
@@ -11204,15 +11205,9 @@ async function calcQuantScore(stockId, stratKey){
 }
 
 const JSON_FORMAT = `
-請直接輸出JSON，不加任何說明文字、不加markdown、不加\`\`\`：
-{"stocks":[
-{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
-{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
-{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
-{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"},
-{"id":"XXXX","name":"股名","sector":"產業","winRate":整數,"risk":整數,"reason":"最多6字"}
-]}
-每支股票填入真實台股代號，請輸出指定支數，不多不少。`;
+只輸出純JSON，不加任何文字說明、不加markdown符號：
+{stocks:[{id:2330,name:台積電,sector:半導體,winRate:72,risk:3,reason:外資連買},{id:2317,name:鴻海,sector:電子,winRate:65,risk:4,reason:法人買超}]}
+格式規則：id為4-6位數字代號，winRate為0-100整數，risk為1-10整數，reason最多6個中文字。`;
 
 const STRATEGIES = {
   A:{
