@@ -7813,9 +7813,9 @@ async function loadMxfData(){
     const trendEl = document.getElementById('mxfTrend');
     const dateEl  = document.getElementById('mxfDate');
     const tMap = {
-      bull:    '🔺 偏多',   // 法人淨多口增加（看多）
-      bear:    '🔻 偏空',   // 法人淨多口減少（避險/看空）
-      neutral: '➡️ 中立',  // 法人籌碼無明顯方向
+      bull:    '🔺 偏多',   // 法人淨多口為正（看多）
+      bear:    '🔻 偏空',   // 法人淨多口為負（看空）
+      neutral: '➡️ 中立',  // 法人籌碼近零
     };
     if(trendEl){ trendEl.textContent=tMap[d.trend]||'—'; trendEl.style.color=d.trend==='bull'?'var(--red)':d.trend==='bear'?'var(--green)':'var(--text2)'; }
     if(dateEl) dateEl.textContent = d.date||'—';
