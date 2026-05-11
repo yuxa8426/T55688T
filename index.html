@@ -3426,6 +3426,7 @@ const TREND_SIGNALS = {
 
 let _trendCache = null;
 let _trendCacheTime = 0;
+let _trendKVCache = {};  // 儲存 KV 均線資料供盤中模式使用
 // 趨勢股快取：盤中30分鐘、盤外到午夜（原本5分鐘每次30次請求，改為節流模式）
 // 趨勢股快取：盤中15分鐘，盤外2小時（讓排名隨市場變化）
 const TREND_CACHE_MS = ()=> _isTradingSession() ? 15*60*1000 : 2*60*60*1000;
@@ -4737,9 +4738,9 @@ function updateInstCard(inst, stockName){
 
   // 格式化張數（FinMind 單位：股，1張=1000股）
   function fmtShares(v){
-    const張 = v / 1000;  // 股 → 張
-    const abs = Math.abs(張);
-    const s = 張 >= 0 ? '+' : '-';
+    const lot = v / 1000;  // 股 → 張
+    const abs = Math.abs(lot);
+    const s = lot >= 0 ? '+' : '-';
     if(abs >= 10000) return s + (abs/10000).toFixed(1) + '萬張';
     if(abs >= 1000)  return s + (abs/1000).toFixed(1)  + '千張';
     if(abs >= 100)   return s + Math.round(abs)         + '張';
@@ -4747,9 +4748,9 @@ function updateInstCard(inst, stockName){
   }
   // 用於合計行（張）
   function fmtSharesTotal(v){
-    const張 = v / 1000;
-    const abs = Math.abs(張);
-    const s = 張 >= 0 ? '+' : '-';
+    const lot = v / 1000;
+    const abs = Math.abs(lot);
+    const s = lot >= 0 ? '+' : '-';
     if(abs >= 10000) return s + (abs/10000).toFixed(2) + '萬張';
     if(abs >= 1000)  return s + (abs/1000).toFixed(1)  + '千張';
     return s + Math.round(abs) + '張';
@@ -10083,6 +10084,15 @@ async function refreshTrendStocks(manual=false){
           const kv = await r.json();
           if(kv.items && kv.items.length >= 3){
             const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
+            // 儲存 KV 均線資料供盤中模式使用
+            _trendKVCache = {};
+            kv.items.forEach(item=>{
+              _trendKVCache[item.id] = {
+                ma5: item.ma5||null, ma20: item.ma20||null,
+                isBreakout: item.isBreakout||false,
+                instNet: item.instNet||0,
+              };
+            });
             const mapped = kv.items.slice(0,5).map(item=>({
               id:        item.id,
               name:      DB[item.id]?.name || NAME_MAP[item.id] || item.id,
@@ -10092,7 +10102,7 @@ async function refreshTrendStocks(manual=false){
               price:     item.close||null,
               signals:   [item.instNet>0?'foreign':null,(item.instNet||0)>10000?'momentum':null,(item.ret1||0)>2?'breakout':null].filter(Boolean),
               inst5:     item.instNet||0, gain5:String(item.ret5||0), volRatio:'1',
-              isBreakout:false, ma5:null, ma20:null,
+              isBreakout:item.isBreakout||false, ma5:item.ma5||null, ma20:item.ma20||null,
               _mode: 'eod', _src: 'KV',
             }));
             mapped._mode = 'eod';
@@ -10136,6 +10146,8 @@ async function refreshTrendStocks(manual=false){
             const volPts= vol>2e8?12:vol>1e8?8:vol>5e7?5:vol>1e7?2:0;
             const pePts = pe&&pe>0&&pe<15?5:0;
             const score = Math.round(50 + chg*3 + volPts + pePts);
+            // 從 KV 補充均線資料（盤中也能顯示昨日均線狀態）
+            const kvData = _trendKVCache?.[row.id] || {};
             intradayScored.push({
               id:        row.id,
               name:      NAME_MAP[row.id] || DB[row.id]?.name || row.name,
@@ -10143,8 +10155,11 @@ async function refreshTrendStocks(manual=false){
               score,
               changePct: chg,
               price:     row.close,
+              ma5:       kvData.ma5  || null,
+              ma20:      kvData.ma20 || null,
+              isBreakout:kvData.isBreakout || (chg > 3),  // 漲>3%也視為突破
               signals:   [
-                chg>2?'breakout':null,
+                (chg>2||kvData.isBreakout)?'breakout':null,
                 vol>1e8?'volume':null,
                 chg>1&&vol>5e7?'momentum':null,
               ].filter(Boolean),
@@ -10294,8 +10309,11 @@ function renderTrendList(stocks){
 
     // 依據小字
     const basis = [];
-    if(s.isBreakout) basis.push(`MA5(${s.ma5})>MA20(${s.ma20})`);
-    if(s.inst5>0) basis.push(`法人+${Math.round(s.inst5/1000)}千張`);
+    if(s.isBreakout && s.ma5!=null && s.ma20!=null)
+      basis.push(`MA5(${s.ma5})>MA20(${s.ma20})`);  // 有均線才顯示
+    else if(s.isBreakout)
+      basis.push('均線多頭排列');
+    if(s.inst5>0) basis.push(`法人+${Math.round(Math.abs(s.inst5)/1000000).toFixed(1)}千張`);
     if(parseFloat(s.volRatio)>=1.5) basis.push(`量${s.volRatio}倍均量`);
     if(parseFloat(s.gain5)>2) basis.push(`5日+${s.gain5}%`);
     const basisStr = basis.join(' · ');
@@ -16862,9 +16880,9 @@ function updatePulse(instData, indexData, txfData){
   }
   // 格式化張數（FinMind 單位：股，÷1000=張）
   const fmtInst = v => {
-    const張 = v / 1000;
-    const abs = Math.abs(張);
-    const s = 張 >= 0 ? '+' : '-';
+    const lot = v / 1000;  // 股 → 張
+    const abs = Math.abs(lot);
+    const s = lot >= 0 ? '+' : '-';
     if(abs >= 10000) return s+(abs/10000).toFixed(1)+'萬張';
     if(abs >= 1000)  return s+(abs/1000).toFixed(1)+'千張';
     return s+Math.round(abs)+'張';
