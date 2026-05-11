@@ -10329,13 +10329,26 @@ function renderTrendList(stocks){
 
     // 依據小字
     const basis = [];
-    if(s.isBreakout && s.ma5!=null && s.ma20!=null)
-      basis.push(`MA5(${s.ma5})>MA20(${s.ma20})`);  // 有均線才顯示
-    else if(s.isBreakout)
-      basis.push('均線多頭排列');
-    if(s.inst5>0) basis.push(`法人+${Math.round(Math.abs(s.inst5)/1000000).toFixed(1)}千張`);
-    if(parseFloat(s.volRatio)>=1.5) basis.push(`量${s.volRatio}倍均量`);
-    if(parseFloat(s.gain5)>2) basis.push(`5日+${s.gain5}%`);
+    const isIntraday = s._src === 'trend_realtime' || s._mode === 'intraday';
+
+    // 均線：只有真實均線資料才顯示
+    if(s.ma5!=null && s.ma20!=null && s.ma5>s.ma20)
+      basis.push(`MA5(${s.ma5})>MA20(${s.ma20})`);
+
+    // 法人
+    if(s.inst5 && Math.abs(s.inst5)>0)
+      basis.push(`法人${s.inst5>0?'+':'-'}${Math.abs((s.inst5/1000)).toFixed(0)}張`);
+
+    // 量能
+    if(parseFloat(s.volRatio)>=1.5)
+      basis.push(`量${s.volRatio}倍均量`);
+
+    // 漲跌幅：盤中顯示「今日」，盤後顯示「5日」
+    const gainVal = parseFloat(s.gain5)||0;
+    const gainLabel = isIntraday ? '今日' : '5日';
+    if(gainVal > 2 || gainVal < -2)
+      basis.push(`${gainLabel}${gainVal>=0?'+':''}${gainVal}%`);
+
     const basisStr = basis.join(' · ');
 
     return `<div class="rank-row" onclick="pickTrendStock('${s.name}','${s.id}')">
