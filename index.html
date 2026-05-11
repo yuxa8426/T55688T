@@ -3432,7 +3432,7 @@ let _trendCacheTime = 0;
 let _trendKVCache = {};  // 儲存 KV 均線資料供盤中模式使用
 // 趨勢股快取：盤中30分鐘、盤外到午夜（原本5分鐘每次30次請求，改為節流模式）
 // 趨勢股快取：盤中15分鐘，盤外2小時（讓排名隨市場變化）
-const TREND_CACHE_MS = ()=> _isTradingSession() ? 15*60*1000 : 2*60*60*1000;
+const TREND_CACHE_MS = ()=> _isTradingSession() ? 5*60*1000 : 60*60*1000;  // 盤中5分鐘、盤後1小時
 
 // ── 台股名稱對照表 ────────────────────────────────────
 const NAME_MAP = {
@@ -10076,7 +10076,7 @@ let _trendMode = localStorage.getItem('trendMode') || 'intraday';
 function setTrendMode(mode){
   _trendMode = mode;
   localStorage.setItem('trendMode', mode);
-  _trendCache = null; // 清快取，強制重新載入
+  _trendCache = null; _trendCacheTime = 0; // 清快取，強制重新載入
 
   // 更新 Tab 樣式
   const btnI = document.getElementById('trendModeIntraday');
