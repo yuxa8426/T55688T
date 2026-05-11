@@ -10167,64 +10167,36 @@ async function refreshTrendStocks(manual=false){
     return;
 
   } else {
-    // ── 盤中即時模式：TWSE 全市場即時行情 ──────────────────
-    // 直接用 /market-all 取今日漲跌幅，不依賴 Cron KV
+    // ── 盤中即時模式：直接呼叫 /trend（Worker 統一處理即時計算）──
     if(API){
       try{
-        const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/market-all', 15000);
+        const r = await fetchWithTimeout(API.replace(/\/$/,'')+'/trend', 12000);
         if(r.ok){
-          const json = await r.json();
-          const tse  = json.data?.tse || [];
-          const otc  = json.data?.otc || [];
-          const all  = [...tse, ...otc];
-          const peMap = {};
-          (json.data?.pe||[]).forEach(r=>{ peMap[r.id]=r; });
-
-          // 從全市場中挑出 TREND_POOL 的股票，計算即時分數
-          const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
-          const intradayScored = [];
-
-          for(const row of all){
-            if(!DB[row.id]) continue; // 只保留 TREND_POOL 的股票
-            const chg   = row.changePct || 0;
-            const vol   = row.volume || 0;
-            const pe    = peMap[row.id]?.pe || null;
-            // 盤中評分：漲幅×3 + 成交量加分 + 低PE加分
-            const volPts= vol>2e8?12:vol>1e8?8:vol>5e7?5:vol>1e7?2:0;
-            const pePts = pe&&pe>0&&pe<15?5:0;
-            const score = Math.round(50 + chg*3 + volPts + pePts);
-            // 從 KV 補充均線資料（盤中也能顯示昨日均線狀態）
-            const kvData = _trendKVCache?.[row.id] || {};
-            intradayScored.push({
-              id:        row.id,
-              name:      NAME_MAP[row.id] || DB[row.id]?.name || row.name,
-              sector:    SECTOR_MAP[row.id] || DB[row.id]?.sector || '—',
-              score,
-              changePct: chg,
-              price:     row.close,
-              ma5:       kvData.ma5  || null,
-              ma20:      kvData.ma20 || null,
-              isBreakout:kvData.isBreakout || (chg > 3),  // 漲>3%也視為突破
-              signals:   [
-                (chg>2||kvData.isBreakout)?'breakout':null,
-                vol>1e8?'volume':null,
-                chg>1&&vol>5e7?'momentum':null,
-              ].filter(Boolean),
-              inst5:0, gain5:String(chg), volRatio:'1',
-              isBreakout: chg>2,
-              ma5:null, ma20:null,
-              _mode:'intraday', _src:'TWSE',
-            });
-          }
-
-          intradayScored.sort((a,b)=>b.score-a.score);
-          const top5 = intradayScored.slice(0,5);
-          if(top5.length >= 3){
+          const kv = await r.json();
+          if(kv.items && kv.items.length >= 3){
+            const DB = {}; TREND_POOL.forEach(s=>{ DB[s.id]=s; });
+            const top5 = kv.items.slice(0,5).map(item=>({
+              id:        item.id,
+              name:      NAME_MAP[item.id] || DB[item.id]?.name || item.name || item.id,
+              sector:    SECTOR_MAP[item.id] || DB[item.id]?.sector || '—',
+              score:     item.score,
+              changePct: item.changePct || item.ret1 || 0,
+              price:     item.close,
+              ma5:       item.ma5 || null,
+              ma20:      item.ma20 || null,
+              isBreakout:item.isBreakout || (item.changePct>3),
+              signals:   item.signals || (item.changePct>2?['breakout']:[]),
+              inst5:     item.instNet || 0,
+              gain5:     String(item.ret5 || item.changePct || 0),
+              volRatio:  '1',
+              _mode: 'intraday', _src: 'trend_realtime',
+            }));
             top5._mode = 'intraday';
             _trendCache = top5; _trendCacheTime = Date.now();
             const timeEl = document.getElementById('trendUpdateTime');
             if(timeEl){
-              timeEl.textContent = twTime()+' TWSE即時';
+              const updAt = kv.updatedAt||'';
+              timeEl.textContent = updAt ? twTime()+' TWSE即時' : twTime()+' 更新';
               timeEl.style.color = 'var(--green)';
             }
             renderTrendList(top5); return;
