@@ -536,7 +536,10 @@
       </div>
     </div>
   </div>
-<div class="sec" style="padding-bottom:8px"><h2>主要指數</h2></div>
+<div class="sec" style="padding-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+  <h2>主要指數</h2>
+  <span id="idxUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+</div>
   <div class="index-row">
     <div class="idx"><div class="n">加權指數</div><div class="v" id="idx-taiex">—</div><div class="c" id="idx-taiex-c">—</div></div>
     <div class="idx"><div class="n">S&amp;P 500</div><div class="v" id="idx-sp500">—</div><div class="c" id="idx-sp500-c">—</div></div>
@@ -3563,6 +3566,27 @@ let currentTicker = '2330.TW';
 let currentName   = '台積電';
 let currentPeriod = '1D';
 
+// ── 統一時間格式 ─────────────────────────────────────────
+// 台灣時間 HH:MM 格式
+function twTime(){ 
+  return new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+// 資料更新標籤：「HH:MM 更新」
+function dataTimeLabel(dateStr){
+  if(!dateStr) return twTime()+' 更新';
+  // 如果是今天的資料，只顯示時間
+  const today = new Date().toLocaleDateString('zh-TW',{timeZone:'Asia/Taipei'}).replace(/\//g,'-');
+  const d = dateStr.slice(0,10);
+  if(d===today || d===today.replace(/-/g,'/')) return twTime()+' 更新';
+  // 非今天的資料，顯示日期
+  return dateStr.slice(5,10).replace('-','/')+' 收盤';
+}
+// 設定時間 DOM
+function setUpdateTime(id, dateStr){
+  const el = document.getElementById(id);
+  if(el) el.textContent = dateStr ? dataTimeLabel(dateStr) : twTime()+' 更新';
+}
+
 // ── Page switch ──────────────────────────────────────
 function switchPage(n){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -5934,6 +5958,22 @@ function updateAI(name, q){
   showPeriod('short');
 }
 
+
+// ── 統一時間顯示格式 ───────────────────────────────────
+function fmtDataTime(isoStr){
+  // 回傳「MM/DD HH:MM」格式
+  if(!isoStr) return '—';
+  const d = new Date(isoStr);
+  if(isNaN(d)) return isoStr.slice(0,16).replace('T',' ');
+  const pad = n=>String(n).padStart(2,'0');
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtTWNow(){
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const pad = n=>String(n).padStart(2,'0');
+  return `${pad(tw.getMonth()+1)}/${pad(tw.getDate())} ${pad(tw.getHours())}:${pad(tw.getMinutes())}`;
+}
+
 function calcRSI(closes, period=14){
   if(closes.length < period+1) return null;
   let gains=0, losses=0;
@@ -6475,7 +6515,7 @@ async function loadMarketVolume(){
     _renderMktVolSVG(slice20, avgB);
     _setTurnoverDOM(turnoverData);
     _estimateMktBreakdown(todayB, yesterB);
-    se('mktVolUpdateTime', `${latest?.date||''} · ${nowStr}`);
+    se('mktVolUpdateTime', (latest?.date ? latest.date.slice(5,10).replace('-','/')+' 收盤' : twTime()+' 更新'));
     _runMktVolAI(slice20, todayB, yesterB, avgB, ratio, turnoverData);
 
   }catch(e){
@@ -7349,7 +7389,9 @@ async function loadLeadingIndicators(manual=false){
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const ts  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   const el  = document.getElementById('leadingUpdateTime');
-  if(el) el.textContent='更新 '+ts;
+  if(el) el.textContent = twTime()+' 更新';
+  // 同步更新主要指數時間
+  setUpdateTime('idxUpdateTime');
 
   // 並行抓三組資料（各自處理錯誤）
   await Promise.all([
@@ -10108,7 +10150,12 @@ async function refreshTrendStocks(manual=false){
             mapped._mode = 'eod';
             _trendCache = mapped; _trendCacheTime = Date.now();
             const timeEl = document.getElementById('trendUpdateTime');
-            if(timeEl) timeEl.textContent = '盤後 ' + (kv.updatedAt||'').slice(11,16) || '昨日';
+            if(timeEl){
+              const updAt = kv.updatedAt||'';
+              const dStr = updAt ? updAt.slice(5,10).replace('-','/')+' '+updAt.slice(11,16) : '昨日';
+              timeEl.textContent = '📋 盤後法人・'+dStr;
+              timeEl.style.color = 'var(--gold)';
+            }
             renderTrendList(mapped); return;
           }
         }
@@ -10176,9 +10223,10 @@ async function refreshTrendStocks(manual=false){
             top5._mode = 'intraday';
             _trendCache = top5; _trendCacheTime = Date.now();
             const timeEl = document.getElementById('trendUpdateTime');
-            const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-            const ts = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-            if(timeEl) timeEl.textContent = ts+' 即時';
+            if(timeEl){
+              timeEl.textContent = twTime()+' TWSE即時';
+              timeEl.style.color = 'var(--green)';
+            }
             renderTrendList(top5); return;
           }
         }
@@ -16868,7 +16916,7 @@ function updatePulse(instData, indexData, txfData){
   const pmTrust   = document.getElementById('pmTrust');
   const pulseTime = document.getElementById('pulseTime');
 
-  if(pulseTime) pulseTime.textContent = hh+':'+mm+' 更新';
+  if(pulseTime) pulseTime.textContent = twTime()+' 更新';
   if(pmTwse && idxPrice != null){
     const chg = idxChg >= 0;
     pmTwse.textContent = Number(idxPrice).toLocaleString('zh-TW',{maximumFractionDigits:2});
