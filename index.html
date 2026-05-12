@@ -12928,22 +12928,26 @@ async function runMultiAgentSignal(){
 
   // ── 收集各 Agent 的資料 ─────────────────────────────
   const g = id => document.getElementById(id)?.textContent?.trim()||'—';
-  const price     = g('stockPrice');
-  const changePct = g('stockChangePct');
-  const name      = currentName || stockId;
+  // 個股基本資訊（從 AI context 或 DOM 取）
+  const ctx     = _lastAIContext || {};
+  const price   = g('chartPrice') || ctx.price || '—';
+  const changePct = ctx.changePct ? (ctx.changePct>0?'+':'')+ctx.changePct.toFixed(2)+'%' : g('ttChange');
+  const name    = currentName || stockId;
 
-  // Agent-01 技術面資料
+  // Agent-01 技術面（使用正確的 DOM id）
   const techData = {
-    rsi:      g('stockRSI') !== '—' ? g('stockRSI') : null,
-    ma5:      g('stockMA5'),
-    ma20:     g('stockMA20'),
-    ret5:     g('stockRet5'),
-    volRatio: g('stockVolRatio'),
+    rsi:      g('s-rsi') !== '—' ? g('s-rsi') : (g('m-rsi')||null),
+    ma5:      ctx.ma5  || '—',
+    ma20:     g('m-ma20') || '—',
+    ret5:     ctx.mom5Pct ? ctx.mom5Pct.toFixed(2)+'%' : '—',
+    volRatio: g('drawerVolRatio') || '—',
+    longScore:g('l-score'),
+    shortScore:g('s-score'),
     changePct,
     price,
   };
 
-  // Agent-02 基本面資料
+  // Agent-02 基本面（fund- 開頭，已確認存在）
   const fundData = {
     pe:        g('fund-pe'),
     pb:        g('fund-pb'),
@@ -12952,24 +12956,33 @@ async function runMultiAgentSignal(){
     cashFlow:  g('fundCashFree'),
     debtRatio: g('fundBalDebtRatio'),
     eps:       g('fund-eps'),
+    revStreak: g('fund-rev-streak'),
   };
 
-  // Agent-03 籌碼面資料
+  // Agent-03 籌碼面（正確的 DOM id）
   const chipData = {
-    instScore:    g('chipScore'),
-    foreignStreak:g('chipForeignStreak'),
+    instScore:    g('instScoreNum'),
+    instSignal:   g('instScoreText'),
+    foreignStreak:g('inst-foreign-streak'),
+    foreignAmt:   g('inst-foreign-amt'),
     shortRatio:   g('stockMarginRatio'),
     marginSignal: g('stockMarginSignal'),
+    marginBal:    g('stockMarginBal'),
     foreignRatio: g('fundForeignRatio'),
     foreignChg:   g('fundForeignChg'),
   };
 
-  // Agent-04 總體經濟（從首頁指數）
+  // Agent-04 總體經濟（idx- 開頭）
   const macroData = {
-    vix:     document.getElementById('idx-vix')?.textContent || '—',
-    sp500:   document.getElementById('idx-sp500-c')?.textContent || '—',
-    nasdaq:  document.getElementById('idx-nasdaq-c')?.textContent || '—',
-    sox:     document.getElementById('idx-sox-c')?.textContent || '—',
+    vix:     g('idx-vix'),
+    vixChg:  g('idx-vix-c'),
+    sp500:   g('idx-sp500'),
+    sp500c:  g('idx-sp500-c'),
+    nasdaq:  g('idx-nasdaq'),
+    nasdaqc: g('idx-nasdaq-c'),
+    sox:     g('idx-sox'),
+    soxc:    g('idx-sox-c'),
+    dji:     g('idx-dji'),
   };
 
   const WORKER = API ? API.replace(/\/$/, '') + '/v1/messages' : '';
@@ -12979,25 +12992,31 @@ async function runMultiAgentSignal(){
   const agentPrompts = {
     tech: `你是台股技術分析師 Agent-01。分析以下技術指標，用繁體中文輸出 JSON：
 股票：${name}(${stockId}) 現價：${price} 今日：${changePct}
-RSI：${techData.rsi||'無'} MA5：${techData.ma5} MA20：${techData.ma20} 5日漲跌：${techData.ret5} 量能比：${techData.volRatio}
-輸出：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"技術面最大風險"}`,
+RSI：${techData.rsi||'無'} MA20：${techData.ma20} 5日漲跌：${techData.ret5}
+量能比：${techData.volRatio} 長線評分：${techData.longScore} 短線評分：${techData.shortScore}
+輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
 
     fund: `你是台股基本面分析師 Agent-02。分析以下財務數據，用繁體中文輸出 JSON：
 股票：${name}(${stockId}) 現價：${price}
-PE：${fundData.pe} PB：${fundData.pb} 殖利率：${fundData.yield} 月營收年增：${fundData.revYoY}
+PE：${fundData.pe} PB：${fundData.pb} 殖利率：${fundData.yield}
+月營收年增：${fundData.revYoY} 連續成長：${fundData.revStreak}
 自由現金流：${fundData.cashFlow}億 負債比：${fundData.debtRatio} EPS：${fundData.eps}
-輸出：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"基本面最大風險"}`,
+輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
 
     chip: `你是台股籌碼分析師 Agent-03。分析以下籌碼數據，用繁體中文輸出 JSON：
 股票：${name}(${stockId}) 現價：${price}
-法人評分：${chipData.instScore} 外資連買賣：${chipData.foreignStreak}天
-券資比：${chipData.shortRatio}（${chipData.marginSignal}）外資持股：${chipData.foreignRatio}% 週變化：${chipData.foreignChg}%
-輸出：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"籌碼面最大風險"}`,
+法人評分：${chipData.instScore}（${chipData.instSignal}）
+外資連買賣：${chipData.foreignStreak} 外資淨買：${chipData.foreignAmt}
+融資餘額：${chipData.marginBal} 券資比：${chipData.shortRatio}（${chipData.marginSignal}）
+外資持股：${chipData.foreignRatio}% 週變化：${chipData.foreignChg}%
+輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
 
     macro: `你是總體經濟分析師 Agent-04。分析外部環境，用繁體中文輸出 JSON：
 股票：${name}(${stockId}) 現價：${price}
-VIX：${macroData.vix} S&P500今日：${macroData.sp500} 那斯達克：${macroData.nasdaq} 費半：${macroData.sox}
-輸出：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"總經最大風險"}`,
+VIX：${macroData.vix}(${macroData.vixChg}) 
+S&P500：${macroData.sp500}(${macroData.sp500c}) 那斯達克：${macroData.nasdaq}(${macroData.nasdaqc})
+費半：${macroData.sox}(${macroData.soxc}) 道瓊：${macroData.dji}
+輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
   };
 
   const agentIds = ['tech','fund','chip','macro'];
