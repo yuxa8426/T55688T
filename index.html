@@ -12475,11 +12475,18 @@ async function loadFundamentals(stockId){
       return row ? parseFloat(row.value||0) : null;
     };
 
-    const cashRaw    = findBal(['CashAndCash','現金及約當現金','Cash']);
-    const totAsset   = findBal(['TotalAssets','資產總計','TotalAsset']);
-    const totLiab    = findBal(['TotalLiabilities','負債總計','TotalLiab']);
-    const curAsset   = findBal(['CurrentAssets','流動資產']);
-    const curLiab    = findBal(['CurrentLiabilities','流動負債']);
+    // FinMind TaiwanStockBalanceSheet 確認欄位名稱：
+    // CashAndCashEquivalents / CurrentAssets / TotalAssets / CurrentLiabilities / Liabilities
+    // 注意：_per 結尾的是百分比版本，不要用
+    const findBalExact = (type) => {
+      const row = balRows.find(r => r.type === type);
+      return row ? parseFloat(row.value||0) : null;
+    };
+    const cashRaw  = findBalExact('CashAndCashEquivalents');
+    const totAsset = findBalExact('TotalAssets');
+    const totLiab  = findBalExact('Liabilities');        // 負債合計（非 TotalLiabilities）
+    const curAsset = findBalExact('CurrentAssets');
+    const curLiab  = findBalExact('CurrentLiabilities');
 
     const cashStr    = cashRaw!=null ? (cashRaw/1e8).toFixed(0) : null;
     const debtRatio  = (totAsset&&totAsset>0&&totLiab!=null)
