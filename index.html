@@ -12047,6 +12047,41 @@ function fundReset(){
 }
 
 // 主函式：載入並渲染基本面
+// 快速渲染基本面核心數字（PE/PB/殖利率/融資）
+function _renderFundCore(stockId, perData, marginData){
+  const se = (id,val,col)=>{
+    const e=document.getElementById(id);
+    if(e){e.textContent=val??'—';if(col)e.style.color=col;}
+  };
+  // PE / PB
+  if(perData?.length){
+    const latest = perData[perData.length-1];
+    const pe = parseFloat(latest?.PER||0)||null;
+    const pb = parseFloat(latest?.PBR||0)||null;
+    const yld= parseFloat(latest?.dividend_yield||0)||null;
+    if(pe!=null){ se('fund-pe', pe>0?pe.toFixed(1)+'x':'虧損', pe>0&&pe<15?'var(--red)':pe<25?'var(--text)':'var(--green)'); }
+    if(pb!=null){ se('fund-pb', pb.toFixed(2)+'x', pb<1?'var(--red)':pb<3?'var(--text)':'var(--green)'); }
+    if(yld!=null&&yld>0){
+      const el=document.getElementById('fund-div-yield');
+      if(el){ el.textContent=yld.toFixed(2)+'%'; el.style.color=yld>=5?'var(--red)':yld>=3?'var(--gold)':'var(--text)'; }
+    }
+  }
+  // 融資融券
+  if(marginData?.length){
+    const ms=[...marginData].sort((a,b)=>a.date>b.date?1:-1);
+    const ml=ms[ms.length-1];
+    const mBal=Math.round(parseFloat(ml?.MarginPurchaseTodayBalance||0)/1000);
+    const sBal=Math.round(parseFloat(ml?.ShortSaleTodayBalance||0)/1000);
+    se('stockMarginBal', mBal.toLocaleString()+'張', null);
+    se('stockShortBal',  sBal.toLocaleString()+'張', null);
+    const ratio = mBal>0?(sBal/mBal*100).toFixed(1):null;
+    se('stockMarginRatio', ratio?ratio+'%':null, null);
+    const dateEl=document.getElementById('stockMarginDate');
+    if(dateEl) dateEl.textContent=ml?.date||'';
+    console.log('[Margin]', ml?.date, '融資:', mBal, '融券:', sBal, '欄位:', Object.keys(ml||{}).slice(0,5));
+  }
+}
+
 async function loadFundamentals(stockId){
   const card = document.getElementById('fundamentalCard');
   if(!card) return;
@@ -12059,24 +12094,31 @@ async function loadFundamentals(stockId){
   const yr5ago  = nDaysAgo(1825);  // 配息取5年
 
   // 四個資料集並行取得
-  const [fsData, revData, perData, divData, marginData,
-         cashData, balData, holdData, dealerData] = await Promise.all([
+  // ── 第一波：核心資料（PE/PB/殖利率/融資券）立即顯示 ──
+  const [perData, marginData] = await Promise.all([
+    fmFetch({ dataset:'TaiwanStockPER',
+      data_id: stockId, start_date: nDaysAgo(5), end_date: today,
+      _ttl: _msTillMidnight() }, 8000).catch(()=>null),
+    fmFetch({ dataset:'TaiwanStockMarginPurchaseShortSale',
+      data_id: stockId, start_date: nDaysAgo(10), end_date: today,
+      _ttl: _msTillMidnight() }, 8000).catch(()=>null),
+  ]);
+
+  // 先渲染 PE/PB/殖利率/融資（讓用戶立即看到核心數字）
+  _renderFundCore(stockId, perData, marginData);
+
+  // ── 第二波：財報資料（背景載入，不阻塞核心顯示）──────
+  const [fsData, revData, divData,
+         cashData, balData, holdData] = await Promise.all([
     fmFetch({ dataset:'TaiwanStockFinancialStatements',
       data_id: stockId, start_date: yr2ago, end_date: today,
       _ttl: 90*24*60*60*1000 }, 15000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockMonthRevenue',
       data_id: stockId, start_date: yr1ago, end_date: today,
-      _ttl: 30*24*60*60*1000 }, 15000).catch(()=>null),
-    fmFetch({ dataset:'TaiwanStockPER',
-      data_id: stockId, start_date: nDaysAgo(5), end_date: today,
-      _ttl: _msTillMidnight() }, 12000).catch(()=>null),
+      _ttl: 30*24*60*60*1000 }, 12000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockDividend',
       data_id: stockId, start_date: yr5ago, end_date: today,
-      _optional: true, _ttl: 180*24*60*60*1000 }, 12000).catch(()=>null),
-    fmFetch({ dataset:'TaiwanStockMarginPurchaseShortSale',
-      data_id: stockId, start_date: nDaysAgo(10), end_date: today,
-      _ttl: _msTillMidnight() }, 10000).catch(()=>null),
-    // ── 付費方案新增 ─────────────────────────────────
+      _optional: true, _ttl: 180*24*60*60*1000 }, 10000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockCashFlowsStatement',
       data_id: stockId, start_date: yr2ago, end_date: today,
       _ttl: 90*24*60*60*1000 }, 12000).catch(()=>null),
@@ -12086,8 +12128,8 @@ async function loadFundamentals(stockId){
     fmFetch({ dataset:'TaiwanStockShareholding',
       data_id: stockId, start_date: nDaysAgo(60), end_date: today,
       _ttl: 7*24*60*60*1000 }, 10000).catch(()=>null),
-    Promise.resolve(null), // TaiwanStockTradingDailyReport 需更高付費方案，暫停
   ]);
+  const dealerData = null;
 
   const spinner = document.getElementById('fundLoadSpinner');
   if(spinner) spinner.style.display='none';
