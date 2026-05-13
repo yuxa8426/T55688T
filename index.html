@@ -275,6 +275,14 @@
     </div>
   </div>
 
+  <!-- 資料更新說明 -->
+  <div style="background:rgba(212,160,0,.06);border:1px solid rgba(212,160,0,.2);
+              border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:10px;color:var(--text3)">
+    ⏰ 所有指標均為<strong style="color:var(--gold)">盤後資料</strong>，
+    每日收盤後 <strong style="color:var(--text2)">16:00~19:00</strong> 由交易所公告，FinMind 同步更新。
+    當日數字標示 <span style="color:var(--red);font-weight:700">紅色</span>，前日數字標示 <span style="color:var(--gold)">橘色</span>。
+  </div>
+
   <!-- Tab 切換列 -->
   <div style="display:flex;gap:0;margin:0 16px 12px;background:var(--card);border-radius:12px;padding:4px;border:1px solid var(--border)">
     <button class="li-tab active" onclick="switchLeadingTab(this,'option')"  style="flex:1;padding:7px 2px;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;background:var(--purple);color:#fff">📊 選擇權</button>
@@ -330,6 +338,18 @@
       <!-- AI 分析 -->
       <div class="li-analysis" id="optionAnalysis">
         <span class="purple">🤖 AI 解讀：</span>資料載入中…
+      </div>
+      <!-- 資料時效說明 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:6px 10px;background:rgba(255,255,255,.03);
+                  border-radius:8px;margin-top:6px;border:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text3)">
+          📡 <span style="color:var(--text2)">FinMind · TaiwanOptionInstitutionalInvestors</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);text-align:right">
+          <span id="optionDataDate" style="color:var(--gold)">—</span>
+          <span style="margin-left:4px">· 即時更新</span>
+        </div>
       </div>
     </div>
   </div>
@@ -409,6 +429,18 @@
       <div class="li-analysis" id="futuresAnalysis">
         <span class="purple">🤖 AI 解讀：</span>資料載入中…
       </div>
+      <!-- 資料時效說明 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:6px 10px;background:rgba(255,255,255,.03);
+                  border-radius:8px;margin-top:6px;border:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text3)">
+          📡 <span style="color:var(--text2)">FinMind · TaiwanFuturesInstitutionalInvestors</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);text-align:right">
+          <span id="futuresDataDate" style="color:var(--gold)">—</span>
+          <span style="margin-left:4px">· 即時更新</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -471,6 +503,18 @@
       <!-- AI 解讀 -->
       <div class="li-analysis" id="marginAnalysis">
         <span class="purple">🤖 AI 解讀：</span>資料載入中…
+      </div>
+      <!-- 資料時效說明 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:6px 10px;background:rgba(255,255,255,.03);
+                  border-radius:8px;margin-top:6px;border:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text3)">
+          📡 <span style="color:var(--text2)">FinMind · TaiwanStockTotalMarginPurchaseShortSale</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);text-align:right">
+          <span id="marginDataDate" style="color:var(--gold)">—</span>
+          <span style="margin-left:4px">· 盤後更新</span>
+        </div>
       </div>
     </div>
   </div>
@@ -861,6 +905,18 @@
       <div id="svPosition" style="margin-top:8px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:8px;padding:8px 10px;font-size:11px">
         <div style="font-weight:700;color:var(--green);margin-bottom:4px">💰 建議倉位（依您的資金設定）</div>
         <div id="svPositionBody" style="color:var(--text2);line-height:1.8"></div>
+      </div>
+      <!-- 資料時效說明 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:6px 10px;background:rgba(255,255,255,.03);
+                  border-radius:8px;margin-top:6px;border:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--text3)">
+          📡 <span style="color:var(--text2)">FinMind · TaiwanFuturesInstitutionalInvestors (MTX)</span>
+        </div>
+        <div style="font-size:9px;color:var(--text3);text-align:right">
+          <span id="mxfDataDate" style="color:var(--gold)">—</span>
+          <span style="margin-left:4px">· 即時更新</span>
+        </div>
       </div>
     </div>
   </div>
@@ -7794,6 +7850,14 @@ async function loadOptionData(){
     end_date:   nDaysAgo(0),   // 用今日真實日期（非週末修正版），確保取到最新資料
   }, 15000);
   if(!data||!data.length){ renderOptionFallback(); return; }
+  // 填入資料日期
+  const optLatestDate = data.reduce((mx,r)=>r.date>mx?r.date:mx,'');
+  const optDateEl = document.getElementById('optionDataDate');
+  if(optDateEl && optLatestDate){
+    const isToday = optLatestDate === todayStr();
+    optDateEl.textContent = optLatestDate.slice(5,10).replace('-','/') + (isToday?' 當日':'') ;
+    optDateEl.style.color = isToday ? 'var(--red)' : 'var(--gold)';
+  }
 
   // 整理：三大法人 Call/Put 未平倉淨部位 by date
   // call_put 真實值為 '買權' (Call) / '賣權' (Put)
@@ -7885,6 +7949,13 @@ async function loadFuturesData(){
     end_date:   nDaysAgo(0),   // 用今日真實日期，確保取到最新資料
   }, 15000);
   if(!data||!data.length){ renderFuturesFallback(); return; }
+  const futLatestDate = data.reduce((mx,r)=>r.date>mx?r.date:mx,'');
+  const futDateEl = document.getElementById('futuresDataDate');
+  if(futDateEl && futLatestDate){
+    const isToday = futLatestDate === todayStr();
+    futDateEl.textContent = futLatestDate.slice(5,10).replace('-','/') + (isToday?' 當日':'');
+    futDateEl.style.color = isToday ? 'var(--red)' : 'var(--gold)';
+  }
 
   // 整理 by date × 法人，淨部位 = long - short
   const byDate = {};
@@ -7985,6 +8056,13 @@ async function loadMxfData(){
     const d = await r.json();
     if(!d||!d.history?.length) throw new Error('no data');
     const hist = d.history||[];
+    // 填入資料日期
+    const mxfDateEl = document.getElementById('mxfDataDate');
+    if(mxfDateEl && d.date){
+      const isToday = d.date === todayStr();
+      mxfDateEl.textContent = d.date.slice(5,10).replace('-','/') + (isToday?' 當日':'');
+      mxfDateEl.style.color = isToday ? 'var(--red)' : 'var(--gold)';
+    }
 
     // ── 散戶情緒 ────────────────────────────────────────────
     const sentEl = document.getElementById('mxfRetailSentiment');
@@ -8160,6 +8238,13 @@ async function loadMarginData(){
     end_date:   nDaysAgo(0),   // 用今日真實日期，確保取到最新資料
   }, 15000);
   if(!data||!data.length){ renderMarginFallback(); return; }
+  const marLatestDate = data.reduce((mx,r)=>r.date>mx?r.date:mx,'');
+  const marDateEl = document.getElementById('marginDataDate');
+  if(marDateEl && marLatestDate){
+    const isToday = marLatestDate === todayStr();
+    marDateEl.textContent = marLatestDate.slice(5,10).replace('-','/') + (isToday?' 當日':'');
+    marDateEl.style.color = isToday ? 'var(--red)' : 'var(--gold)';
+  }
 
   // 依 date + name 整理 { date: { margin, marginYes, short, shortYes } }
   const byDate = {};
