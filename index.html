@@ -13017,98 +13017,82 @@ async function runMultiAgentSignal(){
   const WORKER = API ? API.replace(/\/$/, '') + '/v1/messages' : '';
   if(!WORKER){ _showMAError('API 未設定'); return; }
 
-  // ── 四個 Agent 並行分析 ──────────────────────────────
-  const agentPrompts = {
-    tech: `你是台股技術分析師 Agent-01。分析以下技術指標，用繁體中文輸出 JSON：
-股票：${name}(${stockId}) 現價：${price} 今日：${changePct}
-RSI：${techData.rsi||'無'} MA20：${techData.ma20} 5日漲跌：${techData.ret5}
-量能比：${techData.volRatio} 長線評分：${techData.longScore} 短線評分：${techData.shortScore}
-輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
-
-    fund: `你是台股基本面分析師 Agent-02。分析以下財務數據，用繁體中文輸出 JSON：
-股票：${name}(${stockId}) 現價：${price}
-PE：${fundData.pe} PB：${fundData.pb} 殖利率：${fundData.yield}
-月營收年增：${fundData.revYoY} 連續成長：${fundData.revStreak}
-自由現金流：${fundData.cashFlow}億 負債比：${fundData.debtRatio} EPS：${fundData.eps}
-輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
-
-    chip: `你是台股籌碼分析師 Agent-03。分析以下籌碼數據，用繁體中文輸出 JSON：
-股票：${name}(${stockId}) 現價：${price}
-法人評分：${chipData.instScore}（${chipData.instSignal}）
-外資連買賣：${chipData.foreignStreak} 外資淨買：${chipData.foreignAmt}
-融資餘額：${chipData.marginBal} 券資比：${chipData.shortRatio}（${chipData.marginSignal}）
-外資持股：${chipData.foreignRatio}% 週變化：${chipData.foreignChg}%
-輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
-
-    macro: `你是總體經濟分析師 Agent-04。分析外部環境，用繁體中文輸出 JSON：
-股票：${name}(${stockId}) 現價：${price}
-VIX：${macroData.vix}(${macroData.vixChg}) 
-S&P500：${macroData.sp500}(${macroData.sp500c}) 那斯達克：${macroData.nasdaq}(${macroData.nasdaqc})
-費半：${macroData.sox}(${macroData.soxc}) 道瓊：${macroData.dji}
-輸出JSON（僅此一行）：{"signal":"偏多|偏空|中立","strength":1-10,"reason":"20字內","risk":"20字內"}`,
-  };
-
-  const agentIds = ['tech','fund','chip','macro'];
   const agentUIIds = ['agent-tech','agent-fund','agent-chip','agent-macro'];
-  const sigIds = ['sig-tech','sig-fund','sig-chip','sig-macro'];
-  const results = {};
 
-  // 並行呼叫四個 Agent
-  await Promise.all(agentIds.map(async (agentId, i) => {
-    try{
-      const resp = await fetchWithTimeout(WORKER, 20000, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ max_tokens:200, messages:[{role:'user',content:agentPrompts[agentId]}] })
-      });
-      const data = await resp.json();
-      const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-      const clean = text.replace(/```json|```/g,'').trim();
-      const parsed = JSON.parse(clean);
-      results[agentId] = parsed;
-      const sig = parsed.signal || '中立';
-      const cls = sig==='偏多'?'bull':sig==='偏空'?'bear':'neutral';
-      const str = parsed.strength||5;
-      const strLabel = str>=9?'極強信號':str>=7?'強烈信號':str>=5?'中等信號':str>=3?'弱訊號':'訊號微弱';
-      _setAgentCard(agentUIIds[i], cls, sig, `${strLabel}(${str}/10)`);
-      // 在卡片上顯示 reason
-      const card = document.getElementById(agentUIIds[i]);
-      if(card){
-        card.title = (parsed.reason||'') + (parsed.risk ? ' ⚠️ '+parsed.risk : '');
-        // 加入 reason 在 signal 下方
-        const reasonEl = card.querySelector('.agent-reason');
-        if(reasonEl) reasonEl.textContent = parsed.reason||'';
-      }
-    }catch(e){
-      results[agentId] = {signal:'中立', strength:5, reason:'分析失敗', risk:'無法取得'};
-      _setAgentCard(agentUIIds[i], 'neutral', '—', '取得失敗');
-    }
-  }));
+  // ══ 單次呼叫：把4個 Agent + 仲裁者合併為一個 prompt，節省 80% 配額 ══
+  const combinedPrompt = `你是台股多代理人交易分析系統。請扮演以下4個分析師角色，對 ${name}(${stockId}) 現價 ${price} 進行協同分析。
 
-  // ── 仲裁者：整合四大 Agent → 最終信號 ──────────────
-  const agentSummary = agentIds.map((id,i)=>`${['技術','基本面','籌碼','總經'][i]}：${results[id]?.signal||'中立'}(${results[id]?.strength||5}/10) - ${results[id]?.reason||'—'}`).join('\n');
+【技術面 Agent-01】RSI：${techData.rsi||'無'} MA20：${techData.ma20} 5日：${techData.ret5} 量能比：${techData.volRatio} 長線分：${techData.longScore} 短線分：${techData.shortScore}
 
-  const arbPrompt = `你是資深交易員仲裁者。整合以下四大 Agent 分析，對 ${name}(${stockId}) 現價 ${price} 產出交易決策。
+【基本面 Agent-02】PE：${fundData.pe} PB：${fundData.pb} 殖利率：${fundData.yield} 月營收年增：${fundData.revYoY} 自由現金流：${fundData.cashFlow}億 負債比：${fundData.debtRatio}
 
-${agentSummary}
+【籌碼面 Agent-03】法人評分：${chipData.instScore}(${chipData.instSignal}) 外資連買：${chipData.foreignStreak} 券資比：${chipData.shortRatio}(${chipData.marginSignal}) 外資持股：${chipData.foreignRatio}% 週變化：${chipData.foreignChg}%
 
-請輸出 JSON（繁體中文）：
-{"final":"做多|做空|觀望","confidence":1-100,"entry":"進場區間如495-505","stopLoss":"停損價位","target":"目標價位","debate":"30字內說明各Agent分歧或共識","rationale":"50字內最終理由","risks":"最大風險20字"}`;
+【總體經濟 Agent-04】VIX：${macroData.vix} S&P500：${macroData.sp500}(${macroData.sp500c}) 費半：${macroData.sox}(${macroData.soxc})
+
+請輸出以下 JSON（繁體中文，reason/risk 各限15字）：
+{
+  "tech":  {"signal":"偏多|偏空|中立","strength":1-10,"reason":"15字","risk":"15字"},
+  "fund":  {"signal":"偏多|偏空|中立","strength":1-10,"reason":"15字","risk":"15字"},
+  "chip":  {"signal":"偏多|偏空|中立","strength":1-10,"reason":"15字","risk":"15字"},
+  "macro": {"signal":"偏多|偏空|中立","strength":1-10,"reason":"15字","risk":"15字"},
+  "final": {"action":"做多|做空|觀望","confidence":1-100,"entry":"進場區間","stopLoss":"停損價","target":"目標價","debate":"30字共識或分歧","rationale":"40字理由"}
+}
+只輸出 JSON，不加任何說明文字。`;
+
+  _stratProgress && _stratProgress(60,'分析中…','🧠',null);
 
   try{
-    const resp2 = await fetchWithTimeout(WORKER, 25000, {
+    const resp = await fetchWithTimeout(WORKER, 40000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ max_tokens:400, messages:[{role:'user',content:arbPrompt}] })
+      body: JSON.stringify({ max_tokens:600, messages:[{role:'user',content:combinedPrompt}] })
     });
-    const data2 = await resp2.json();
-    const text2 = (data2.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-    const clean2 = text2.replace(/```json|```/g,'').trim();
-    const arb = JSON.parse(clean2);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+    let clean = text.replace(/`{3}json/g,'').replace(/`{3}/g,'').trim();
+')+1,m.lastIndexOf('
+
+    const parsed = JSON.parse(clean);
+
+    // 解析4個 Agent 結果
+    const agentIds = ['tech','fund','chip','macro'];
+    const results  = {};
+    agentIds.forEach((id,i)=>{
+      const a = parsed[id] || {signal:'中立',strength:5,reason:'—',risk:'—'};
+      results[id] = a;
+      const sig = a.signal||'中立';
+      const cls = sig==='偏多'?'bull':sig==='偏空'?'bear':'neutral';
+      const str = a.strength||5;
+      const strLabel = str>=9?'極強':str>=7?'強烈':str>=5?'中等':str>=3?'弱':'微弱';
+      _setAgentCard(agentUIIds[i], cls, sig, `${strLabel}信號(${str}/10)`);
+      const card = document.getElementById(agentUIIds[i]);
+      if(card){
+        card.title = (a.reason||'')+(a.risk?' ⚠️ '+a.risk:'');
+        const reasonEl = card.querySelector('.agent-reason');
+        if(reasonEl) reasonEl.textContent = a.reason||'';
+      }
+    });
+
+    // 仲裁結果
+    const f = parsed.final || {};
+    const arb = {
+      final:      f.action||'觀望',
+      confidence: f.confidence||50,
+      entry:      f.entry||'—',
+      stopLoss:   f.stopLoss||'—',
+      target:     f.target||'—',
+      debate:     f.debate||'—',
+      rationale:  f.rationale||'—',
+    };
 
     const result = { agents: results, arbitrator: arb, stockId, name, price, ts: Date.now() };
     _maCache[cacheKey] = { data: result, ts: Date.now() };
     _renderMultiAgentResult(result);
   }catch(e){
-    _showMAError('仲裁者分析失敗，請重試');
+    console.error('[MA]', e);
+    _showMAError('分析失敗：'+(e.message.includes('速率')?'API 配額不足，請稍後1分鐘再試':e.message.slice(0,30)));
   }
   if(btn) btn.disabled = false;
 }
