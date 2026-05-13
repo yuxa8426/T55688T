@@ -4429,7 +4429,8 @@ async function fmShareholder(stockId='2330', days=60){
     const nm  = (r.name || r.institutional_investors || '').toString();
     const buy  = parseInt(r.buy  || 0);
     const sell = parseInt(r.sell || 0);
-    const net  = buy - sell; // 張
+    // FinMind TaiwanStockInstitutionalInvestorsBuySell 單位：股（÷1000=張）
+    const net  = Math.round((buy - sell) / 1000);  // 換算成張
     if(!byDate[d]) byDate[d]={foreign:0,trust:0,dealer:0};
     if     (nm.includes('外資')||nm.includes('Foreign'))    byDate[d].foreign += net;
     else if(nm.includes('投信')||nm.includes('Investment')) byDate[d].trust   += net;
@@ -4959,13 +4960,13 @@ function calcInstScore(inst){
   const fStreak = inst.foreignStreak || 0;  // 外資連買/賣天數
   const tStreak = inst.trustStreak   || 0;  // 投信連買/賣天數
 
-  // 外資（±3分，最重要）
-  if(fNet > 50000)       score += 3;   // 外資大買超（>5萬張）
-  else if(fNet > 10000)  score += 2;   // 中量買超
-  else if(fNet > 0)      score += 1;   // 小量買超
-  else if(fNet < -50000) score -= 3;   // 大量賣超
-  else if(fNet < -10000) score -= 2;
-  else if(fNet < 0)      score -= 1;
+  // 外資（±3分，最重要）— 單位：張
+  if(fNet > 5000)       score += 3;   // 外資大買超（>5千張）
+  else if(fNet > 1000)  score += 2;   // 中量買超
+  else if(fNet > 0)     score += 1;   // 小量買超
+  else if(fNet < -5000) score -= 3;   // 大量賣超
+  else if(fNet < -1000) score -= 2;
+  else if(fNet < 0)     score -= 1;
 
   // 外資連買/賣加權
   if(fStreak >= 5)       score += 2;   // 連買5日以上，強烈訊號
@@ -4973,11 +4974,11 @@ function calcInstScore(inst){
   else if(fStreak <= -5) score -= 2;
   else if(fStreak <= -3) score -= 1;
 
-  // 投信（±1.5分）
-  if(tNet > 5000)        score += 1.5;
-  else if(tNet > 0)      score += 0.5;
-  else if(tNet < -5000)  score -= 1.5;
-  else if(tNet < 0)      score -= 0.5;
+  // 投信（±1.5分）— 單位：張
+  if(tNet > 500)        score += 1.5;
+  else if(tNet > 0)     score += 0.5;
+  else if(tNet < -500)  score -= 1.5;
+  else if(tNet < 0)     score -= 0.5;
 
   // 雙法人共鳴（外資+投信同向，+1分）
   if(fNet > 0 && tNet > 0)   score += 1;
@@ -8626,11 +8627,12 @@ function renderChips(data, label='近60日'){
   // 評級（以60日法人淨買超方向）
   let rating, ratingColor;
   const netSum=(data.foreignNet||0)+(data.trustNet||0)+(data.dealerNet||0);
-  if(netSum>5000)      {rating='法人強勢買超';ratingColor='var(--red)';}
-  else if(netSum>500)  {rating='法人偏多';    ratingColor='var(--gold)';}
-  else if(netSum>-500) {rating='法人中立';    ratingColor='var(--text2)';}
-  else if(netSum>-5000){rating='法人偏空';    ratingColor='var(--text2)';}
-  else                 {rating='法人持續賣超';ratingColor='var(--green)';}
+  // netSum 單位：張（修正後）
+  if(netSum>5000)       {rating='法人強勢買超';ratingColor='var(--red)';}
+  else if(netSum>500)   {rating='法人偏多';    ratingColor='var(--gold)';}
+  else if(netSum>-500)  {rating='法人中立';    ratingColor='var(--text2)';}
+  else if(netSum>-5000) {rating='法人偏空';    ratingColor='var(--text2)';}
+  else                  {rating='法人持續賣超';ratingColor='var(--green)';}
   const ratingEl=document.getElementById('chip-rating');
   if(ratingEl){ratingEl.textContent=rating;ratingEl.style.color=ratingColor;}
 
