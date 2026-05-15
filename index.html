@@ -12859,11 +12859,19 @@ async function loadFundamentals(stockId){
   }
 
   // ── 新功能渲染 ──────────────────────────────────────────
-  // 股價：優先從 perData 取（最可靠），fallback 到 DOM
   const perForPrice = (perData||[]).slice(-1)[0];
-  const currentPriceNum = parseFloat(perForPrice?.closing_price||perForPrice?.close||0) ||
+  // perData 欄位確認
+  const perKeys = perForPrice ? Object.keys(perForPrice) : [];
+  const perPrice = parseFloat(
+    perForPrice?.closing_price || perForPrice?.close ||
+    perForPrice?.Close || perForPrice?.price || 0
+  );
+  const currentPriceNum = perPrice ||
     parseFloat(document.getElementById('ttPrice')?.textContent?.replace(/[^0-9.]/g,'')||'0') ||
     null;
+  console.log('[NewFeatures] perKeys:', perKeys, 'perPrice:', perPrice,
+    'marginData:', marginData?.length, 'holdData:', holdData?.length,
+    'divData:', divData?.length, 'currentPriceNum:', currentPriceNum);
 
   // ⑦ 支撐壓力位（從 perData 歷史收盤價計算）
   const closesForSupport = (perData||[])
