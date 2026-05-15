@@ -12263,7 +12263,7 @@ async function loadFundamentals(stockId){
   // ── 第一波：核心資料（PE/PB/殖利率/融資券）立即顯示 ──
   const [perData, marginData] = await Promise.all([
     fmFetch({ dataset:'TaiwanStockPER',
-      data_id: stockId, start_date: nDaysAgo(5), end_date: today,
+      data_id: stockId, start_date: nDaysAgo(60), end_date: today,  // 60天供支撐壓力計算
       _ttl: _msTillMidnight() }, 8000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockMarginPurchaseShortSale',
       data_id: stockId, start_date: nDaysAgo(10), end_date: today,
@@ -12859,16 +12859,25 @@ async function loadFundamentals(stockId){
   }
 
   // ── 新功能渲染 ──────────────────────────────────────────
-  const currentPriceNum = parseFloat(
-    document.getElementById('chartPrice')?.textContent?.replace(/,/g,'')
-  )||null;
+  // 股價：優先從 perData 取（最可靠），fallback 到 DOM
+  const perForPrice = (perData||[]).slice(-1)[0];
+  const currentPriceNum = parseFloat(perForPrice?.closing_price||perForPrice?.close||0) ||
+    parseFloat(document.getElementById('ttPrice')?.textContent?.replace(/[^0-9.]/g,'')||'0') ||
+    null;
 
-  // ⑦ 支撐壓力位（用技術分析的 closes 資料）
-  const closesForSupport = window._lastCloses || [];
-  const ma5Str  = document.getElementById('m-ma5')?.textContent||null;
-  const ma20Str = document.getElementById('m-ma20')?.textContent||null;
-  if(closesForSupport.length >= 10 && currentPriceNum){
-    renderSupportResistance(closesForSupport, currentPriceNum, ma5Str, ma20Str);
+  // ⑦ 支撐壓力位（從 perData 歷史收盤價計算）
+  const closesForSupport = (perData||[])
+    .sort((a,b)=>a.date>b.date?1:-1)
+    .map(r=>parseFloat(r.closing_price||r.close||0))
+    .filter(v=>v>0);
+  const ma5Str  = document.getElementById('m-ma5')?.textContent?.replace(/[^0-9.]/g,'')||null;
+  const ma20Str = document.getElementById('m-ma20')?.textContent?.replace(/[^0-9.]/g,'')||null;
+  if(closesForSupport.length >= 5 && currentPriceNum){
+    // 若 perData 不足（只有5天），補上 window._lastCloses
+    const allCloses = closesForSupport.length >= 20
+      ? closesForSupport
+      : [...(window._lastCloses||[]), ...closesForSupport].slice(-40);
+    renderSupportResistance(allCloses, currentPriceNum, ma5Str, ma20Str);
   }
 
   // ⑤ 融資追繳警戒線
@@ -13660,6 +13669,10 @@ function renderForeignTrendChart(holdData){
   se('foreignTrendStart', dates[0]||'');
   se('foreignTrendMid',   dates[Math.floor(dates.length/2)]||'');
   se('foreignTrendEnd',   dates[dates.length-1]||'');
+
+  // 顯示包含此圖的外資持股卡片
+  const holdCard = document.getElementById('fundHoldDealerCard');
+  if(holdCard) holdCard.style.display='block';
 }
 
 // ══════════════════════════════════════════════════════
