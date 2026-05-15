@@ -14547,7 +14547,7 @@ async function runCustomStratAnalysis(){
       return s.id+'('+s.name+') ['+tags.join('/')+']';
     }).join(', ');
 
-    const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+stratCount+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
+    const fullPrompt = ['你是台股選股助理。以下是程式從全市場'+candidates.length+'支股票中，依 '+stratName+' 條件量化篩選出的候選股：', candLines, '請依據以下條件，從上述候選中挑出最符合的'+count+'支，並給每支股票一個6字內的理由。', '條件：'+userPrompt, (vixStr?'市場：'+vixStr:''), '日期：'+today, '直接輸出JSON（reason限6字，winRate估計勝率0-100，risk風險1-10）：', '{"stocks":[{"id":"2330","name":"台積電","sector":"半導體","winRate":70,"risk":4,"reason":"買超"}]}'].join('\n');
 
     const WORKER = (typeof API!=='undefined'&&API) ? API.replace(/\/$/,'')+'/v1/messages' : '';
     if(!WORKER) throw new Error('API 未設定');
