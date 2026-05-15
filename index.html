@@ -6859,10 +6859,8 @@ async function _fetchMarketTurnover(){
     if(r.ok){const d=await r.json();if(d?.turnover!=null)return d;}
   }catch(e){}
   try{
-    const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const ds=tw.getFullYear()+String(tw.getMonth()+1).padStart(2,'0')+String(tw.getDate()).padStart(2,'0');
-    const r=await fetch(`https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${ds}`,
-      {headers:{'Referer':'https://www.twse.com.tw/'}});
+    // 走 Worker proxy 避免 CORS 問題
+    const r=await fetchWithTimeout(API.replace(/\/$/,'')+'/turnover', 8000);
     if(r.ok){
       const d=await r.json();
       const last=d?.data?.[d.data.length-1];
