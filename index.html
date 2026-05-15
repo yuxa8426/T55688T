@@ -12534,7 +12534,7 @@ async function loadFundamentals(stockId){
   // ── 解析配息與殖利率 ──────────────────────────────────
   // 優先直接用 TaiwanStockPER 的 dividend_yield 欄位（最準確）
   const _perLatestNF = (perData||[]).slice(-1)[0];
-  const _perYield  = parseFloat(_perLatest?.dividend_yield||0)||null;
+  const _perYield  = parseFloat(_perLatestNF?.dividend_yield||0)||null;
   const divYieldEl = document.getElementById('fund-div-yield');
   if(_perYield!=null && _perYield>0 && divYieldEl){
     divYieldEl.textContent = _perYield.toFixed(2)+'%';
@@ -16413,7 +16413,9 @@ async function autoRunBacktest(){
       const strat = STRATEGIES[key];
       if(!strat) continue;
       const bt = getBacktestSummary(key);
-      const prompt = strat.prompt.replace('{{BT_SUMMARY}}', bt||'')
+      const prompt = (typeof strat.prompt === 'function'
+          ? strat.prompt(bt||'')
+          : strat.prompt.replace('{{BT_SUMMARY}}', bt||''))
         + '\n請直接輸出 JSON，無需說明。';
       const resp = await fetch(`${API}/v1/messages`, {
         method:'POST',
@@ -18226,6 +18228,7 @@ window.addEventListener('load', async ()=>{
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js', {scope: '/'})
+        .catch(()=>{}) // sw.js 不存在時靜默略過
     .then(reg => { if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); })
     .catch(e => console.warn('[SW] 註冊失敗:', e.message));
 }
