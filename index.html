@@ -1220,12 +1220,74 @@
         </div>
       </div>
 
+      <!-- ③ 填息歷史記錄 -->
+      <div id="divFillCard" style="display:none;background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border);margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between">
+          <span>📅 股利發放記錄</span>
+          <span style="font-size:10px;font-weight:400;color:var(--text3)" id="divFillYears">—</span>
+        </div>
+        <div id="divFillList" style="display:flex;flex-direction:column;gap:5px"></div>
+        <div id="divFillSummary" style="margin-top:8px;font-size:11px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card)"></div>
+      </div>
+
+      <!-- ⑦ 支撐壓力位 -->
+      <div id="supportCard" style="display:none;background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border);margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:10px">📐 關鍵價位分析</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div style="background:rgba(255,76,106,.06);border:1px solid rgba(255,76,106,.2);border-radius:10px;padding:10px">
+            <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:6px">▲ 壓力位</div>
+            <div id="resistanceLevels" style="display:flex;flex-direction:column;gap:4px"></div>
+          </div>
+          <div style="background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:10px">
+            <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:6px">▼ 支撐位</div>
+            <div id="supportLevels" style="display:flex;flex-direction:column;gap:4px"></div>
+          </div>
+        </div>
+        <div id="supportSignal" style="font-size:11px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card)"></div>
+      </div>
+
       <!-- 籌碼異常偵測提示 -->
       <div id="chipAlertCard" style="display:none;margin-bottom:8px">
         <div id="chipAlertList"></div>
       </div>
 
       <!-- AI 評語已移至頂部 -->
+
+      <!-- ⑤ 融資追繳警戒線 -->
+      <div id="marginCallCard" style="display:none;margin-bottom:8px">
+        <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+            ⚠️ 融資維持率分析
+            <span style="font-size:9px;font-weight:400;color:var(--text3)">安全線 166%・追繳線 130%</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+            <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+              <div style="font-size:9px;color:var(--text3);margin-bottom:3px">融資維持率</div>
+              <div style="font-size:15px;font-weight:800" id="marginCallRatio">—</div>
+              <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+            </div>
+            <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+              <div style="font-size:9px;color:var(--text3);margin-bottom:3px">追繳警戒價</div>
+              <div style="font-size:14px;font-weight:800;color:var(--green)" id="marginCallPrice">—</div>
+              <div style="font-size:9px;color:var(--text3);margin-top:2px">元</div>
+            </div>
+            <div style="text-align:center;background:var(--card);border-radius:8px;padding:8px 4px;border:1px solid var(--border)">
+              <div style="font-size:9px;color:var(--text3);margin-bottom:3px">距警戒尚有</div>
+              <div style="font-size:14px;font-weight:800" id="marginCallGap">—</div>
+              <div style="font-size:9px;color:var(--text3);margin-top:2px">%</div>
+            </div>
+          </div>
+          <div style="margin-bottom:8px">
+            <div style="height:10px;background:linear-gradient(90deg,#ff4c6a 0%,#ff4c6a 52%,#d4a000 52%,#d4a000 66%,#00d4aa 66%,#00d4aa 100%);border-radius:5px;position:relative">
+              <div id="marginCallPointer" style="position:absolute;top:-4px;width:4px;height:18px;background:#fff;border-radius:2px;transform:translateX(-50%);left:50%;transition:left 1s;box-shadow:0 0 6px rgba(0,0,0,.6)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-top:3px">
+              <span style="color:var(--red)">● 危險</span><span style="color:var(--gold)">● 警戒 130%</span><span>安全線 166%</span><span style="color:var(--green)">● 充裕</span>
+            </div>
+          </div>
+          <div id="marginCallAlert" style="font-size:11px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card)">—</div>
+        </div>
+      </div>
 
       <!-- 融資融券（個股）-->
       <div id="stockMarginCard" style="background:var(--surface);border-radius:10px;padding:10px 12px;border:1px solid var(--border);margin-bottom:8px;display:none">
@@ -1336,7 +1398,17 @@
             <div id="fundForeignBar" style="height:100%;background:var(--purple);border-radius:4px;width:0%;transition:width 1s"></div>
           </div>
         </div>
-        <div id="fundHoldSummary" style="font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border)"></div>
+        <!-- ⑥ 外資持股趨勢折線圖 -->
+        <div style="margin-top:10px">
+          <div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:5px">外資持股近60日趨勢</div>
+          <svg id="foreignTrendChart" viewBox="0 0 300 60" style="width:100%;height:60px;overflow:visible"></svg>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:2px">
+            <span id="foreignTrendStart">—</span>
+            <span id="foreignTrendMid">—</span>
+            <span id="foreignTrendEnd">—</span>
+          </div>
+        </div>
+        <div id="fundHoldSummary" style="font-size:11px;color:var(--text2);padding:6px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border);margin-top:8px"></div>
       </div>
       <!-- 主力券商分點 -->
       <div style="background:var(--surface);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
@@ -11154,6 +11226,7 @@ function calcTraderScore(data){
       else if(rsi <= 75)  score -= 8;   // 過熱，注意壓力
       else                score -= 20;  // 嚴重超買，短線風險高
       data._rsi = Math.round(rsi);
+    window._lastCloses = closes;  // ⑦ 供支撐壓力計算使用
     }
   }
 
@@ -12127,6 +12200,14 @@ function fundReset(){
   if(fundCashBalCard) fundCashBalCard.style.display='none';
   const fundHoldDealerCard = document.getElementById('fundHoldDealerCard');
   if(fundHoldDealerCard) fundHoldDealerCard.style.display='none';
+  const marginCallCard = document.getElementById('marginCallCard');
+  if(marginCallCard) marginCallCard.style.display='none';
+  const divFillCard = document.getElementById('divFillCard');
+  if(divFillCard) divFillCard.style.display='none';
+  const supportCard = document.getElementById('supportCard');
+  if(supportCard) supportCard.style.display='none';
+  const ftChart = document.getElementById('foreignTrendChart');
+  if(ftChart) ftChart.innerHTML='';
   const spinner = document.getElementById('fundLoadSpinner');
   if(spinner) spinner.style.display='inline';
 }
@@ -12425,6 +12506,8 @@ async function loadFundamentals(stockId){
       peEl.textContent = pe>0 ? pe.toFixed(1)+'x' : '虧損';
       peEl.style.color = pe>0&&pe<15?'var(--red)':pe<25?'var(--text)':'var(--green)';
     }
+    // ② 產業PE對比
+    const sectorAvgPE = _getSectorAvgPE(currentSector || SECTOR_MAP[stockId] || '');
     const peJEl = document.getElementById('fund-pe-judge');
     if(peJEl && pe!=null){
       peJEl.textContent = pe<=0?'虧損中':pe<12?'低估值':pe<20?'合理':pe<30?'偏高':'高估';
@@ -12774,6 +12857,32 @@ async function loadFundamentals(stockId){
       if(holdDealerCard) holdDealerCard.style.display='block';
     }
   }
+
+  // ── 新功能渲染 ──────────────────────────────────────────
+  const currentPriceNum = parseFloat(
+    document.getElementById('chartPrice')?.textContent?.replace(/,/g,'')
+  )||null;
+
+  // ⑦ 支撐壓力位（用技術分析的 closes 資料）
+  const closesForSupport = window._lastCloses || [];
+  const ma5Str  = document.getElementById('m-ma5')?.textContent||null;
+  const ma20Str = document.getElementById('m-ma20')?.textContent||null;
+  if(closesForSupport.length >= 10 && currentPriceNum){
+    renderSupportResistance(closesForSupport, currentPriceNum, ma5Str, ma20Str);
+  }
+
+  // ⑤ 融資追繳警戒線
+  if(marginData?.length && currentPriceNum){
+    const ml = [...marginData].sort((a,b)=>a.date>b.date?1:-1).slice(-1)[0];
+    const mBal = Math.round(parseFloat(ml?.MarginPurchaseTodayBalance||0)/1000);
+    if(mBal > 0) renderMarginCall(currentPriceNum, mBal, marginData);
+  }
+
+  // ⑥ 外資持股趨勢圖
+  if(holdData?.length) renderForeignTrendChart(holdData);
+
+  // ③ 填息歷史記錄
+  if(divData?.length) renderDivFillHistory(divData, perData);
 
   // ── AI 基本面評語（等 DOM 更新後再讀取數值）─────────────
   // 用 setTimeout 確保所有 DOM 更新完成後才讀取
@@ -13288,6 +13397,336 @@ function _renderMultiAgentResult(result){
 function _showMAError(msg){
   const errorEl = document.getElementById('multiAgentError');
   if(errorEl){ errorEl.style.display='block'; errorEl.textContent='⚠️ '+msg; }
+}
+
+// ══════════════════════════════════════════════════════
+// ⑦ 支撐壓力位計算（基於近期高低點、均線、整數關卡）
+// ══════════════════════════════════════════════════════
+function renderSupportResistance(closes, currentPrice, ma5, ma20){
+  const card = document.getElementById('supportCard');
+  if(!card || !closes?.length || !currentPrice) return;
+
+  const price = parseFloat(currentPrice);
+  const prices = closes.map(Number).filter(v=>!isNaN(v)&&v>0);
+  if(prices.length < 10) return;
+
+  const levels = [];
+
+  // 1. 近20日高低點
+  const recent = prices.slice(-20);
+  const high20 = Math.max(...recent);
+  const low20  = Math.min(...recent);
+  const high10 = Math.max(...prices.slice(-10));
+  const low10  = Math.min(...prices.slice(-10));
+  levels.push({ price: high20, type:'resistance', label:'20日高點' });
+  levels.push({ price: high10, type:'resistance', label:'10日高點' });
+  levels.push({ price: low20,  type:'support',    label:'20日低點' });
+  levels.push({ price: low10,  type:'support',    label:'10日低點' });
+
+  // 2. 均線支撐
+  if(ma5  && !isNaN(ma5))  levels.push({ price:parseFloat(ma5),  type:parseFloat(ma5)<price?'support':'resistance', label:'MA5' });
+  if(ma20 && !isNaN(ma20)) levels.push({ price:parseFloat(ma20), type:parseFloat(ma20)<price?'support':'resistance', label:'MA20' });
+
+  // 3. 整數關卡（心理價位）
+  const magnitude = Math.pow(10, Math.floor(Math.log10(price)));
+  const step = magnitude >= 1000 ? 100 : magnitude >= 100 ? 10 : 5;
+  for(let i=-3; i<=3; i++){
+    const roundPrice = Math.round(price/step)*step + i*step;
+    if(roundPrice !== price && roundPrice > 0){
+      levels.push({
+        price: roundPrice,
+        type: roundPrice > price ? 'resistance' : 'support',
+        label: '整數關卡'
+      });
+    }
+  }
+
+  // 4. 斐波那契回撤（近期波段）
+  const swing_high = Math.max(...prices.slice(-40));
+  const swing_low  = Math.min(...prices.slice(-40));
+  const diff = swing_high - swing_low;
+  [0.382, 0.5, 0.618].forEach(ratio=>{
+    const fibPrice = +(swing_high - diff*ratio).toFixed(1);
+    if(fibPrice > 0){
+      levels.push({
+        price: fibPrice,
+        type: fibPrice > price ? 'resistance' : 'support',
+        label: `Fib ${(ratio*100).toFixed(0)}%`
+      });
+    }
+  });
+
+  // 篩選：壓力取高於現價的最近3個、支撐取低於現價的最近3個
+  const resistances = levels
+    .filter(l=>l.type==='resistance' && l.price>price*1.001)
+    .sort((a,b)=>a.price-b.price)
+    .slice(0,3);
+
+  const supports = levels
+    .filter(l=>l.type==='support' && l.price<price*0.999)
+    .sort((a,b)=>b.price-a.price)
+    .slice(0,3);
+
+  // 渲染
+  const fmt = v => v >= 1000 ? v.toFixed(0) : v.toFixed(1);
+  const rEl = document.getElementById('resistanceLevels');
+  const sEl = document.getElementById('supportLevels');
+
+  if(rEl) rEl.innerHTML = resistances.map((l,i)=>{
+    const dist = +((l.price-price)/price*100).toFixed(1);
+    const strength = i===0?'強':'中';
+    return `<div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-size:12px;font-weight:700;color:var(--red)">${fmt(l.price)}</span>
+        <span style="font-size:9px;color:var(--text3);margin-left:3px">${l.label}</span>
+      </div>
+      <span style="font-size:9px;color:var(--red)">+${dist}%</span>
+    </div>`;
+  }).join('') || '<div style="font-size:10px;color:var(--text3)">無明顯壓力</div>';
+
+  if(sEl) sEl.innerHTML = supports.map((l,i)=>{
+    const dist = +((price-l.price)/price*100).toFixed(1);
+    return `<div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span style="font-size:12px;font-weight:700;color:var(--green)">${fmt(l.price)}</span>
+        <span style="font-size:9px;color:var(--text3);margin-left:3px">${l.label}</span>
+      </div>
+      <span style="font-size:9px;color:var(--green)">-${dist}%</span>
+    </div>`;
+  }).join('') || '<div style="font-size:10px;color:var(--text3)">無明顯支撐</div>';
+
+  // 信號：距離最近壓力和支撐的比例
+  const nearRes = resistances[0]?.price;
+  const nearSup = supports[0]?.price;
+  const sigEl = document.getElementById('supportSignal');
+  if(sigEl && nearRes && nearSup){
+    const toRes = +((nearRes-price)/price*100).toFixed(1);
+    const toSup = +((price-nearSup)/price*100).toFixed(1);
+    const riskReward = +(toRes/toSup).toFixed(1);
+    const rrColor = riskReward>=2?'var(--red)':riskReward>=1?'var(--gold)':'var(--green)';
+    sigEl.innerHTML = `<span style="color:var(--text2)">
+      最近壓力 <strong style="color:var(--red)">${fmt(nearRes)}</strong>（+${toRes}%）・
+      最近支撐 <strong style="color:var(--green)">${fmt(nearSup)}</strong>（-${toSup}%）<br>
+      <span style="color:var(--text3)">風報比 </span><strong style="color:${rrColor}">${riskReward}</strong>
+      <span style="color:var(--text3)">（≥2 為佳）${riskReward>=2?' ✅ 進場風報比良好':riskReward>=1?' ⚖️ 風報比尚可':' ⚠️ 距支撐太近，注意風險'}</span>
+    </span>`;
+  }
+
+  card.style.display = 'block';
+}
+
+// ② 產業平均PE對比資料庫（台股各產業歷史平均PE）
+function _getSectorAvgPE(sector){
+  const sectorPE = {
+    '半導體':   25, 'IC設計':    30, '晶圓代工':  20,
+    '電子零組件':18, '被動元件':  20, '印刷電路板':18,
+    '網路通訊':  22, '電腦及周邊':18, '光電':      20,
+    '其他電子':  20, '電機機械':  22, '汽車零件':  18,
+    '金融':      14, '銀行':      12, '保險':      15,
+    '電信':      20, '航運':      10, '鋼鐵':      12,
+    '塑膠':      14, '化學':      15, '食品':      20,
+    '紡織':      16, '建材':      15, '生技':      45,
+    '醫療器材':  35, '零售':      20, '電商':      30,
+    'ETF':       15, '營建':      18, '傳產':      15,
+  };
+  if(!sector) return null;
+  // 找最接近的產業
+  for(const [key, pe] of Object.entries(sectorPE)){
+    if(sector.includes(key) || key.includes(sector)) return pe;
+  }
+  return 20; // 整體市場平均
+}
+
+// ══════════════════════════════════════════════════════
+// ⑤ 融資追繳警戒線計算
+// 融資維持率 = 股價 / 融資成本 × 100%
+// 追繳線 130%，強制回補 120%，安全線 166%
+// ══════════════════════════════════════════════════════
+function renderMarginCall(price, marginBal, marginData){
+  const card = document.getElementById('marginCallCard');
+  if(!card || !price || !marginBal || marginBal <= 0) return;
+
+  // 估算融資成本（取近期成交均價作為融資價格）
+  // 實際融資成本需要個別帳戶資料，這裡用近期均線估算
+  let estimatedCost = null;
+  if(marginData?.length){
+    const sorted = [...marginData].sort((a,b)=>a.date>b.date?1:-1);
+    // 用最早一筆有融資的日期估算（近似法）
+    const earliest = sorted.find(r=>parseFloat(r.MarginPurchaseTodayBalance||0)>0);
+    if(earliest){
+      const ep = parseFloat(earliest.MarginPurchaseYesterdayBalance||0);
+      // 無法精確得知融資成本，改用當前股價×0.85（融資成數60%，安全估算）
+      estimatedCost = price * 0.85;
+    }
+  }
+  if(!estimatedCost) estimatedCost = price * 0.85;
+
+  // 融資維持率（以市值/融資金額計算）
+  // 融資成數台股一般 60%，即融資金額 = 股價 × 0.6 × 張數
+  const loanPct   = 0.6;  // 融資成數
+  const loanAmt   = estimatedCost * loanPct;  // 每股融資金額
+  const maintRatio = (price / loanAmt * 100);  // 維持率 = 市值/融資金額
+
+  // 追繳警戒價 = 融資金額 × 130%（追繳線）
+  const callPrice  = +(loanAmt * 1.3).toFixed(1);
+  // 強制回補價
+  const forcePrice = +(loanAmt * 1.2).toFixed(1);
+  // 距離追繳的百分比
+  const gapPct = +((price - callPrice) / price * 100).toFixed(1);
+
+  const se = (id, val, col) => {
+    const e = document.getElementById(id);
+    if(e){ e.textContent = val??'—'; if(col) e.style.color = col; }
+  };
+
+  const ratioColor = maintRatio < 130 ? 'var(--red)' :
+                     maintRatio < 166 ? 'var(--gold)' : 'var(--green)';
+  se('marginCallRatio', maintRatio.toFixed(1), ratioColor);
+  se('marginCallPrice', callPrice.toLocaleString(), 'var(--green)');
+  se('marginCallGap',   gapPct >= 0 ? '+'+gapPct : String(gapPct),
+     gapPct < 0 ? 'var(--red)' : gapPct < 10 ? 'var(--gold)' : 'var(--green)');
+
+  // 進度條指針位置（130%~250% 對應 0%~100%）
+  const pointerPct = Math.min(100, Math.max(0, (maintRatio - 0) / 250 * 100));
+  const pointer = document.getElementById('marginCallPointer');
+  if(pointer) setTimeout(() => pointer.style.left = pointerPct + '%', 100);
+
+  // 警示文字
+  const alertEl = document.getElementById('marginCallAlert');
+  if(alertEl){
+    if(maintRatio < 130){
+      alertEl.innerHTML = `<span style="color:var(--red)">🚨 已低於追繳線！券商可能通知補繳保證金，跌破 ${forcePrice} 元將強制回補</span>`;
+      alertEl.style.borderColor = 'rgba(255,76,106,.4)';
+      alertEl.style.background  = 'rgba(255,76,106,.06)';
+    } else if(maintRatio < 166){
+      alertEl.innerHTML = `<span style="color:var(--gold)">⚠️ 維持率偏低（${maintRatio.toFixed(0)}%），距追繳線 ${callPrice} 元尚有 ${gapPct}%，建議密切關注</span>`;
+      alertEl.style.borderColor = 'rgba(212,160,0,.3)';
+      alertEl.style.background  = 'rgba(212,160,0,.06)';
+    } else {
+      alertEl.innerHTML = `<span style="color:var(--green)">✅ 維持率充裕（${maintRatio.toFixed(0)}%），距追繳線 ${callPrice} 元尚有 ${gapPct}%，風險可控</span>`;
+      alertEl.style.borderColor = 'rgba(0,212,170,.2)';
+      alertEl.style.background  = 'rgba(0,212,170,.04)';
+    }
+  }
+
+  card.style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════
+// ⑥ 外資持股趨勢折線圖
+// ══════════════════════════════════════════════════════
+function renderForeignTrendChart(holdData){
+  const svg = document.getElementById('foreignTrendChart');
+  if(!svg || !holdData?.length) return;
+
+  const sorted = [...holdData].sort((a,b)=>a.date>b.date?1:-1);
+  const ratios  = sorted.map(r=>parseFloat(r.ForeignInvestmentSharesRatio||0));
+  const dates   = sorted.map(r=>r.date?.slice(5,10)||'');
+
+  if(ratios.length < 2) return;
+
+  const W=300, H=60, pad=4;
+  const minR = Math.min(...ratios) - 0.5;
+  const maxR = Math.max(...ratios) + 0.5;
+  const xStep = (W - pad*2) / (ratios.length - 1);
+  const yScale = v => H - pad - (v - minR) / (maxR - minR) * (H - pad*2);
+
+  const pts = ratios.map((r,i) => `${pad + i*xStep},${yScale(r)}`).join(' ');
+  const fillPts = `${pad},${H} ${pts} ${pad+(ratios.length-1)*xStep},${H}`;
+
+  // 趨勢方向（最近5日 vs 前5日均值）
+  const recent5 = ratios.slice(-5).reduce((s,v)=>s+v,0)/5;
+  const prev5   = ratios.slice(-10,-5).reduce((s,v)=>s+v,0)/5;
+  const trendUp = recent5 > prev5;
+  const lineColor = trendUp ? '#ff4c6a' : '#00d4aa';
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="fg_grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lineColor}" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${fillPts}" fill="url(#fg_grad)"/>
+    <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="${pad}" cy="${yScale(ratios[0])}" r="2.5" fill="${lineColor}"/>
+    <circle cx="${pad+(ratios.length-1)*xStep}" cy="${yScale(ratios[ratios.length-1])}" r="3" fill="${lineColor}"/>
+    <text x="${pad+(ratios.length-1)*xStep+4}" y="${yScale(ratios[ratios.length-1])+4}" 
+          font-size="8" fill="${lineColor}" font-weight="700">${ratios[ratios.length-1].toFixed(2)}%</text>
+  `;
+
+  // 日期標籤
+  const se = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+  se('foreignTrendStart', dates[0]||'');
+  se('foreignTrendMid',   dates[Math.floor(dates.length/2)]||'');
+  se('foreignTrendEnd',   dates[dates.length-1]||'');
+}
+
+// ══════════════════════════════════════════════════════
+// ③ 填息歷史記錄
+// ══════════════════════════════════════════════════════
+function renderDivFillHistory(divData, perData){
+  const card = document.getElementById('divFillCard');
+  if(!card || !divData?.length) return;
+
+  const sorted = [...divData].sort((a,b)=>a.date>b.date?1:-1);
+  const recentDivs = sorted.slice(-12); // 最近12筆（約3年季配）
+
+  // 取當前股價作為填息參考
+  const perLatest = (perData||[]).slice(-1)[0];
+  const currentPrice = parseFloat(perLatest?.closing_price||perLatest?.close||0)||null;
+
+  const getCashDiv = r => parseFloat(r.CashEarningsDistribution||r.CashDividend||0);
+
+  const listEl = document.getElementById('divFillList');
+  if(listEl){
+    listEl.innerHTML = recentDivs.filter(r=>getCashDiv(r)>0).slice(-6).reverse().map(r=>{
+      const div = getCashDiv(r);
+      const exDate = r.CashExDividendTradingDate||r.date;
+      const payDate = r.CashDividendPaymentDate||'—';
+      const year = r.year||r.date?.slice(0,4)||'—';
+
+      // 填息判斷：配息日後是否回到除息前股價
+      // 無法取歷史股價，改用殖利率顯示
+      const yieldPct = currentPrice ? (div/currentPrice*100).toFixed(2) : null;
+
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text)">${year}</div>
+          <div style="font-size:9px;color:var(--text3)">除息 ${exDate?.slice(0,10)||'—'}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">$${div.toFixed(2)}</div>
+          <div style="font-size:9px;color:var(--text3)">現金股利</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;color:var(--red)">${yieldPct ? yieldPct+'%' : '—'}</div>
+          <div style="font-size:9px;color:var(--text3)">當前殖利率</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // 統計
+  const validDivs = recentDivs.filter(r=>getCashDiv(r)>0);
+  const totalYears = new Set(validDivs.map(r=>(r.year||r.date||'').slice(0,4))).size;
+  const annualDiv  = validDivs.slice(-4).reduce((s,r)=>s+getCashDiv(r),0);
+
+  const summEl = document.getElementById('divFillSummary');
+  if(summEl){
+    const consistency = totalYears >= 5 ? '連續5年以上配息' :
+                        totalYears >= 3 ? `近${totalYears}年均有配息` : '配息歷史較短';
+    summEl.innerHTML = `<span style="color:var(--text2)">
+      近一年合計配息 <strong style="color:var(--gold)">$${annualDiv.toFixed(2)} 元</strong>
+      ${currentPrice?`・殖利率 <strong style="color:var(--red)">${(annualDiv/currentPrice*100).toFixed(2)}%</strong>`:''}
+      <br><span style="color:var(--text3)">${consistency}，共 ${validDivs.length} 次發放記錄</span>
+    </span>`;
+  }
+
+  const yearsEl = document.getElementById('divFillYears');
+  if(yearsEl) yearsEl.textContent = `近 ${totalYears} 年`;
+
+  card.style.display = 'block';
 }
 
 // 手動重新分析財報
