@@ -12278,22 +12278,22 @@ async function loadFundamentals(stockId){
          cashData, balData, holdData] = await Promise.all([
     fmFetch({ dataset:'TaiwanStockFinancialStatements',
       data_id: stockId, start_date: yr2ago, end_date: today,
-      _ttl: 90*24*60*60*1000 }, 15000).catch(()=>null),
+      _ttl: 90*24*60*60*1000 }, 20000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockMonthRevenue',
       data_id: stockId, start_date: yr1ago, end_date: today,
-      _ttl: 30*24*60*60*1000 }, 12000).catch(()=>null),
+      _ttl: 30*24*60*60*1000 }, 20000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockDividend',
       data_id: stockId, start_date: yr5ago, end_date: today,
-      _optional: true, _ttl: 180*24*60*60*1000 }, 10000).catch(()=>null),
+      _optional: true, _ttl: 180*24*60*60*1000 }, 20000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockCashFlowsStatement',
       data_id: stockId, start_date: yr2ago, end_date: today,
-      _ttl: 90*24*60*60*1000 }, 12000).catch(()=>null),
+      _ttl: 90*24*60*60*1000 }, 20000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockBalanceSheet',
       data_id: stockId, start_date: yr2ago, end_date: today,
-      _ttl: 90*24*60*60*1000 }, 12000).catch(()=>null),
+      _ttl: 90*24*60*60*1000 }, 20000).catch(()=>null),
     fmFetch({ dataset:'TaiwanStockShareholding',
       data_id: stockId, start_date: nDaysAgo(60), end_date: today,
-      _ttl: 7*24*60*60*1000 }, 10000).catch(()=>null),
+      _ttl: 7*24*60*60*1000 }, 20000).catch(()=>null),
   ]);
   const dealerData = null;
 
@@ -12507,11 +12507,18 @@ async function loadFundamentals(stockId){
       peEl.style.color = pe>0&&pe<15?'var(--red)':pe<25?'var(--text)':'var(--green)';
     }
     // ② 產業PE對比
-    const sectorAvgPE = _getSectorAvgPE(currentSector || SECTOR_MAP[stockId] || '');
+    const sectorAvgPE = _getSectorAvgPE(SECTOR_MAP[stockId] || '');
     const peJEl = document.getElementById('fund-pe-judge');
-    if(peJEl && pe!=null){
-      peJEl.textContent = pe<=0?'虧損中':pe<12?'低估值':pe<20?'合理':pe<30?'偏高':'高估';
-      peJEl.style.color = pe<=0?'var(--green)':pe<12?'var(--red)':pe<20?'var(--gold)':'var(--green)';
+    if(peJEl && pe!=null && pe>0){
+      const _sAvg = sectorAvgPE;
+      const _vs = _sAvg ? (pe<_sAvg*0.85?' 低於產業':pe>_sAvg*1.15?' 高於產業':' 符合產業') : '';
+      const _avgStr = _sAvg ? `（均值${_sAvg}x）` : '';
+      if(pe<12)       { peJEl.textContent='低估值'+_vs+_avgStr; peJEl.style.color='var(--red)'; }
+      else if(pe<20)  { peJEl.textContent='合理'+_vs+_avgStr;   peJEl.style.color='var(--gold)'; }
+      else if(pe<30)  { peJEl.textContent='偏高'+_vs+_avgStr;   peJEl.style.color='var(--text3)'; }
+      else            { peJEl.textContent='高估'+_vs+_avgStr;   peJEl.style.color='var(--green)'; }
+    } else if(peJEl && pe!=null){
+      peJEl.textContent='虧損中'; peJEl.style.color='var(--green)';
     }
 
     const pbEl = document.getElementById('fund-pb');
@@ -12528,7 +12535,7 @@ async function loadFundamentals(stockId){
 
   // ── 解析配息與殖利率 ──────────────────────────────────
   // 優先直接用 TaiwanStockPER 的 dividend_yield 欄位（最準確）
-  const _perLatest = (perData||[]).slice(-1)[0];
+  const _perLatestNF = (perData||[]).slice(-1)[0];
   const _perYield  = parseFloat(_perLatest?.dividend_yield||0)||null;
   const divYieldEl = document.getElementById('fund-div-yield');
   if(_perYield!=null && _perYield>0 && divYieldEl){
@@ -12859,49 +12866,49 @@ async function loadFundamentals(stockId){
   }
 
   // ── 新功能渲染 ──────────────────────────────────────────
-  const perForPrice = (perData||[]).slice(-1)[0];
-  // perData 欄位確認
-  const perKeys = perForPrice ? Object.keys(perForPrice) : [];
-  // 解析股價：移除 $、,、空白等非數字字元
-  const cleanPrice = s => parseFloat(String(s||'').replace(/[$,\s]/g,''))||0;
-  const perPrice = cleanPrice(
-    perForPrice?.closing_price || perForPrice?.close ||
-    perForPrice?.Close || perForPrice?.price
-  );
-  // fallback：從頁面上的股價 DOM 讀取
-  const domPrice = cleanPrice(document.getElementById('ttPrice')?.textContent);
-  const currentPriceNum = perPrice || domPrice || null;
-  console.log('[NewFeatures] perPrice:', perPrice, 'domPrice:', domPrice,
-    'currentPriceNum:', currentPriceNum,
-    'marginData:', marginData?.length, 'holdData:', holdData?.length,
+  // 儲存資料供 Console 測試用
+  window._lastPerData    = perData;
+  window._lastMarginData = marginData;
+  window._lastHoldData   = holdData;
+  window._lastDivData    = divData;
+
+  // 股價：從 perData 的 PER/closing_price 欄位取，或從 DOM 讀
+  const _cp = s => parseFloat(String(s||'0').replace(/[^0-9.]/g,''))||0;
+  // TaiwanStockPER 沒有 closing_price，從 DOM 或 fmQuote 取股價
+  const _price = _cp(document.getElementById('ttPrice')?.textContent) ||
+                 _cp(document.getElementById('chartPrice')?.textContent) ||
+                 parseFloat(document.querySelector('#page-stock .stock-price')?.textContent||'0');
+
+  console.log('[NewFeatures] price:', _price,
+    'perLatest keys:', _perLatestNF?Object.keys(_perLatestNF):[],
+    'marginData:', marginData?.length,
+    'holdData:', holdData?.length,
     'divData:', divData?.length);
 
-  // ⑦ 支撐壓力位（從 perData 歷史收盤價計算）
-  const closesForSupport = (perData||[])
+  // ⑦ 支撐壓力（perData 有歷史收盤才能算）
+  const _closes = (perData||[])
     .sort((a,b)=>a.date>b.date?1:-1)
-    .map(r=>parseFloat(r.closing_price||r.close||0))
+    .map(r=>_cp(r.closing_price||r.close||r.Close))
     .filter(v=>v>0);
-  const ma5Str  = document.getElementById('m-ma5')?.textContent?.replace(/[^0-9.]/g,'')||null;
-  const ma20Str = document.getElementById('m-ma20')?.textContent?.replace(/[^0-9.]/g,'')||null;
-  if(closesForSupport.length >= 5 && currentPriceNum){
-    // 若 perData 不足（只有5天），補上 window._lastCloses
-    const allCloses = closesForSupport.length >= 20
-      ? closesForSupport
-      : [...(window._lastCloses||[]), ...closesForSupport].slice(-40);
-    renderSupportResistance(allCloses, currentPriceNum, ma5Str, ma20Str);
+  const _ma5  = _cp(document.getElementById('m-ma5')?.textContent) || null;
+  const _ma20 = _cp(document.getElementById('m-ma20')?.textContent) || null;
+  if(_closes.length >= 3 && _price > 0){
+    const allCloses = _closes.length >= 20 ? _closes
+      : [...(window._lastCloses||[]), ..._closes].slice(-40);
+    renderSupportResistance(allCloses, _price, _ma5, _ma20);
   }
 
-  // ⑤ 融資追繳警戒線
-  if(marginData?.length && currentPriceNum){
-    const ml = [...marginData].sort((a,b)=>a.date>b.date?1:-1).slice(-1)[0];
-    const mBal = Math.round(parseFloat(ml?.MarginPurchaseTodayBalance||0)/1000);
-    if(mBal > 0) renderMarginCall(currentPriceNum, mBal, marginData);
+  // ⑤ 融資追繳
+  if(marginData?.length && _price > 0){
+    const _ml = [...marginData].sort((a,b)=>a.date>b.date?1:-1).slice(-1)[0];
+    const _mBal = Math.round(parseFloat(_ml?.MarginPurchaseTodayBalance||0)/1000);
+    renderMarginCall(_price, Math.max(_mBal, 1), marginData);
   }
 
-  // ⑥ 外資持股趨勢圖
+  // ⑥ 外資持股趨勢
   if(holdData?.length) renderForeignTrendChart(holdData);
 
-  // ③ 填息歷史記錄
+  // ③ 填息記錄
   if(divData?.length) renderDivFillHistory(divData, perData);
 
   // ── AI 基本面評語（等 DOM 更新後再讀取數值）─────────────
