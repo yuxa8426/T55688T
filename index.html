@@ -12862,16 +12862,19 @@ async function loadFundamentals(stockId){
   const perForPrice = (perData||[]).slice(-1)[0];
   // perData 欄位確認
   const perKeys = perForPrice ? Object.keys(perForPrice) : [];
-  const perPrice = parseFloat(
+  // 解析股價：移除 $、,、空白等非數字字元
+  const cleanPrice = s => parseFloat(String(s||'').replace(/[$,\s]/g,''))||0;
+  const perPrice = cleanPrice(
     perForPrice?.closing_price || perForPrice?.close ||
-    perForPrice?.Close || perForPrice?.price || 0
+    perForPrice?.Close || perForPrice?.price
   );
-  const currentPriceNum = perPrice ||
-    parseFloat(document.getElementById('ttPrice')?.textContent?.replace(/[^0-9.]/g,'')||'0') ||
-    null;
-  console.log('[NewFeatures] perKeys:', perKeys, 'perPrice:', perPrice,
+  // fallback：從頁面上的股價 DOM 讀取
+  const domPrice = cleanPrice(document.getElementById('ttPrice')?.textContent);
+  const currentPriceNum = perPrice || domPrice || null;
+  console.log('[NewFeatures] perPrice:', perPrice, 'domPrice:', domPrice,
+    'currentPriceNum:', currentPriceNum,
     'marginData:', marginData?.length, 'holdData:', holdData?.length,
-    'divData:', divData?.length, 'currentPriceNum:', currentPriceNum);
+    'divData:', divData?.length);
 
   // ⑦ 支撐壓力位（從 perData 歷史收盤價計算）
   const closesForSupport = (perData||[])
