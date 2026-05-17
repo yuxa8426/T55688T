@@ -60,9 +60,6 @@
 </head>
 <body>
 
-<!-- ★ 診斷條：若可見表示渲染正常 -->
-<div id="diagBar" style="position:fixed;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#ff4c6a,#00d4aa,#9b7ffe);z-index:99998;pointer-events:none"></div>
-
 <!-- Android PWA 安裝提示橫幅 -->
 <div id="pwaInstallBanner" style="
   display:none;position:fixed;bottom:0;left:0;right:0;z-index:99999;
@@ -18237,6 +18234,8 @@ window.addEventListener('load', async ()=>{
   })();
 
   // ── Onboarding（最優先，新用戶直接顯示）
+  // 保險：清除殘留 overflow:hidden（防止 PWA 視窗異常關閉後全黑）
+  if(document.body.style.overflow==='hidden') document.body.style.overflow='';
   initOnboarding();
   // 恢復主題按鈕狀態
   setTheme(localStorage.getItem('stockai_theme')||'dark');
@@ -18542,6 +18541,8 @@ function initOnboarding(){
   if(localStorage.getItem(OB_KEY)) return;
   const modal = document.getElementById('onboardingModal');
   if(!modal) return;
+  // 立刻標記已看過（防止 PWA 視窗關閉後重複觸發 overflow:hidden）
+  localStorage.setItem(OB_KEY, '1');
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   _obStep = 0;
