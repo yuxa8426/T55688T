@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<meta name="app-version" content="202605172350">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -57,6 +58,31 @@
 .fund-acc-badge{font-size:9px;padding:1px 6px;border-radius:999px;font-weight:700}
 
 </style>
+
+<script>
+// ── 強制清除舊版快取（每次部署自動更新版本號）──
+(function(){
+  const APP_VER = '202605172350';
+  const STORED  = localStorage.getItem('stockai_app_ver');
+  if(STORED !== APP_VER){
+    localStorage.setItem('stockai_app_ver', APP_VER);
+    // 清除所有舊 SW
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistrations().then(regs=>{
+        regs.forEach(r=>r.unregister());
+      });
+    }
+    // 清除 Cache API
+    if('caches' in window){
+      caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+    }
+    // 版本不同時強制重新整理（只執行一次）
+    if(STORED){
+      location.reload(true);
+    }
+  }
+})();
+</script>
 </head>
 <body>
 
