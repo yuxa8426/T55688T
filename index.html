@@ -10613,8 +10613,9 @@ function renderTrendList(stocks){
     const pctStr = (isUp?'▲+':'▼')+Math.abs(s.changePct).toFixed(2)+'%';
 
     // 趨勢標籤列
-    const tags = s.signals.slice(0,3).map(sig=>{
+    const tags = (s.signals||[]).slice(0,3).map(sig=>{
       const t = TREND_SIGNALS[sig];
+      if(!t) return '';  // 未知 signal 略過
       return `<span class="trend-tag ${t.cls}">${t.label}</span>`;
     }).join('');
 
