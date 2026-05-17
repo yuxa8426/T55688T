@@ -2209,6 +2209,15 @@
       <div id="wlBacktestSummary" style="display:none;padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:12px;margin-bottom:8px"></div>
     </div>
 
+    <!-- 歷史戰績展示 -->
+    <div style="margin-bottom:16px" id="showcaseSection" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.5px">🏆 歷史驗證戰績</div>
+        <div style="font-size:10px;color:var(--text3)" id="showcaseUpdated">—</div>
+      </div>
+      <div id="showcaseGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+    </div>
+
     <!-- 免責聲明（底部）-->
     <div style="margin:4px 0 16px;padding:8px 12px;background:rgba(245,200,66,.05);border:1px solid rgba(245,200,66,.15);border-radius:10px;font-size:10px;color:rgba(245,200,66,.6);line-height:1.5;text-align:center">
       ⚠️ 策略選股僅供參考，不構成投資建議。勝率為技術統計估算，投資風險自負。
@@ -3854,11 +3863,13 @@ function switchPage(n){
   if(n==='profile'){ setTimeout(_refreshPortfolio, 100); }
 
   const pageEl = document.getElementById('page-'+n);
+  if(!pageEl){ console.warn('[switchPage] 找不到 page-'+n); return; }
   pageEl.classList.add('active');
   // 切換頁面重置捲動位置
   pageEl.scrollTop = 0;
   window.scrollTo(0, 0);
-  document.getElementById('nb-'+n).classList.add('active');
+  const nbEl = document.getElementById('nb-'+n);
+  if(nbEl) nbEl.classList.add('active');
   window.scrollTo(0,0);
   // 切換頁面時載入對應資料
   if(n==='watchlist') setTimeout(()=>{
@@ -13941,6 +13952,10 @@ function renderStratShowcase(){
 
   const records  = getBtRecords();
   const verified = records.filter(r=>r.verified);
+
+  // 顯示戰績展示區塊
+  const secEl = document.getElementById('showcaseSection');
+  if(secEl) secEl.style.display = 'block';
 
   if(!verified.length){
     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px 0;color:var(--text3);font-size:12px"><div style="font-size:24px;margin-bottom:6px">📊</div>尚無驗證記錄<br><span style="font-size:10px">執行 AI 策略並完成驗證後自動更新</span></div>';
