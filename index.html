@@ -12229,10 +12229,7 @@ function fundReset(){
   if(chipAlert) chipAlert.style.display='none';
   const stockMarginCard = document.getElementById('stockMarginCard');
   if(stockMarginCard) stockMarginCard.style.display='none';
-  const fundCashBalCard = document.getElementById('fundCashBalCard');
-  if(fundCashBalCard) fundCashBalCard.style.display='none';
-  const fundHoldDealerCard = document.getElementById('fundHoldDealerCard');
-  if(fundHoldDealerCard) fundHoldDealerCard.style.display='none';
+  // fundCashBalCard / fundHoldDealerCard 已是 accordion 容器，不在此控制顯示
   const marginCallCard = document.getElementById('marginCallCard');
   if(marginCallCard) marginCallCard.style.display='none';
   const divFillCard = document.getElementById('divFillCard');
@@ -12683,6 +12680,8 @@ async function loadFundamentals(stockId){
 
   // ── 現金流量表渲染（FinMind 長格式：每列一個 type）──────
   const cashCard = document.getElementById('fundCashBalCard');
+  // acc-finance-body：有現金流資料時自動展開財務體質區塊
+  if(cashCard){ cashCard.style.display='block'; }
   if(cashData?.length){
     // 取最新季度（最大日期）
     const latestDate = cashData.reduce((mx,r)=>r.date>mx?r.date:mx,'');
@@ -18283,9 +18282,8 @@ window.addEventListener('load', async ()=>{
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js', {scope: '/'})
-        .catch(()=>{}) // sw.js 不存在時靜默略過
-    .then(reg => { if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); })
-    .catch(e => console.warn('[SW] 註冊失敗:', e.message));
+    .then(reg => { if(reg && reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); })
+    .catch(()=>{}); // sw.js 不存在時靜默略過
 }
 
 // ── PWA 安裝提示（Android Chrome）────────────────────────
