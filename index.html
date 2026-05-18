@@ -3876,7 +3876,11 @@ function setUpdateTime(id, dateStr){
 
 // ── Page switch ──────────────────────────────────────
 function switchPage(n){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  // 用 inline style 控制顯示（優先度高於任何外部CSS，防止擴充套件干擾）
+  document.querySelectorAll('.page').forEach(p=>{
+    p.classList.remove('active');
+    p.style.display = 'none';
+  });
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   // 個股頁特殊處理：用同一個 nav-btn nb-stock 對應
   const navId = n==='stock' ? 'nb-stock' : 'nb-'+n;
@@ -3891,6 +3895,10 @@ function switchPage(n){
   const pageEl = document.getElementById('page-'+n);
   if(!pageEl){ console.warn('[switchPage] 找不到 page-'+n); return; }
   pageEl.classList.add('active');
+  // inline style 強制顯示（防止擴充套件 CSS 干擾）
+  pageEl.style.display = 'block';
+  pageEl.style.visibility = 'visible';
+  pageEl.style.opacity = '1';
   // 切換頁面重置捲動位置（requestAnimationFrame 確保 DOM 已重繪）
   requestAnimationFrame(()=>{ pageEl.scrollTop=0; window.scrollTo(0,0); });
   const nbEl = document.getElementById('nb-'+n);
@@ -18263,6 +18271,11 @@ window.addEventListener('load', async ()=>{
   // ── Onboarding（最優先，新用戶直接顯示）
   // 保險：清除殘留 overflow:hidden（防止 PWA 視窗異常關閉後全黑）
   if(document.body.style.overflow==='hidden') document.body.style.overflow='';
+  // 強制初始化頁面顯示狀態（防止擴充套件 CSS 干擾）
+  document.querySelectorAll('.page').forEach(p=>{
+    p.style.display = p.classList.contains('active') ? 'block' : 'none';
+    if(p.classList.contains('active')){ p.style.visibility='visible'; p.style.opacity='1'; }
+  });
   initOnboarding();
   // 恢復主題按鈕狀態
   setTheme(localStorage.getItem('stockai_theme')||'dark');
