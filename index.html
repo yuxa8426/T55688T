@@ -1796,6 +1796,24 @@
     <span id="stratRunning" style="font-size:11px;color:var(--text3);display:none">⏳ 分析中…</span>
   </div>
 
+  <!-- ══ 盤後精選（Worker Cron 每日自動掃描）══ -->
+  <div id="dailyScanBanner" style="margin:0 16px 14px;display:none">
+    <div style="background:linear-gradient(135deg,rgba(0,212,170,.1),rgba(155,127,254,.1));border:1px solid rgba(0,212,170,.3);border-radius:14px;padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--green)">🤖 盤後精選</div>
+        <div style="font-size:10px;color:var(--text3)" id="scanResultDate">—</div>
+      </div>
+      <div id="scanAiInsight" style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:8px;display:none"></div>
+      <div id="scanTopList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button onclick="loadDailyScan()" style="flex:1;padding:7px;font-size:11px;background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);border-radius:8px;color:var(--green);cursor:pointer;font-family:inherit">🔄 重新載入</button>
+        <button onclick="switchDailyScanTab(this,'momentum')" data-tab="momentum" style="flex:1;padding:7px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;font-family:inherit">動能</button>
+        <button onclick="switchDailyScanTab(this,'instBuy')"  data-tab="instBuy"  style="flex:1;padding:7px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;font-family:inherit">法人</button>
+        <button onclick="switchDailyScanTab(this,'value')"    data-tab="value"    style="flex:1;padding:7px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;font-family:inherit">價值</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 功能四：市場進場狀態警示 -->
   <div id="marketEntryBanner" style="display:none;margin:0 16px 12px">
     <div id="marketEntryInner" style="padding:10px 14px;border-radius:12px;font-size:12px;line-height:1.5">
@@ -3727,6 +3745,7 @@ function switchPage(n){
     updateStratDesc(_currentStrat||'A');
     autoCheckBacktest();
     renderStratShowcase();
+    if(!_scanData) loadDailyScan(); // 首次切換時載入盤後精選
   },50);
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
   if(n==='profile') setTimeout(()=>initPushUI(),100);
@@ -12141,6 +12160,97 @@ function _renderFundCore(stockId, perData, marginData){
   }
 }
 
+
+
+// ── 盤後精選：讀取 Worker 掃描結果 ────────────────────────
+const PROXY_BASE      = 'https://stockai-proxy.yuxa8426.workers.dev';
+let   _scanData       = null;
+let   _scanCurrentTab = 'top';
+
+async function loadDailyScan(){
+  const banner = document.getElementById('dailyScanBanner');
+  const list   = document.getElementById('scanTopList');
+  if(!banner || !list) return;
+
+  list.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">⏳ 載入中…</div>';
+  banner.style.display = 'block';
+
+  try{
+    const res  = await fetch(PROXY_BASE + '/scan-result', { cache:'no-cache' });
+    if(!res.ok){ throw new Error(res.status === 404 ? 'no_data' : 'fetch_fail'); }
+    _scanData = await res.json();
+    renderDailyScan(_scanData, _scanCurrentTab);
+  }catch(e){
+    if(e.message === 'no_data'){
+      list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">📊 今日掃描尚未完成<br><span style="font-size:10px">每日收盤後 15:05 自動更新</span></div>';
+    } else {
+      list.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">⚠️ 載入失敗，請稍後再試</div>';
+    }
+  }
+}
+
+function renderDailyScan(data, tab){
+  const list     = document.getElementById('scanTopList');
+  const dateEl   = document.getElementById('scanResultDate');
+  const insightEl= document.getElementById('scanAiInsight');
+  if(!list || !data) return;
+
+  if(dateEl) dateEl.textContent = data.date ? data.date + ' 更新' : '—';
+
+  // AI 市場觀察
+  if(insightEl && data.aiInsight?.market){
+    insightEl.textContent = '💡 ' + data.aiInsight.market;
+    insightEl.style.display = 'block';
+  }
+
+  // 決定顯示清單
+  let stocks = data.top20 || [];
+  if(tab === 'momentum') stocks = (data.byStrategy?.momentum || []).map(id => data.top20?.find(s=>s.id===id)).filter(Boolean);
+  if(tab === 'instBuy')  stocks = (data.byStrategy?.instBuy  || []).map(id => data.top20?.find(s=>s.id===id)).filter(Boolean);
+  if(tab === 'value')    stocks = (data.byStrategy?.value    || []).map(id => data.top20?.find(s=>s.id===id)).filter(Boolean);
+
+  const top = stocks.slice(0, tab === 'top' ? 10 : 5);
+
+  // AI reason map
+  const reasonMap = {};
+  (data.aiInsight?.top5 || []).forEach(r => { reasonMap[r.id] = r.reason; });
+
+  list.innerHTML = top.map((s, i) => {
+    const scoreColor = s.score >= 80 ? 'var(--green)' : s.score >= 65 ? 'var(--gold)' : 'var(--text2)';
+    const ret15Color = (s.ret15||0) >= 0 ? 'var(--red)' : 'var(--green)';
+    const reason     = reasonMap[s.id] || '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border);cursor:pointer"
+      onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
+      <div style="font-size:13px;font-weight:700;color:var(--text3);width:16px">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">${s.name}</span>
+          <span style="font-size:9px;color:var(--text3)">${s.id}</span>
+          <span style="font-size:9px;padding:1px 5px;background:rgba(255,255,255,.08);border-radius:4px;color:var(--text3)">${s.sector||'—'}</span>
+        </div>
+        ${reason ? `<div style="font-size:10px;color:var(--purple);margin-top:1px">${reason}</div>` : ''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:15px;font-weight:800;color:${scoreColor}">${s.score}</div>
+        <div style="font-size:10px;color:${ret15Color}">${(s.ret15||0)>=0?'+':''}${(s.ret15||0).toFixed(1)}%</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(top.length === 0){
+    list.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">此分類暫無資料</div>';
+  }
+}
+
+function switchDailyScanTab(btn, tab){
+  _scanCurrentTab = tab;
+  document.querySelectorAll('[data-tab]').forEach(b=>{
+    b.style.background = b === btn ? 'rgba(0,212,170,.2)' : 'rgba(255,255,255,.06)';
+    b.style.color      = b === btn ? 'var(--green)' : 'var(--text2)';
+    b.style.borderColor= b === btn ? 'rgba(0,212,170,.4)' : 'var(--border)';
+  });
+  if(_scanData) renderDailyScan(_scanData, tab);
+}
 
 function toggleFundAcc(key){
   const body  = document.getElementById('acc-'+key+'-body');
