@@ -1820,9 +1820,12 @@
         <span style="font-size:15px;font-weight:800;color:var(--text)">AI 每日精選</span>
         <span id="scanResultDate" style="font-size:10px;color:var(--text3);font-weight:400"></span>
       </div>
-      <button onclick="loadDailyScan()" style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);border-radius:20px;color:var(--green);cursor:pointer;font-family:inherit;font-size:11px;font-weight:600">
-        <span id="scanRefreshIcon">↻</span> 更新
-      </button>
+  <div style="display:flex;gap:6px">
+        <button onclick="toggleScanLegend()" style="padding:4px 10px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:20px;color:var(--text3);cursor:pointer;font-family:inherit;font-size:11px">評分說明</button>
+        <button onclick="loadDailyScan()" style="display:flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);border-radius:20px;color:var(--green);cursor:pointer;font-family:inherit;font-size:11px;font-weight:600">
+          <span id="scanRefreshIcon">↻</span> 更新
+        </button>
+      </div>
     </div>
 
     <!-- AI 市場觀察 -->
@@ -1845,6 +1848,115 @@
 
     <!-- 股票清單 -->
     <div id="scanTopList" style="padding:0 16px"></div>
+
+    <!-- 評分說明彈窗 -->
+    <div id="scanLegend" style="display:none;margin:0 16px 12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">📊 AI 評分說明</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+        綜合技術面、籌碼面、基本面三大維度評分，滿分 99。
+      </div>
+      <!-- 分數說明 -->
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:32px;height:32px;border-radius:50%;border:2px solid #00d4aa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#00d4aa">80+</div>
+          <span style="font-size:12px;color:var(--text2)">多項指標共振，強勢訊號</span>
+        </div>
+        <div></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:32px;height:32px;border-radius:50%;border:2px solid #d4a000;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#d4a000">65+</div>
+          <span style="font-size:12px;color:var(--text2)">部分指標正向，值得關注</span>
+        </div>
+        <div></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:32px;height:32px;border-radius:50%;border:2px solid #9b7ffe;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#9b7ffe">50+</div>
+          <span style="font-size:12px;color:var(--text2)">中性，無明顯方向</span>
+        </div>
+      </div>
+      <!-- 各項加分說明 -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.5px">評分項目</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">技術面</span>
+            <span style="font-size:11px;color:var(--text2)">KD 黃金交叉</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">+20</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">技術面</span>
+            <span style="font-size:11px;color:var(--text2)">MACD 多頭擴張</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">+20</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">技術面</span>
+            <span style="font-size:11px;color:var(--text2)">均線多頭排列</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">+15</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">技術面</span>
+            <span style="font-size:11px;color:var(--text2)">布林通道位置</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#9b7ffe">最高+10</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">籌碼面</span>
+            <span style="font-size:11px;color:var(--text2)">外資買超</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">最高+15</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">籌碼面</span>
+            <span style="font-size:11px;color:var(--text2)">外資連買天數</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">最高+5</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">籌碼面</span>
+            <span style="font-size:11px;color:var(--text2)">投信買超</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#9b7ffe">最高+10</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">籌碼面</span>
+            <span style="font-size:11px;color:var(--text2)">券資比低</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#00d4aa">+6</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">基本面</span>
+            <span style="font-size:11px;color:var(--text2)">月營收年增率</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#d4a000">最高+12</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">基本面</span>
+            <span style="font-size:11px;color:var(--text2)">自由現金流</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#d4a000">最高+10</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+          <div>
+            <span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--text3);margin-right:5px">量能</span>
+            <span style="font-size:11px;color:var(--text2)">成交量放大</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#9b7ffe">最高+6</span>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.6">
+        ⚠️ AI 評分僅供參考，不構成投資建議。投資風險自負。
+      </div>
+    </div>
 
     <!-- 底部提示 -->
     <div style="text-align:center;padding:10px 16px 4px;font-size:10px;color:var(--text3)">
@@ -12272,14 +12384,26 @@ function renderDailyScan(data, tab){
       ? (changePct>=0?'rgba(255,76,106,.08)':'rgba(0,212,170,.08)')
       : 'rgba(155,127,254,.08)';
 
-    // 主訊號標籤
+    // 主訊號標籤（依優先順序，確保每支都有標籤）
     const mainSignal = adviceMap[s.id] ||
-      (s.kd?.signal==='golden'?'KD金叉':
-       s.macd?.signal==='bull_strong'?'MACD強多':
-       s.macd?.signal==='bull_turn'?'MACD翻多':
-       s.bullAlign?'多頭排列':
-       (s.foreignBuyDays||0)>=3?`外資連買${s.foreignBuyDays}日`:
-       (s.revYoY||0)>20?`營收+${(s.revYoY||0).toFixed(0)}%`:'');
+      (s.kd?.signal==='golden'          ? 'KD金叉' :
+       s.macd?.signal==='bull_strong'   ? 'MACD強多' :
+       s.macd?.signal==='bull_turn'     ? 'MACD翻多' :
+       s.macd?.signal==='bear_turn'     ? '底背離' :
+       s.bullAlign                      ? '多頭排列' :
+       (s.foreignBuyDays||0)>=3         ? `外資連買${s.foreignBuyDays}日` :
+       (s.foreignNet||0)>500000         ? '外資大買' :
+       (s.trustNet||0)>200000           ? '投信買超' :
+       (s.revYoY||0)>30                 ? `營收+${(s.revYoY||0).toFixed(0)}%` :
+       (s.revYoY||0)>10                 ? `營收增長` :
+       (s.freeCashFlow||0)>30           ? '現金流充裕' :
+       (s.shortRatio!=null&&s.shortRatio<5) ? '券資比低' :
+       s.kd?.signal==='oversold'        ? 'KD低檔' :
+       s.bollPct!=null&&s.bollPct<30    ? '布林下軌' :
+       (s.ret15||0)>10                  ? `15日漲${(s.ret15||0).toFixed(0)}%` :
+       (s.volRatio||1)>1.5              ? '量能放大' :
+       s.pe!=null&&s.pe>0&&s.pe<15     ? `低PE ${s.pe.toFixed(0)}` :
+       '綜合評分');  // 保底標籤
 
     const signalColor = (s.kd?.signal==='golden'||s.macd?.signal?.includes('bull')||s.bullAlign)
       ? '#00d4aa' : '#d4a000';
@@ -12315,6 +12439,11 @@ function renderDailyScan(data, tab){
     list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>';
 }
 
+function toggleScanLegend(){
+  const el = document.getElementById('scanLegend');
+  if(!el) return;
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
 function toggleScanDetail(id){
   const el = document.getElementById(id);
   if(!el) return;
