@@ -12372,17 +12372,19 @@ function renderDailyScan(data, tab){
     const score = typeof s.score === 'number' ? s.score : 0;
     const scoreColor = score>=80?'#00d4aa':score>=65?'#d4a000':'#9b7ffe';
 
-    // 當日漲跌
-    const changePct = s.changePct != null ? s.changePct : null;
-    const chgStr  = changePct != null
-      ? (changePct>=0?'+':'')+changePct.toFixed(2)+'%'
-      : (s.ret15!=null ? (s.ret15>=0?'+':'')+s.ret15.toFixed(1)+'%' : '—');
-    const chgColor = changePct!=null
-      ? (changePct>=0?'#ff4c6a':'#00d4aa')
-      : (s.ret15!=null?(s.ret15>=0?'#ff4c6a':'#00d4aa'):'var(--text3)');
-    const bgChg = changePct!=null
-      ? (changePct>=0?'rgba(255,76,106,.08)':'rgba(0,212,170,.08)')
-      : 'rgba(155,127,254,.08)';
+    // 當日漲跌（優先）或 15日漲幅（次選），標籤對應正確
+    const hasDayChg = s.changePct != null;
+    const chgVal    = hasDayChg ? s.changePct : s.ret15;
+    const chgLabel  = hasDayChg ? '當日漲跌' : '15日漲幅';
+    const chgStr    = chgVal != null
+      ? (chgVal>=0?'+':'')+chgVal.toFixed(1)+'%'
+      : '—';
+    const chgColor  = chgVal != null
+      ? (chgVal>=0?'#ff4c6a':'#00d4aa')
+      : 'var(--text3)';
+    const bgChg     = chgVal != null
+      ? (chgVal>=0?'rgba(255,76,106,.08)':'rgba(0,212,170,.08)')
+      : 'rgba(255,255,255,.06)';
 
     // 主訊號標籤（依優先順序，確保每支都有標籤）
     const mainSignal = adviceMap[s.id] ||
@@ -12427,7 +12429,7 @@ function renderDailyScan(data, tab){
         </div>
         <div style="text-align:right">
           <div style="font-size:15px;font-weight:800;color:${chgColor}">${chgStr}</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:1px">當日漲跌</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:1px">${chgLabel}</div>
         </div>
       </div>
       <!-- 主訊號 -->
