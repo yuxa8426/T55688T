@@ -12303,32 +12303,91 @@ function renderDailyScan(data, tab){
       ? `<div class="scan-rank top3">${rank}</div>`
       : `<div class="scan-rank">${rank}</div>`;
 
-    return `<div class="scan-stock-row" onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
-      ${rankHtml}
-      <div style="flex:1;min-width:0;padding:0 10px">
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="scan-name">${s.name}</span>
-          <span class="scan-code">${s.id}</span>
-          ${s.mktVal ? `<span style="font-size:9px;color:var(--text3)">${(s.mktVal/1e8).toFixed(0)}億</span>` : ''}
+    // 當日漲跌（changePct 或從 close/change 計算）
+    const changePct = s.changePct != null ? s.changePct
+      : (s.close && s.change) ? +((s.change/(s.close-s.change))*100).toFixed(2) : null;
+    const chgStr   = changePct != null
+      ? (changePct >= 0 ? '▲' : '▼') + Math.abs(changePct).toFixed(2) + '%'
+      : (retStr || '');
+    const chgColor = changePct != null
+      ? (changePct >= 0 ? '#ff4c6a' : '#00d4aa')
+      : retColor;
+
+    // 評分明細
+    const scoreDetail = [
+      s.kd?.signal==='golden'      ? {label:'KD黃金交叉',   pts:'+20', c:'#00d4aa'} : null,
+      s.kd?.signal==='oversold'    ? {label:'KD低檔超賣',   pts:'+10', c:'#d4a000'} : null,
+      s.kd?.signal==='dead'        ? {label:'KD死亡交叉',   pts:'-15', c:'#ff4c6a'} : null,
+      s.macd?.signal==='bull_strong'?{label:'MACD多頭擴張', pts:'+20', c:'#00d4aa'} : null,
+      s.macd?.signal==='bull_turn' ? {label:'MACD翻多',     pts:'+12', c:'#9b7ffe'} : null,
+      s.macd?.signal==='bear_strong'?{label:'MACD空頭',     pts:'-15', c:'#ff4c6a'} : null,
+      s.bullAlign                  ? {label:'均線多頭排列', pts:'+15', c:'#00d4aa'} : null,
+      s.bollPct > 70               ? {label:'布林上軌附近', pts:'+5',  c:'#9b7ffe'} : null,
+      s.bollPct < 30               ? {label:'布林下軌支撐', pts:'+8',  c:'#d4a000'} : null,
+      (s.foreignNet||0)>500000     ? {label:'外資大買超',   pts:'+15', c:'#00d4aa'} : null,
+      (s.foreignNet||0)>0          ? {label:'外資買超',     pts:'+∼',  c:'#00d4aa'} : null,
+      (s.foreignNet||0)<-500000    ? {label:'外資大賣超',   pts:'-15', c:'#ff4c6a'} : null,
+      (s.foreignBuyDays||0)>=3     ? {label:`外資連買${s.foreignBuyDays}日`, pts:'+5', c:'#00d4aa'} : null,
+      (s.trustNet||0)>0            ? {label:'投信買超',     pts:'+∼',  c:'#9b7ffe'} : null,
+      (s.shortRatio||99)<5         ? {label:'券資比低',     pts:'+6',  c:'#00d4aa'} : null,
+      (s.shortRatio||0)>20         ? {label:'券資比偏高',   pts:'-8',  c:'#ff4c6a'} : null,
+      (s.revYoY||0)>20             ? {label:`營收年增${(s.revYoY||0).toFixed(0)}%`, pts:'+8∼12', c:'#00d4aa'} : null,
+      (s.freeCashFlow||0)>0        ? {label:'現金流為正',   pts:'+5∼10',c:'#00d4aa'} : null,
+      (s.freeCashFlow||0)<0        ? {label:'現金流為負',   pts:'-8',  c:'#ff4c6a'} : null,
+      (s.volRatio||1)>2.5          ? {label:'爆量',         pts:'+6',  c:'#d4a000'} : null,
+    ].filter(Boolean).slice(0, 6);
+
+    const detailId = 'sd_'+s.id+'_'+i;
+    const detailHtml = scoreDetail.length ? `
+      <div id="${detailId}" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:8px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">評分明細（基準分 40）</div>
+        ${scoreDetail.map(d=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)">
+            <span style="font-size:11px;color:var(--text2)">${d.label}</span>
+            <span style="font-size:11px;font-weight:700;color:${d.c}">${d.pts}</span>
+          </div>`).join('')}
+        <div style="margin-top:6px;display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:var(--text3)">綜合評分</span>
+          <span style="font-size:13px;font-weight:900;color:${scoreTextColor}">${score} / 99</span>
         </div>
-        <div style="display:flex;flex-wrap:wrap;margin-top:4px">${tagsHtml}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0;min-width:52px">
-        <div style="position:relative;width:38px;height:38px;margin-left:auto">
-          <svg viewBox="0 0 36 36" style="width:38px;height:38px;transform:rotate(-90deg)">
-            <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3"/>
-            <circle cx="18" cy="18" r="15" fill="none" stroke="${scoreTextColor}" stroke-width="3"
-              stroke-dasharray="${score/100*94.2} 94.2" stroke-linecap="round"/>
-          </svg>
-          <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:900;color:${scoreTextColor}">${score}</span>
+      </div>` : '';
+
+    return `<div class="scan-stock-row" style="flex-direction:column;align-items:stretch;padding:10px 0" onclick="">
+      <div style="display:flex;align-items:center" onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
+        ${rankHtml}
+        <div style="flex:1;min-width:0;padding:0 10px">
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span class="scan-name">${s.name}</span>
+            <span class="scan-code">${s.id}</span>
+            ${s.mktVal ? `<span style="font-size:9px;color:var(--text3)">${(s.mktVal/1e8/100).toFixed(0)}百億</span>` : ''}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;margin-top:4px">${tagsHtml}</div>
         </div>
-        ${retStr ? `<div style="font-size:10px;font-weight:700;color:${retColor};text-align:center;margin-top:2px">${retStr}</div>` : ''}
+        <div style="text-align:right;flex-shrink:0;min-width:56px">
+          <div style="position:relative;width:38px;height:38px;margin-left:auto;cursor:pointer"
+            onclick="event.stopPropagation();toggleScanDetail('${detailId}')">
+            <svg viewBox="0 0 36 36" style="width:38px;height:38px;transform:rotate(-90deg)">
+              <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3"/>
+              <circle cx="18" cy="18" r="15" fill="none" stroke="${scoreTextColor}" stroke-width="3"
+                stroke-dasharray="${score/100*94.2} 94.2" stroke-linecap="round"/>
+            </svg>
+            <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:900;color:${scoreTextColor}">${score}</span>
+          </div>
+          <div style="font-size:10px;font-weight:700;color:${chgColor};text-align:center;margin-top:2px">${chgStr}</div>
+        </div>
       </div>
+      ${detailHtml}
     </div>`;
   }).join('');
 
   if(top.length === 0)
     list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>';
+}
+
+function toggleScanDetail(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function switchDailyScanTab(btn, tab){
