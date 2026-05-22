@@ -12444,7 +12444,12 @@ function renderDailyScan(data, tab){
 function toggleScanLegend(){
   const el = document.getElementById('scanLegend');
   if(!el) return;
-  el.style.display = el.style.display==='none' ? 'block' : 'none';
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  // 展開時自動滾動到說明區域
+  if(!isOpen){
+    setTimeout(()=>{ el.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+  }
 }
 function toggleScanDetail(id){
   const el = document.getElementById(id);
