@@ -1981,7 +1981,7 @@
 
     <!-- 底部提示 -->
     <div style="text-align:center;padding:10px 16px 4px;font-size:10px;color:var(--text3)">
-      市值前300大 · 每日收盤後自動更新 · 僅供參考
+      市值前300大 · 綜合榜可搜尋全部 · 每日自動更新 · 僅供參考
     </div>
   </div>
 
@@ -12367,99 +12367,104 @@ function renderDailyScan(data, tab){
   const insightTx = document.getElementById('scanAiInsightText');
   if(!list || !data) return;
 
-  const isV2 = data.version === 'v2';
   if(dateEl) dateEl.textContent = data.date ? data.date.slice(5) + ' 更新' : '';
-
   if(insightEl && insightTx && data.aiInsight?.market){
     insightTx.textContent = data.aiInsight.market;
     insightEl.style.display = 'block';
   }
 
-  const allStocks = data.top20 || [];
-  const stratMap  = data.byStrategy || {};
-  let stocks = allStocks;
-  if(tab !== 'top'){
-    const ids = stratMap[tab] || [];
-    stocks = ids.map(id => allStocks.find(s=>s.id===id) || {id, name:id, score:0}).filter(Boolean);
+  const fullRank = data.fullRank || data.top20 || [];
+  const stratMap = data.byStrategy || {};
+
+  // 決定本頁清單 + 每筆的「分類關鍵數值」函式
+  let stocks = [], extraFn = null, searchable = false;
+  if(tab === 'top'){
+    stocks = fullRank;            // 綜合榜：完整300名
+    searchable = true;
+    extraFn = (s) => s.changePct!=null ? {label:'當日', val:(s.changePct>=0?'+':'')+s.changePct.toFixed(1)+'%', color:s.changePct>=0?'#ff4c6a':'#00d4aa'} : null;
+  } else {
+    const arr = stratMap[tab] || [];
+    // 相容：可能是 id 字串陣列（舊）或物件陣列（新）
+    stocks = arr.map(item => {
+      if(typeof item === 'string'){
+        return fullRank.find(s=>s.id===item) || {id:item, name:item, score:0};
+      }
+      return item;
+    });
+    // 各分類的關鍵數值
+    const fns = {
+      technical: (s)=> ({label:'訊號', val:(s.kd==='golden'||s.kd==='golden_high')?'KD金叉':(s.macd==='bull_strong')?'MACD強多':(s.macd==='bull_turn')?'MACD翻多':'多頭', color:'#00d4aa'}),
+      instBuy:   (s)=> ({label:'外資', val:(s.foreignNet!=null? (s.foreignNet>=0?'+':'')+Math.round(s.foreignNet/1000)+'張':'—')+(s.foreignBuyDays>=3?` 連${s.foreignBuyDays}日`:''), color:'#00d4aa'}),
+      value:     (s)=> ({label:'本益比', val:(s.pe!=null?s.pe.toFixed(1)+'倍':'—')+(s.yield?` 殖利率${s.yield}%`:''), color:'#d4a000'}),
+      momentum:  (s)=> ({label:'20日', val:((s.ret20!=null?s.ret20:s.ret15)>=0?'+':'')+((s.ret20!=null?s.ret20:s.ret15)||0).toFixed(1)+'%', color:'#ff4c6a'}),
+      rebound:   (s)=> ({label:'位階', val:s.bollPct!=null?`布林${s.bollPct.toFixed(0)}%`:(s.kd==='oversold'?'KD超賣':'低檔'), color:'#9b7ffe'}),
+    };
+    extraFn = fns[tab] || null;
   }
-  const top = stocks.slice(0, tab === 'top' ? 10 : 6);
+
+  // 搜尋框（僅綜合榜）
+  let searchHtml = '';
+  if(searchable){
+    searchHtml = `<div style="margin-bottom:10px"><input id="scanSearchInput" type="text" placeholder="🔍 搜尋股名或代號（共${stocks.length}支）" value="${_scanSearchKw||''}"
+      oninput="_onScanSearch(this.value)" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box"></div>`;
+  }
+
+  // 套用搜尋過濾
+  let shown = stocks;
+  if(searchable && _scanSearchKw){
+    const kw = _scanSearchKw.trim().toLowerCase();
+    shown = stocks.filter(s => (s.name||'').toLowerCase().includes(kw) || (s.id||'').includes(kw));
+  }
+
+  // 顯示筆數：綜合榜全顯示（搜尋後），分類榜前20
+  const limit = tab==='top' ? (searchable && _scanSearchKw ? shown.length : 50) : 20;
+  const top = shown.slice(0, limit);
 
   const adviceMap = {};
   (data.aiInsight?.top5 || []).forEach(r=>{ adviceMap[r.id] = r.advice || r.reason || ''; });
 
-  // 網格卡片渲染（元大風格 2欄）
-  list.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">` +
-  top.map((s, i) => {
+  const rows = top.map((s, i) => {
     const score = typeof s.score === 'number' ? s.score : 0;
     const scoreColor = score>=80?'#00d4aa':score>=65?'#d4a000':'#9b7ffe';
+    const rank = i+1;
+    const rankBadge = (tab==='top' && !_scanSearchKw && rank<=3)
+      ? `<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#9b7ffe,#00d4aa);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0">${rank}</div>`
+      : `<div style="width:22px;text-align:center;font-size:12px;font-weight:700;color:var(--text3);flex-shrink:0">${rank}</div>`;
+    // 分類關鍵數值
+    const extra = extraFn ? extraFn(s) : null;
+    const extraHtml = extra ? `<div style="font-size:10px;color:${extra.color};margin-top:2px"><span style="color:var(--text3)">${extra.label}</span> ${extra.val}</div>` : '';
 
-    // 當日漲跌（優先）或 15日漲幅（次選），標籤對應正確
-    const hasDayChg = s.changePct != null;
-    const chgVal    = hasDayChg ? s.changePct : s.ret15;
-    const chgLabel  = hasDayChg ? '當日漲跌' : '15日漲幅';
-    const chgStr    = chgVal != null
-      ? (chgVal>=0?'+':'')+chgVal.toFixed(1)+'%'
-      : '—';
-    const chgColor  = chgVal != null
-      ? (chgVal>=0?'#ff4c6a':'#00d4aa')
-      : 'var(--text3)';
-    const bgChg     = chgVal != null
-      ? (chgVal>=0?'rgba(255,76,106,.08)':'rgba(0,212,170,.08)')
-      : 'rgba(255,255,255,.06)';
-
-    // 主訊號標籤（依優先順序，確保每支都有標籤）
-    const mainSignal = adviceMap[s.id] ||
-      (s.kd?.signal==='golden'          ? 'KD金叉' :
-       s.macd?.signal==='bull_strong'   ? 'MACD強多' :
-       s.macd?.signal==='bull_turn'     ? 'MACD翻多' :
-       s.macd?.signal==='bear_turn'     ? '底背離' :
-       s.bullAlign                      ? '多頭排列' :
-       (s.foreignBuyDays||0)>=3         ? `外資連買${s.foreignBuyDays}日` :
-       (s.foreignNet||0)>500000         ? '外資大買' :
-       (s.trustNet||0)>200000           ? '投信買超' :
-       (s.revYoY||0)>30                 ? `營收+${(s.revYoY||0).toFixed(0)}%` :
-       (s.revYoY||0)>10                 ? `營收增長` :
-       (s.freeCashFlow||0)>30           ? '現金流充裕' :
-       (s.shortRatio!=null&&s.shortRatio<5) ? '券資比低' :
-       s.kd?.signal==='oversold'        ? 'KD低檔' :
-       s.bollPct!=null&&s.bollPct<30    ? '布林下軌' :
-       (s.ret15||0)>10                  ? `15日漲${(s.ret15||0).toFixed(0)}%` :
-       (s.volRatio||1)>1.5              ? '量能放大' :
-       s.pe!=null&&s.pe>0&&s.pe<15     ? `低PE ${s.pe.toFixed(0)}` :
-       '綜合評分');  // 保底標籤
-
-    const signalColor = (s.kd?.signal==='golden'||s.macd?.signal?.includes('bull')||s.bullAlign)
-      ? '#00d4aa' : '#d4a000';
-
-    // 排名角標
-    const rankBadge = i<3
-      ? `<div style="position:absolute;top:8px;left:8px;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#9b7ffe,#00d4aa);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff">${i+1}</div>`
-      : `<div style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;color:var(--text3)">${i+1}</div>`;
-
-    return `<div style="position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 10px 10px 28px;cursor:pointer;transition:border-color .2s"
-      onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
+    return `<div class="scan-stock-row" style="display:flex;align-items:center;padding:10px 4px" onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
       ${rankBadge}
-      <!-- 股名 + 代號 -->
-      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:1px;line-height:1.2">${s.name}</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${s.id}${s.mktVal?(` · ${(s.mktVal/1e10).toFixed(0)}百億`):''}</div>
-      <!-- 評分 + 漲跌 -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
-        <div>
-          <div style="font-size:22px;font-weight:900;color:${scoreColor};line-height:1">${score}</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:1px">AI評分</div>
+      <div style="flex:1;min-width:0;padding:0 10px">
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${s.name}</span>
+          <span style="font-size:11px;color:var(--text3)">${s.id}</span>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:15px;font-weight:800;color:${chgColor}">${chgStr}</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:1px">${chgLabel}</div>
-        </div>
+        ${extraHtml}
       </div>
-      <!-- 主訊號 -->
-      ${mainSignal?`<div style="display:inline-block;padding:3px 8px;background:${bgChg};border-radius:20px;font-size:10px;font-weight:700;color:${signalColor}">${mainSignal}</div>`:''}
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:18px;font-weight:900;color:${scoreColor}">${score}</div>
+        <div style="font-size:9px;color:var(--text3)">AI評分</div>
+      </div>
     </div>`;
-  }).join('') + `</div>`;
+  }).join('');
 
-  if(top.length === 0)
-    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>';
+  list.innerHTML = searchHtml + (top.length ? rows :
+    '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>');
+
+  // 搜尋框重新聚焦（避免輸入時失焦）
+  if(searchable && _scanSearchKw){
+    const inp = document.getElementById('scanSearchInput');
+    if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
+}
+
+// 搜尋狀態 + handler
+var _scanSearchKw = '';
+function _onScanSearch(kw){
+  _scanSearchKw = kw;
+  if(_scanData) renderDailyScan(_scanData, _scanCurrentTab || 'top');
 }
 
 function toggleScanLegend(){
@@ -12480,6 +12485,7 @@ function toggleScanDetail(id){
 
 function switchDailyScanTab(btn, tab){
   _scanCurrentTab = tab;
+  _scanSearchKw = '';  // 切換分類時清空搜尋
   document.querySelectorAll('[data-tab]').forEach(b=>{
     b.classList.toggle('scan-tab-active', b === btn);
   });
