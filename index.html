@@ -19059,5 +19059,70 @@ async function _wlRunAI(){
     </div>
   </div>
 </div>
+
+<!-- 版本更新說明彈窗 -->
+<div id="changelogModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--bg,#0a0e17);border:1px solid var(--border);border-radius:20px;max-width:380px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="padding:20px 20px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">✨</span>
+        <span style="font-size:17px;font-weight:800;color:var(--text)">功能更新</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">AI 選股全新升級</div>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:10px">
+        <span style="font-size:18px;flex-shrink:0">🏆</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">完整 300 大排名</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">綜合榜涵蓋市值前300大，可分頁瀏覽，每頁10檔</div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span style="font-size:18px;flex-shrink:0">🔍</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">個股搜尋</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">綜合榜可直接輸入股名或代號快速查詢</div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span style="font-size:18px;flex-shrink:0">📊</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">六大分類排名</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">技術、法人、動能、價值、反彈分類，各顯示關鍵數值（外資張數、本益比、漲幅等）</div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span style="font-size:18px;flex-shrink:0">🏷️</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">股價與評分標籤</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">每檔顯示即時股價、漲跌額，以及完整評分依據標籤</div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <span style="font-size:18px;flex-shrink:0">🎨</span>
+        <div><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">台股配色</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.5">紅漲綠跌，符合台股看盤習慣</div></div>
+      </div>
+    </div>
+    <div style="padding:14px 20px 20px">
+      <button onclick="closeChangelog()" style="width:100%;padding:12px;background:linear-gradient(135deg,#ff4c6a,#d4a000);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">開始使用</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 版本更新說明（改版本號即會重新顯示一次）
+var APP_CHANGELOG_VERSION = 'v7.0-rank';
+function checkChangelog(){
+  try{
+    const seen = localStorage.getItem('changelog_seen');
+    if(seen !== APP_CHANGELOG_VERSION){
+      const m = document.getElementById('changelogModal');
+      if(m) m.style.display = 'flex';
+    }
+  }catch(e){}
+}
+function closeChangelog(){
+  try{ localStorage.setItem('changelog_seen', APP_CHANGELOG_VERSION); }catch(e){}
+  const m = document.getElementById('changelogModal');
+  if(m) m.style.display = 'none';
+}
+// 進 APP 後延遲 1.2 秒顯示（讓主畫面先載入）
+setTimeout(checkChangelog, 1200);
+</script>
+
 </body>
 </html>
