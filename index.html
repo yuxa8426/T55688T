@@ -12376,28 +12376,23 @@ function renderDailyScan(data, tab){
   const fullRank = data.fullRank || data.top20 || [];
   const stratMap = data.byStrategy || {};
 
-  // 決定本頁清單 + 每筆的「分類關鍵數值」函式
   let stocks = [], extraFn = null, searchable = false;
   if(tab === 'top'){
-    stocks = fullRank;            // 綜合榜：完整300名
+    stocks = fullRank;
     searchable = true;
-    extraFn = (s) => s.changePct!=null ? {label:'當日', val:(s.changePct>=0?'+':'')+s.changePct.toFixed(1)+'%', color:s.changePct>=0?'#ff4c6a':'#00d4aa'} : null;
+    extraFn = (s) => s.changePct!=null ? {label:'當日', val:(s.changePct>=0?'+':'')+s.changePct.toFixed(1)+'%', color:s.changePct>=0?'var(--red)':'var(--green)'} : null;
   } else {
     const arr = stratMap[tab] || [];
-    // 相容：可能是 id 字串陣列（舊）或物件陣列（新）
     stocks = arr.map(item => {
-      if(typeof item === 'string'){
-        return fullRank.find(s=>s.id===item) || {id:item, name:item, score:0};
-      }
+      if(typeof item === 'string') return fullRank.find(s=>s.id===item) || {id:item, name:item, score:0};
       return item;
     });
-    // 各分類的關鍵數值
     const fns = {
-      technical: (s)=> ({label:'訊號', val:(s.kd==='golden'||s.kd==='golden_high')?'KD金叉':(s.macd==='bull_strong')?'MACD強多':(s.macd==='bull_turn')?'MACD翻多':'多頭', color:'#00d4aa'}),
-      instBuy:   (s)=> ({label:'外資', val:(s.foreignNet!=null? (s.foreignNet>=0?'+':'')+Math.round(s.foreignNet/1000)+'張':'—')+(s.foreignBuyDays>=3?` 連${s.foreignBuyDays}日`:''), color:'#00d4aa'}),
-      value:     (s)=> ({label:'本益比', val:(s.pe!=null?s.pe.toFixed(1)+'倍':'—')+(s.yield?` 殖利率${s.yield}%`:''), color:'#d4a000'}),
-      momentum:  (s)=> ({label:'20日', val:((s.ret20!=null?s.ret20:s.ret15)>=0?'+':'')+((s.ret20!=null?s.ret20:s.ret15)||0).toFixed(1)+'%', color:'#ff4c6a'}),
-      rebound:   (s)=> ({label:'位階', val:s.bollPct!=null?`布林${s.bollPct.toFixed(0)}%`:(s.kd==='oversold'?'KD超賣':'低檔'), color:'#9b7ffe'}),
+      technical: (s)=> ({label:'訊號', val:(s.kd==='golden'||s.kd==='golden_high')?'KD金叉':(s.macd==='bull_strong')?'MACD強多':(s.macd==='bull_turn')?'MACD翻多':'多頭', color:'var(--red)'}),
+      instBuy:   (s)=> ({label:'外資', val:(s.foreignNet!=null?(s.foreignNet>=0?'+':'')+Math.round(s.foreignNet/1000)+'張':'—')+(s.foreignBuyDays>=3?` 連${s.foreignBuyDays}日`:''), color:'var(--red)'}),
+      value:     (s)=> ({label:'本益比', val:(s.pe!=null?s.pe.toFixed(1)+'倍':'—')+(s.yield?` 殖${s.yield}%`:''), color:'var(--gold)'}),
+      momentum:  (s)=> ({label:'20日', val:((s.ret20!=null?s.ret20:s.ret15)>=0?'+':'')+((s.ret20!=null?s.ret20:s.ret15)||0).toFixed(1)+'%', color:'var(--red)'}),
+      rebound:   (s)=> ({label:'位階', val:s.bollPct!=null?`布林${s.bollPct.toFixed(0)}%`:(s.kd==='oversold'?'KD超賣':'低檔'), color:'var(--green)'}),
     };
     extraFn = fns[tab] || null;
   }
@@ -12409,55 +12404,86 @@ function renderDailyScan(data, tab){
       oninput="_onScanSearch(this.value)" style="width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box"></div>`;
   }
 
-  // 套用搜尋過濾
+  // 搜尋過濾
   let shown = stocks;
   if(searchable && _scanSearchKw){
     const kw = _scanSearchKw.trim().toLowerCase();
     shown = stocks.filter(s => (s.name||'').toLowerCase().includes(kw) || (s.id||'').includes(kw));
   }
 
-  // 顯示筆數：綜合榜全顯示（搜尋後），分類榜前20
-  const limit = tab==='top' ? (searchable && _scanSearchKw ? shown.length : 50) : 20;
-  const top = shown.slice(0, limit);
+  // ── 分頁：每頁10個 ──
+  const PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
+  if(_scanPage > totalPages) _scanPage = 1;
+  const pageStart = (_scanPage - 1) * PER_PAGE;
+  const pageItems = shown.slice(pageStart, pageStart + PER_PAGE);
 
   const adviceMap = {};
   (data.aiInsight?.top5 || []).forEach(r=>{ adviceMap[r.id] = r.advice || r.reason || ''; });
 
-  const rows = top.map((s, i) => {
+  // 評分顏色：台股紅漲綠跌 → 高分紅、中分黃、低分綠
+  const _scoreColor = (sc) => sc>=80 ? 'var(--red)' : sc>=60 ? 'var(--gold)' : 'var(--green)';
+
+  // 卡片（一行兩個網格）
+  const cards = pageItems.map((s, idx) => {
+    const i = pageStart + idx;
     const score = typeof s.score === 'number' ? s.score : 0;
-    const scoreColor = score>=80?'#00d4aa':score>=65?'#d4a000':'#9b7ffe';
+    const scoreColor = _scoreColor(score);
     const rank = i+1;
     const rankBadge = (tab==='top' && !_scanSearchKw && rank<=3)
-      ? `<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#9b7ffe,#00d4aa);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0">${rank}</div>`
-      : `<div style="width:22px;text-align:center;font-size:12px;font-weight:700;color:var(--text3);flex-shrink:0">${rank}</div>`;
-    // 分類關鍵數值
+      ? `<div style="position:absolute;top:8px;left:8px;width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#ff4c6a,#d4a000);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff">${rank}</div>`
+      : `<div style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;color:var(--text3)">${rank}</div>`;
     const extra = extraFn ? extraFn(s) : null;
-    const extraHtml = extra ? `<div style="font-size:10px;color:${extra.color};margin-top:2px"><span style="color:var(--text3)">${extra.label}</span> ${extra.val}</div>` : '';
+    const extraHtml = extra ? `<div style="display:inline-block;margin-top:6px;padding:3px 8px;background:rgba(255,255,255,.06);border-radius:20px;font-size:10px;font-weight:600;color:${extra.color}"><span style="color:var(--text3)">${extra.label}</span> ${extra.val}</div>` : '';
 
-    return `<div class="scan-stock-row" style="display:flex;align-items:center;padding:10px 4px" onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
+    return `<div style="position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 10px 10px 26px;cursor:pointer"
+      onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
       ${rankBadge}
-      <div style="flex:1;min-width:0;padding:0 10px">
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span style="font-size:14px;font-weight:700;color:var(--text)">${s.name}</span>
-          <span style="font-size:11px;color:var(--text3)">${s.id}</span>
-        </div>
-        ${extraHtml}
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:18px;font-weight:900;color:${scoreColor}">${score}</div>
-        <div style="font-size:9px;color:var(--text3)">AI評分</div>
-      </div>
+      <div style="font-size:13px;font-weight:800;color:var(--text);line-height:1.2">${s.name}</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px">${s.id}</div>
+      <div style="font-size:24px;font-weight:900;color:${scoreColor};line-height:1">${score}</div>
+      <div style="font-size:9px;color:var(--text3)">AI評分</div>
+      ${extraHtml}
     </div>`;
   }).join('');
 
-  list.innerHTML = searchHtml + (top.length ? rows :
-    '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>');
+  const grid = pageItems.length
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${cards}</div>`
+    : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>';
 
-  // 搜尋框重新聚焦（避免輸入時失焦）
+  // 分頁控制列
+  let pager = '';
+  if(totalPages > 1){
+    const prevDis = _scanPage<=1 ? 'opacity:.3;pointer-events:none' : '';
+    const nextDis = _scanPage>=totalPages ? 'opacity:.3;pointer-events:none' : '';
+    pager = `<div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px">
+      <button onclick="_scanGoPage(${_scanPage-1})" style="${prevDis};padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:13px">‹ 上一頁</button>
+      <span style="font-size:12px;color:var(--text2);font-weight:600">${_scanPage} / ${totalPages}</span>
+      <button onclick="_scanGoPage(${_scanPage+1})" style="${nextDis};padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-family:inherit;font-size:13px">下一頁 ›</button>
+    </div>`;
+  }
+
+  list.innerHTML = searchHtml + grid + pager;
+
   if(searchable && _scanSearchKw){
     const inp = document.getElementById('scanSearchInput');
     if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
+}
+
+var _scanSearchKw = '';
+var _scanPage = 1;
+function _onScanSearch(kw){
+  _scanSearchKw = kw;
+  _scanPage = 1;
+  if(_scanData) renderDailyScan(_scanData, _scanCurrentTab || 'top');
+}
+function _scanGoPage(p){
+  _scanPage = p;
+  if(_scanData) renderDailyScan(_scanData, _scanCurrentTab || 'top');
+  // 滾動到清單頂部
+  const el = document.getElementById('scanTopList');
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // 搜尋狀態 + handler
@@ -12486,6 +12512,7 @@ function toggleScanDetail(id){
 function switchDailyScanTab(btn, tab){
   _scanCurrentTab = tab;
   _scanSearchKw = '';  // 切換分類時清空搜尋
+  _scanPage = 1;       // 重置分頁
   document.querySelectorAll('[data-tab]').forEach(b=>{
     b.classList.toggle('scan-tab-active', b === btn);
   });
