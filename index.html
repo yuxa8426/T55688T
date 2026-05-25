@@ -566,7 +566,7 @@
         <!-- 散戶情緒 -->
         <div style="background:rgba(245,200,66,.06);border:1px solid rgba(245,200,66,.25);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">散戶情緒</div>
-          <div style="font-size:22px;font-weight:800;line-height:1.1" id="mxfRetailSentiment">—</div>
+          <div style="font-size:18px;font-weight:800;line-height:1.2;white-space:nowrap" id="mxfRetailSentiment">—</div>
           <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="mxfRetailLabel">—</div>
         </div>
         <!-- 法人淨多口 -->
@@ -8228,7 +8228,12 @@ async function loadMxfData(){
     const rLabel = d.retailLabel || (d.retailBull?'偏多':'偏空');
     const rIsBull = rLabel.includes('偏多');
     const rIsNeutral = rLabel==='中性';
-    if(sentEl){ sentEl.textContent=rLabel; sentEl.style.color=rIsNeutral?'var(--gold)':(rIsBull?'var(--red)':'var(--green)'); }
+    if(sentEl){
+      sentEl.textContent=rLabel;
+      sentEl.style.color=rIsNeutral?'var(--gold)':(rIsBull?'var(--red)':'var(--green)');
+      sentEl.style.fontSize = rLabel.includes('強烈')?'16px':'18px';  // 強烈4字縮小
+      sentEl.style.whiteSpace='nowrap';
+    }
     if(lblEl)  lblEl.textContent = '散戶情緒（法人反向推算）';
 
     // ── 法人淨額（外資+投信，已排除自營商避險）──
@@ -8240,7 +8245,10 @@ async function loadMxfData(){
       // 顯示「淨額K + 方向」，正數紅、負數綠
       instEl.textContent=(k>=0?'+':'')+k+'K '+tLabel;
       instEl.style.color = tLabel.includes('偏多')?'var(--red)':tLabel.includes('偏空')?'var(--green)':'var(--gold)';
-      instEl.style.fontSize='20px';
+      // 文字長度自適應：含「強烈」時字體更小，避免換行
+      instEl.style.fontSize = tLabel.includes('強烈')?'15px':'17px';
+      instEl.style.whiteSpace='nowrap';
+      instEl.style.lineHeight='1.2';
     }
     if(chgEl && hist.length>=2){
       const diff = hist[hist.length-1].instNetK - hist[hist.length-2].instNetK;
@@ -12470,12 +12478,12 @@ function renderDailyScan(data, tab){
       if((s.foreignBuyDays||0)>=3) tags.push(`外資連買${s.foreignBuyDays}日`);
     }
     const tagColors = {'三重共振':'var(--red)','雙訊號共振':'var(--red)','強勢領漲':'var(--red)','KD金叉':'var(--red)','KD高檔強勢':'var(--red)','MACD多頭擴張':'var(--red)','MACD強多':'var(--red)','MACD翻多':'var(--gold)','均線多頭排列':'var(--red)','均線多排':'var(--red)','突破布林上軌':'var(--red)','價漲量增':'var(--red)','布林下軌支撐':'var(--gold)','KD低檔':'var(--gold)'};
-    const tagsHtml = tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">${tags.map(t=>{
+    const tagsHtml = tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;max-width:100%">${tags.map(t=>{
       const c = tagColors[t] || (/外資|投信|營收|現金流|連\d+月/.test(t) ? 'var(--red)' : 'var(--text3)');
       return `<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.06);color:${c}">${t}</span>`;
     }).join('')}</div>` : '';
 
-    return `<div style="position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 10px 10px 26px;cursor:pointer"
+    return `<div style="position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 10px 10px 26px;cursor:pointer;min-width:0;overflow:hidden;box-sizing:border-box"
       onclick="selectStock(null,'${s.name}','${s.id}.TW');switchPage('stock')">
       ${rankBadge}
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
@@ -12495,7 +12503,7 @@ function renderDailyScan(data, tab){
   }).join('');
 
   const grid = pageItems.length
-    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${cards}</div>`
+    ? `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px">${cards}</div>`
     : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">📭 此分類暫無資料</div>';
 
   // 分頁控制列
