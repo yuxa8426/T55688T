@@ -1981,7 +1981,7 @@
 
     <!-- 底部提示 -->
     <div style="text-align:center;padding:10px 16px 4px;font-size:10px;color:var(--text3)">
-      市值前300大 · 綜合榜可搜尋全部 · 每日自動更新 · 僅供參考
+      市值前300大 · 顯示最新交易日完整收盤資料 · 僅供參考
     </div>
   </div>
 
@@ -12359,9 +12359,9 @@ let   _scanCurrentTab = 'top';
 
 // 檢查掃描資料新鮮度：無資料或非今日資料則重新載入
 function _checkScanFreshness(){
-  const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'}); // YYYY-MM-DD
+  const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'});
   if(!_scanData){ loadDailyScan(); return; }
-  // 若快取資料的日期不是今天，自動重載
+  // 若快取的「掃描日期」不是今天，自動重載（抓最新一次掃描結果）
   if(_scanData.date && _scanData.date !== today){
     loadDailyScan();
   }
@@ -12396,7 +12396,11 @@ function renderDailyScan(data, tab){
   const insightTx = document.getElementById('scanAiInsightText');
   if(!list || !data) return;
 
-  if(dateEl) dateEl.textContent = data.date ? data.date.slice(5) + ' 更新' : '';
+  if(dateEl){
+    // 顯示「資料日期」（實際交易日，可能比掃描日早一天）
+    const dd = data.dataDate || data.date;
+    dateEl.textContent = dd ? '資料日 ' + dd.slice(5) : '';
+  }
   if(insightEl && insightTx && data.aiInsight?.market){
     insightTx.textContent = data.aiInsight.market;
     insightEl.style.display = 'block';
