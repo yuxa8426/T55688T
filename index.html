@@ -586,7 +586,7 @@
       <!-- 說明文字 -->
       <div style="font-size:10px;color:var(--text3);margin-bottom:10px;padding:6px 10px;
                   background:rgba(255,255,255,.03);border-radius:8px;line-height:1.6">
-        💡 小台（MTX）法人淨多口為正 → 法人偏多，散戶慣與法人反向，偏空居多<br>
+        💡 法人淨額為正 → 法人偏多，散戶慣與法人反向，偏空居多<br>
         法人淨多口為負 → 法人偏空，散戶可能偏多方
       </div>
 
@@ -8224,13 +8224,24 @@ async function loadMxfData(){
     // ── 散戶情緒 ────────────────────────────────────────────
     const sentEl = document.getElementById('mxfRetailSentiment');
     const lblEl  = document.getElementById('mxfRetailLabel');
-    if(sentEl){ sentEl.textContent=d.retailBull?'偏多':'偏空'; sentEl.style.color=d.retailBull?'var(--red)':'var(--green)'; }
-    if(lblEl)  lblEl.textContent = d.retailBull?'散戶多方居多':'散戶空方居多';
+    // 散戶情緒（用新的強度分級 retailLabel；紅=偏多 綠=偏空 黃=中性）
+    const rLabel = d.retailLabel || (d.retailBull?'偏多':'偏空');
+    const rIsBull = rLabel.includes('偏多');
+    const rIsNeutral = rLabel==='中性';
+    if(sentEl){ sentEl.textContent=rLabel; sentEl.style.color=rIsNeutral?'var(--gold)':(rIsBull?'var(--red)':'var(--green)'); }
+    if(lblEl)  lblEl.textContent = '散戶情緒（法人反向推算）';
 
-    // ── 法人淨多口 ───────────────────────────────────────────
+    // ── 法人淨額（外資+投信，已排除自營商避險）──
     const instEl = document.getElementById('mxfInstNet');
     const chgEl  = document.getElementById('mxfInstNetChg');
-    if(instEl){ const k=d.instNetK; instEl.textContent=(k>=0?'+':'')+k+'K'; instEl.style.color=k>0?'var(--red)':k<0?'var(--green)':'var(--text2)'; }
+    if(instEl){
+      const k=d.instNetK;
+      const tLabel = d.trendLabel || (k>0?'偏多':k<0?'偏空':'中性');
+      // 顯示「淨額K + 方向」，正數紅、負數綠
+      instEl.textContent=(k>=0?'+':'')+k+'K '+tLabel;
+      instEl.style.color = tLabel.includes('偏多')?'var(--red)':tLabel.includes('偏空')?'var(--green)':'var(--gold)';
+      instEl.style.fontSize='20px';
+    }
     if(chgEl && hist.length>=2){
       const diff = hist[hist.length-1].instNetK - hist[hist.length-2].instNetK;
       chgEl.textContent = '日變化 '+(diff>=0?'+':'')+diff.toFixed(1)+'K';
