@@ -3916,7 +3916,7 @@ function switchPage(n){
     updateStratDesc(_currentStrat||'A');
     autoCheckBacktest();
     renderStratShowcase();
-    if(!_scanData) loadDailyScan(); // 首次切換時載入盤後精選
+    _checkScanFreshness(); // 首次切換時載入盤後精選
   },50);
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
   if(n==='profile') setTimeout(()=>initPushUI(),100);
@@ -12356,6 +12356,16 @@ function _renderFundCore(stockId, perData, marginData){
 const PROXY_BASE      = 'https://stockai-proxy.yuxa8426.workers.dev';
 let   _scanData       = null;
 let   _scanCurrentTab = 'top';
+
+// 檢查掃描資料新鮮度：無資料或非今日資料則重新載入
+function _checkScanFreshness(){
+  const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'}); // YYYY-MM-DD
+  if(!_scanData){ loadDailyScan(); return; }
+  // 若快取資料的日期不是今天，自動重載
+  if(_scanData.date && _scanData.date !== today){
+    loadDailyScan();
+  }
+}
 
 async function loadDailyScan(){
   const banner = document.getElementById('dailyScanBanner');
