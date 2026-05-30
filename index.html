@@ -4608,8 +4608,8 @@ async function fmShareholderDays(stockId='2330', days=60){
 }
 
 async function fmShareholder(stockId='2330', days=60){
-  // 三個 API 並行抓取
-  const [instData, marginData, holdData] = await Promise.all([
+  // 四個 API 並行抓取（新增集保股權分散表，算真實散戶比例）
+  const [instData, marginData, holdData, dispData] = await Promise.all([
     fmFetch({
       dataset:    'TaiwanStockInstitutionalInvestorsBuySell',
       data_id:    stockId,
@@ -4626,6 +4626,12 @@ async function fmShareholder(stockId='2330', days=60){
       dataset:    'TaiwanStockShareholding', _optional:true,
       data_id:    stockId,
       start_date: nDaysAgo(10),
+      end_date:   todayStr(),
+    }, 15000).catch(()=>null),
+    fmFetch({
+      dataset:    'TaiwanStockHoldingSharesPer', _optional:true,
+      data_id:    stockId,
+      start_date: nDaysAgo(30),
       end_date:   todayStr(),
     }, 15000).catch(()=>null),
   ]);
@@ -4705,19 +4711,42 @@ async function fmShareholder(stockId='2330', days=60){
   ));
   bigPct = +bigPct.toFixed(1);
 
-  // 散戶估算：融資餘額張數 / 1000 * 比例係數（融資愈多，散戶佔比愈高）
-  let retailPct = Math.min(35, Math.max(3,
-    marginBal > 0 ? Math.log10(marginBal+1) * 4 : 8
-  ));
-  retailPct = +retailPct.toFixed(1);
+  // 散戶持股%：用集保股權分散表（TaiwanStockHoldingSharesPer）真實計算
+  // 散戶 = 持股 <400張（<400,000股）的級距加總
+  let retailPct = null;        // 真實散戶持股%
+  let dispDate  = null;        // 集保資料日期
+  let retailIsReal = false;
+  if(dispData && dispData.length){
+    // 取最新日期
+    const dLatest = dispData.reduce((mx,x)=>x.date>mx?x.date:mx,'');
+    const dRows = dispData.filter(x=>x.date===dLatest);
+    dispDate = dLatest;
+    // <400張的散戶級距（排除 400,001 以上、total、差異數調整）
+    const retailLevels = ['1-999','1,000-5,000','5,001-10,000','10,001-15,000',
+      '15,001-20,000','20,001-30,000','30,001-40,000','40,001-50,000',
+      '50,001-100,000','100,001-200,000','200,001-400,000'];
+    let sum = 0, matched = 0;
+    for(const r of dRows){
+      if(retailLevels.includes(r.HoldingSharesLevel)){
+        sum += (parseFloat(r.percent)||0);
+        matched++;
+      }
+    }
+    if(matched >= 5){   // 至少抓到5個級距才算有效
+      retailPct = +sum.toFixed(1);
+      retailIsReal = true;
+    }
+  }
+  // 集保資料抓不到時，retailPct 維持 null（UI 顯示「—」而非假數據）
+  if(retailPct === null) retailPct = 0;
 
-  // 法人（本土法人）= 100% - 外資持股% - 散戶估算%
+  // 法人（本土法人）= 100% - 外資持股% - 散戶持股%
   const midPct = +Math.max(0, 100 - bigPct - retailPct).toFixed(1);
 
   return {
     bigHolder: { pct:bigPct,   count:0, label:'外資持股',   chg:foreignChg  },
     midHolder: { pct:midPct,   count:0, label:'本土法人'                     },
-    retail:    { pct:retailPct,count:0, label:'散戶估算'                     },
+    retail:    { pct:retailPct,count:0, label: retailIsReal ? '散戶持股' : '散戶估算', isReal:retailIsReal, dispDate:dispDate },
     // 真實數據
     foreignNet:   foreignNet,      // 張
     trustNet:     trustNet,         // 張
@@ -8873,8 +8902,11 @@ function renderChips(data, label='近60日'){
     setLegSub('leg-mid-sub',`今日${tN>=0?'淨買+':'淨賣'}${tNStr}`,tN>=0?'var(--red)':'var(--green)');
   } else { setLegSub('leg-mid-sub','—'); }
 
-  // 散戶：融資餘額
-  if(data.marginBal){
+  // 散戶：真實集保持股（優先）或融資餘額（備用）
+  if(data.retail?.isReal && data.retail?.dispDate){
+    // 集保真實散戶持股，標示資料日期（集保每週更新）
+    setLegSub('leg-ret-sub',`集保 ${data.retail.dispDate.slice(5)} 真實持股`, 'var(--text3)');
+  } else if(data.marginBal){
     const mc=data.marginChg||0;
     setLegSub('leg-ret-sub',`融資${data.marginBal.toLocaleString()}張 ${mc>=0?'▲+':'▼'}${Math.abs(mc).toLocaleString()}`,mc>0?'var(--red)':mc<0?'var(--green)':'var(--text3)');
   } else { setLegSub('leg-ret-sub','—'); }
