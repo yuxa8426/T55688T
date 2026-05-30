@@ -6984,9 +6984,10 @@ async function _fetchMarketTurnover(){
       // 換手率不在此表，改抓股價成交量統計 TWTB4U
       if(last&&last[3]){
         const tradeVal=parseFloat((last[3]||'0').replace(/,/g,''));
-        // 台灣上市總市值約55兆，換手率≈成交金額/總市值
+        // 台灣上市總市值約55兆，換手率≈成交金額(元)/總市值(元)×100
+        // FMTQIK 成交金額單位為「元」，直接除總市值，不需×1000
         const mktCap=55e12;
-        if(tradeVal>0) return {turnover:+(tradeVal*1000/mktCap*100).toFixed(2)};
+        if(tradeVal>0) return {turnover:+(tradeVal/mktCap*100).toFixed(2)};
       }
     }
   }catch(e){}
@@ -9089,7 +9090,7 @@ async function loadIndices(){
   const twseData = await twseDirectIndex();
   if(twseData && idxEls[0]){
     const isUp = !String(twseData.change||'').startsWith('-');
-    idxEls[0].querySelector('.v').textContent = twseData.index ? Number(twseData.index).toLocaleString() : '—';
+    idxEls[0].querySelector('.v').textContent = twseData.price ? Number(twseData.price).toLocaleString(undefined,{maximumFractionDigits:2}) : (twseData.index || '—');
     idxEls[0].querySelector('.c').textContent = (isUp?'+':'')+twseData.changePct+'%';
     idxEls[0].querySelector('.c').className   = 'c '+(isUp?'up':'dn');
   }
