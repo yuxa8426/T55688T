@@ -6876,7 +6876,7 @@ function _renderMktVolSVG(rows,avgB){
     return;
   }
   const isDark=document.documentElement.getAttribute('data-theme')!=='light';
-  const barDataB=rows.map(r=>Math.round((r.value||0)/1e4));
+  const barDataB=rows.map(r=>Math.round((r.value||0)/1e8));  // 元→億，與主數字統一
   const validB=barDataB.filter(v=>v>0);
   if(!validB.length){barEl.innerHTML='<div style="padding:12px;text-align:center;font-size:11px;color:var(--text3)">無有效資料</div>';return;}
   const barMaxB=Math.max(...validB);
@@ -6893,9 +6893,8 @@ function _renderMktVolSVG(rows,avgB){
   const yRange=yTop-yBase||1;
 
   function yLbl(v){
-    if(v>=10000) return (v/10000).toFixed(1)+'萬億';
-    if(v>=1000)  return (v/1000).toFixed(1)+'千億';
-    return v+'億';
+    if(v>=10000) return (v/10000).toFixed(1)+'兆';   // 1萬億=1兆
+    return Math.round(v)+'億';
   }
   function fmtD(d){
     if(!d) return '';
