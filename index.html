@@ -6824,15 +6824,17 @@ async function loadMarketVolume(){
     const slice20 = rows.slice(-20);
     const latest  = slice20[slice20.length-1];
     const prev    = slice20[slice20.length-2];
-    const toB     = v => Math.round((v||0)/1e4);  // Worker value 單位：千元
+    const toB     = v => Math.round((v||0)/1e8);  // Worker value 單位：元 → 億（/1e8）
     const todayB  = toB(latest?.value);
     const yesterB = toB(prev?.value);
-    const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e4);
+    const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
     const vsYest  = yesterB>0 ? (todayB-yesterB)/yesterB*100 : 0;
     const vsAvg   = avgB>0   ? (todayB-avgB)/avgB*100 : 0;
     const ratio   = avgB>0   ? todayB/avgB : 1;
 
-    if(bigEl) bigEl.innerHTML=`${todayB.toLocaleString()} <span>億元</span>`;
+    // 成交額自適應顯示：≥10000億顯示「X.XX 兆」，否則「XXXX 億」
+    const fmtVol = (b) => b >= 10000 ? (b/10000).toFixed(2)+' <span>兆元</span>' : b.toLocaleString()+' <span>億元</span>';
+    if(bigEl) bigEl.innerHTML = fmtVol(todayB);
     sh('mktVolCompare',
       `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
       +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
