@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202605180736">
+<meta name="app-version" content="202606011200">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1777642240 -->
+<!-- build:1780300800 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -7222,8 +7222,14 @@ async function _taiexTab(period, btn){
 
 async function loadTaiexChart(){
   const loadEl = document.getElementById('taiexChartLoading');
+  // 是否真的在交易時段（台灣 09:00~13:45 平日）
+  const _liveNow = (typeof _isTradingHour === 'function') ? _isTradingHour() : false;
+
+  // 盤中：用 TWSE tse_t00 即時分鐘資料（此時 y 欄位＝當日參考昨收，正確）
+  // ⚠️ 非盤中（盤前/盤後/假日）TWSE tse_t00 的 y 會被重置成「剛結束那場的收盤價」，
+  //    導致 漲跌＝最後一點−y＝0；故非盤中改用 Yahoo ^TWII（提供正確前一交易日收盤）
   try{
-    if(API){
+    if(API && _liveNow){
       const r = await fetchWithTimeout(
         `${API}/intraday?symbol=${encodeURIComponent('tse_t00.tw')}&src=twse`, 10000);
       if(r.ok){
@@ -7235,29 +7241,52 @@ async function loadTaiexChart(){
             times:   body.times||[],
             vol:     body.vol||[],
             prevClose: body.y || body.prevClose || null,
+            isLive:  true,
+            dataDate:null,
           };
-        } else if(body?.chart?.result?.[0]){
-          // Yahoo Finance 格式備援
-          const res = body.chart.result[0];
-          const ts    = res.timestamp||[];
-          const close = res.indicators?.quote?.[0]?.close||[];
-          const vol   = res.indicators?.quote?.[0]?.volume||[];
-          const pts2=[], times2=[], vols2=[];
-          for(let i=0;i<ts.length;i++){
-            if(close[i]==null||isNaN(close[i])) continue;
-            const d=new Date(ts[i]*1000+8*3600000);
-            times2.push(String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'));
-            pts2.push(close[i]);
-            vols2.push(vol[i]||0);
-          }
-          if(pts2.length > 2){
-            const yPrev = res.meta?.chartPreviousClose||0;
-            _taiexData['1D'] = { pts:pts2, times:times2, vol:vols2, prevClose:yPrev||null };
-          }
         }
       }
     }
   }catch(e){}
+
+  // 非盤中，或盤中即時資料抓取失敗 → Yahoo ^TWII 當日資料（含正確 chartPreviousClose）
+  if(!_taiexData['1D']?.pts?.length){
+    try{
+      if(API){
+        const r = await fetchWithTimeout(
+          `${API}/intraday?symbol=${encodeURIComponent('^TWII')}&range=1d&interval=1m`, 10000);
+        if(r.ok){
+          const body = await r.json();
+          const res  = body?.chart?.result?.[0];
+          if(res){
+            const ts    = res.timestamp||[];
+            const close = res.indicators?.quote?.[0]?.close||[];
+            const vol   = res.indicators?.quote?.[0]?.volume||[];
+            const pts2=[], times2=[], vols2=[];
+            let lastTs = 0;
+            for(let i=0;i<ts.length;i++){
+              if(close[i]==null||isNaN(close[i])) continue;
+              const d=new Date(ts[i]*1000+8*3600000);
+              times2.push(String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'));
+              pts2.push(close[i]);
+              vols2.push(vol[i]||0);
+              lastTs = ts[i];
+            }
+            if(pts2.length > 2){
+              const yPrev = res.meta?.chartPreviousClose||0;
+              const dDate = lastTs ? new Date(lastTs*1000+8*3600000).toISOString().slice(0,10) : null;
+              _taiexData['1D'] = {
+                pts:pts2, times:times2, vol:vols2,
+                prevClose: yPrev||null,
+                isLive:    _liveNow,   // 盤中走到此路徑＝即時備援，仍視為盤中
+                dataDate:  dDate,      // 資料實際交易日（非盤中用於顯示「收盤」）
+              };
+            }
+          }
+        }
+      }
+    }catch(e){}
+  }
 
   // 週/月/季：透過 Worker Yahoo Finance 取 ^TWII 歷史資料
   // 月/季：載入 OHLC K 線資料（Yahoo Finance 日 K）
@@ -7514,12 +7543,21 @@ function _renderTaiexChart(){
   if(_dtEl){
     const _twn = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
     if(_taiexPeriod === '1D'){
-      const _hh = String(_twn.getHours()).padStart(2,'0');
-      const _mm = String(_twn.getMinutes()).padStart(2,'0');
-      _dtEl.textContent = _twn.getFullYear()+'/'
-        +String(_twn.getMonth()+1).padStart(2,'0')+'/'
-        +String(_twn.getDate()).padStart(2,'0')
-        +' · 盤中截至 '+_hh+':'+_mm;
+      if(data.isLive){
+        const _hh = String(_twn.getHours()).padStart(2,'0');
+        const _mm = String(_twn.getMinutes()).padStart(2,'0');
+        _dtEl.textContent = _twn.getFullYear()+'/'
+          +String(_twn.getMonth()+1).padStart(2,'0')+'/'
+          +String(_twn.getDate()).padStart(2,'0')
+          +' · 盤中截至 '+_hh+':'+_mm;
+      } else {
+        // 非交易時段：顯示資料實際交易日 + 收盤（避免誤標為盤中）
+        const _d = data.dataDate;
+        _dtEl.textContent = (_d
+          ? _d.replace(/-/g,'/')
+          : _twn.getFullYear()+'/'+String(_twn.getMonth()+1).padStart(2,'0')+'/'+String(_twn.getDate()).padStart(2,'0')
+        ) + ' 收盤';
+      }
     } else {
       // 月/季：顯示資料區間
       const firstT = times[0]||'', lastT = times[times.length-1]||'';
@@ -7612,11 +7650,16 @@ function _renderTaiexChart(){
   const updEl=document.getElementById('taiexUpdateTime');
   if(updEl){
     const _now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    const _dateStr = (_now.getMonth()+1)+'/'+ _now.getDate();
-    const _timeStr = String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0');
-    updEl.innerHTML = '<span style="color:var(--text3)">'
-      + _dateStr+' '+ _timeStr
-      + '</span>';
+    let _label;
+    if(_taiexPeriod === '1D' && data.isLive === false){
+      // 非盤中：標示資料實際交易日，避免誤認為即時
+      _label = (data.dataDate ? data.dataDate.replace(/-/g,'/') : ((_now.getMonth()+1)+'/'+_now.getDate())) + ' 收盤資料';
+    } else {
+      const _dateStr = (_now.getMonth()+1)+'/'+ _now.getDate();
+      const _timeStr = String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0');
+      _label = _dateStr+' '+_timeStr+' 更新';
+    }
+    updEl.innerHTML = '<span style="color:var(--text3)">'+_label+'</span>';
   }
 
   // tooltip（簡化版，HTML div）
@@ -18271,20 +18314,21 @@ function updatePulse(instData, indexData, txfData){
     pmTxf.textContent  = Number(txfData.price).toLocaleString('zh-TW',{maximumFractionDigits:0});
     pmTxf.style.color  = (txfData.change>=0) ? 'var(--red)' : 'var(--green)';
   }
-  // 格式化張數（FinMind 單位：股，÷1000=張）
-  const fmtInst = v => {
-    const lot = v / 1000;  // 股 → 張
-    const abs = Math.abs(lot);
-    const s = lot >= 0 ? '+' : '-';
-    if(abs >= 10000) return s+(abs/10000).toFixed(1)+'萬張';
-    if(abs >= 1000)  return s+(abs/1000).toFixed(1)+'千張';
-    return s+Math.round(abs)+'張';
+  // 格式化買賣超金額（億元）
+  // ⚠️ TaiwanStockTotalInstitutionalInvestors（全市場三大法人）buy/sell 單位為「元（金額）」，
+  //    並非股數，故以億元顯示，符合台股法人買賣超慣用單位（勿再 ÷1000 當張數）
+  const fmtInstAmt = v => {
+    const s   = v >= 0 ? '+' : '-';
+    const yi  = Math.abs(v) / 1e8;   // 元 → 億元
+    if(yi >= 100) return s + yi.toFixed(0) + '億';
+    if(yi >= 1)   return s + yi.toFixed(1) + '億';
+    return s + (Math.abs(v) / 1e4).toFixed(0) + '萬';  // 不足 1 億以萬元顯示
   };
   // 有資料（instData 不為 null）才顯示；instData 為 null 才顯示 —
   const hasInstData = instData !== null && instData !== undefined;
   if(pmForeign){
     if(hasInstData){
-      pmForeign.textContent = fmtInst(foreign);
+      pmForeign.textContent = fmtInstAmt(foreign);
       pmForeign.style.color = foreign>=0?'var(--red)':'var(--green)';
     } else {
       pmForeign.textContent = '—';
@@ -18293,7 +18337,7 @@ function updatePulse(instData, indexData, txfData){
   }
   if(pmTrust){
     if(hasInstData){
-      pmTrust.textContent = fmtInst(trust);
+      pmTrust.textContent = fmtInstAmt(trust);
       pmTrust.style.color = trust>=0?'var(--red)':'var(--green)';
     } else {
       pmTrust.textContent = '—';
