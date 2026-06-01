@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202606011800">
+<meta name="app-version" content="202606012000">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1780322400 -->
+<!-- build:1780329600 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -6862,56 +6862,66 @@ function renderVolBars(isUp, histData, period){
 // TWSE FMTQIK 欄位：[0]日期 [1]成交股數 [2]成交金額 [3]成交筆數 [4]發行量加權股價指數 [5]漲跌點數
 // 為避免欄位順序爭議，成交金額取 [1][2][3] 三欄數值中最大者（金額恆大於股數、筆數）
 function _rocToISO(d){
-  if(!d) return '';
+  if(d==null) return '';
   d = String(d).trim();
-  let m = d.match(/^(\d{2,3})\/(\d{1,2})\/(\d{1,2})$/);     // 民國年 114/05/29
+  let m = d.match(/^(\d{2,3})\/(\d{1,2})\/(\d{1,2})$/);        // 民國年 114/05/29
   if(m){ const y=(+m[1])+((+m[1]<1911)?1911:0);
     return `${y}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`; }
-  m = d.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);        // 西元 2025-05-29 / 2025/05/29
+  m = d.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);        // 西元 2026-05-29 / 2026/05/29
   if(m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
-  return d;
+  m = d.match(/^(\d{4})(\d{2})(\d{2})$/);                       // 純數字西元 20260529
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = d.match(/^(\d{3})(\d{2})(\d{2})$/);                       // 純數字民國 1150529
+  if(m){ const y=(+m[1])+1911; return `${y}-${m[2]}-${m[3]}`; }
+  return '';   // 無法解析 → 回空（呼叫端會丟棄該列，不會塌成今天）
 }
 async function _fetchFMTQIKrawRows(){
   if(!API) return [];
   const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const months=[0,1].map(i=>{const dt=new Date(tw.getFullYear(),tw.getMonth()-i,1);
+  // 多抓近 3 個月，確保湊得到 20 個交易日
+  const months=[0,1,2].map(i=>{const dt=new Date(tw.getFullYear(),tw.getMonth()-i,1);
     return `${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}01`;});
   const merged={};
   await Promise.all(months.map(async ds=>{
     try{
       const r=await fetchWithTimeout(
-        `${API}/twse?path=${encodeURIComponent('rwd/zh/afterTrading/FMTQIK')}&response=json&date=${ds}`, 10000);
+        `${API}/twse?path=${encodeURIComponent('rwd/zh/afterTrading/FMTQIK')}&response=json&date=${ds}`, 12000);
       if(!r.ok) return;
       const j=await r.json();
       const data=j?.data||j?.Data||[];
       for(const row of (Array.isArray(data)?data:[])){
         if(!Array.isArray(row)||row.length<5) continue;
         const date=_rocToISO(row[0]);
-        if(!date) continue;
+        if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;   // 解析失敗的列直接丟棄
+        // 成交金額：取 [1][2][3] 三欄最大值（避免欄位順序爭議；金額恆大於股數、筆數）
         const nums=[1,2,3].map(i=>parseFloat(String(row[i]||'0').replace(/,/g,''))||0);
-        const value=Math.max(...nums);   // 成交金額（元）＝三欄最大
+        const value=Math.max(...nums);
         let taiex=0;
         for(let i=4;i<row.length;i++){
           const v=parseFloat(String(row[i]||'0').replace(/,/g,''))||0;
           if(v>=3000&&v<=60000){ taiex=v; break; }
         }
-        if(value>0) merged[date]={date,value,taiex};
+        if(value>1e8) merged[date]={date,value,taiex};   // 單日成交額需 >1億（過濾異常列）
       }
-    }catch(e){}
+    }catch(e){ console.warn('[FMTQIK raw]',ds,e.message); }
   }));
-  return Object.values(merged).sort((a,b)=>a.date<b.date?-1:1);
+  const out=Object.values(merged).sort((a,b)=>a.date<b.date?-1:1);
+  console.log(`[FMTQIK raw] 取得 ${out.length} 個交易日`);
+  return out;
 }
-// 取得大盤成交值序列：優先 Worker /marketvol，值不合理（欄位錯位）時改用原始 FMTQIK
+// 取得大盤成交值序列：優先 Worker /marketvol（需多日且金額合理），否則原始 FMTQIK
 async function _getMarketVolRows(){
   try{
     if(API){
       const r=await fetchWithTimeout(`${API}/marketvol`,12000);
       if(r.ok){
         const j=await r.json();
-        if(j.source==='TWSE_FMTQIK' && j.rows?.length){
+        if(j.source==='TWSE_FMTQIK' && j.rows?.length>=5){
+          const uniqDates=new Set(j.rows.map(x=>x.date)).size;
           const sorted=[...j.rows.map(x=>x.value||0)].sort((a,b)=>a-b);
           const med=sorted[Math.floor(sorted.length/2)]||0;
-          if(med/1e8>=100) return j.rows;   // 中位數≥100億＝合理
+          // 需：多日(≥5)、日期不重複、金額中位數≥100億 才採信 Worker
+          if(uniqDates>=5 && med/1e8>=100) return j.rows;
         }
       }
     }
@@ -6954,14 +6964,28 @@ async function loadMarketVolume(){
 
     if(json && json.source==='TWSE_FMTQIK' && json.rows?.length>=1){
       rows = json.rows;
-      // 驗證：FMTQIK 欄位錯位會把「成交筆數」當成金額（值過小）→ 改抓原始 FMTQIK 修正
+      // 驗證：①金額需合理（避免欄位錯位把筆數當金額）②日期需多日不重複（避免昨日=今日、bar全平）
       const _sorted=[...rows.map(r=>r.value||0)].sort((a,b)=>a-b);
       const _med=_sorted[Math.floor(_sorted.length/2)]||0;
-      if(_med/1e8 < 100) rows = [];
+      const _uniqDates=new Set(rows.map(r=>r.date)).size;
+      if(_med/1e8 < 100 || _uniqDates < 5) rows = [];
     }
-    // Worker 無資料 / 非 FMTQIK / 金額異常 → 直接抓原始 FMTQIK
+    // Worker 無資料 / 非 FMTQIK / 金額異常 / 日期重複 → 直接抓原始 FMTQIK
     if(!rows.length) rows = await _fetchFMTQIKrawRows();
+    // 保底：raw 仍不足多日，但 Worker 原本金額合理（只是日期重複）→ 退而用 Worker rows
+    if((!rows.length || new Set(rows.map(r=>r.date)).size < 2)
+        && json?.source==='TWSE_FMTQIK' && json.rows?.length>=2){
+      const _med=[...json.rows.map(r=>r.value||0)].sort((a,b)=>a-b)[Math.floor(json.rows.length/2)]||0;
+      if(_med/1e8>=100) rows = json.rows;
+    }
     if(!rows.length) throw new Error('rows empty');
+
+    // 同日去重保險（保留最後一筆），並依日期排序
+    {
+      const _byDate={};
+      for(const r of rows){ if(r&&r.date) _byDate[r.date]=r; }
+      rows=Object.values(_byDate).sort((a,b)=>a.date<b.date?-1:1);
+    }
     if(noteEl) noteEl.style.display='none';
 
     const slice20 = rows.slice(-20);
@@ -6978,20 +7002,31 @@ async function loadMarketVolume(){
     // 成交額自適應顯示：≥10000億顯示「X.XX 兆」，否則「XXXX 億」
     const fmtVol = (b) => b >= 10000 ? (b/10000).toFixed(2)+' <span>兆元</span>' : b.toLocaleString()+' <span>億元</span>';
     if(bigEl) bigEl.innerHTML = fmtVol(todayB);
-    sh('mktVolCompare',
-      `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
-      +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
-    se('mktVolYest', yesterB+'億');
-    se('mktVolAvg',  avgB+'億');
+
+    const hasHistory = slice20.length >= 2 && yesterB > 0;
+    if(hasHistory){
+      sh('mktVolCompare',
+        `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
+        +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
+      se('mktVolYest', yesterB.toLocaleString()+'億');
+      se('mktVolAvg',  avgB.toLocaleString()+'億');
+    } else {
+      // 只有當日資料，無歷史可比
+      sh('mktVolCompare','<span style="color:var(--text3)">歷史資料載入中…</span>');
+      se('mktVolYest','—億');
+      se('mktVolAvg', avgB>0 ? avgB.toLocaleString()+'億' : '—億');
+    }
 
     if(chipEl){
-      if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
+      if(!hasHistory){ chipEl.textContent='—'; chipEl.className='chip'; }
+      else if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
       else if(ratio>=1.1){chipEl.textContent='放量';chipEl.className='chip up';}
       else if(ratio<=0.7){chipEl.textContent='縮量';chipEl.className='chip dn';}
       else{chipEl.textContent='正常';chipEl.className='chip';}
     }
 
-    _renderMktVolSVG(slice20, avgB);
+    // bar 圖：至少 2 個不同交易日才畫（避免單筆撐滿成全平色塊）
+    _renderMktVolSVG(slice20.length>=2 ? slice20 : [], avgB);
     // 換手率：一律用修正後的成交金額(元) / 上市總市值自算
     // （Worker /turnover 端點欄位錯位會回傳極小值如 0.01%，不可信任，故完全忽略 turnoverData）
     const TSE_MKTCAP = 70e12;  // 上市總市值約 70 兆（2026 規模）
