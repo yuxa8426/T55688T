@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202606011600">
+<meta name="app-version" content="202606011800">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1780315200 -->
+<!-- build:1780322400 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -6928,11 +6928,8 @@ async function loadMarketVolume(){
   const twNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const nowStr=String(twNow.getHours()).padStart(2,'0')+':'+String(twNow.getMinutes()).padStart(2,'0');
 
-  // 並行抓：Worker多月成交量 + 換手率
-  const [volRes, turnoverData] = await Promise.all([
-    fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null),
-    _fetchMarketTurnover().catch(()=>null),
-  ]);
+  // 抓 Worker 多月成交量（換手率改由前端依成交金額自算，不再請求壞掉的 /turnover）
+  const volRes = await fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null);
 
   try{
     let rows=[];
@@ -6948,7 +6945,8 @@ async function loadMarketVolume(){
       if(chipEl){chipEl.textContent='盤中';chipEl.className='chip';}
       se('mktVolUpdateTime',`盤中 · ${nowStr}`);
       se('mktVolYest','—億'); se('mktVolAvg','—億');
-      _setTurnoverDOM(turnoverData);
+      // 換手率：盤中以即時成交額(億→元)/總市值自算
+      _setTurnoverDOM(todayB>0 ? { turnover:+((todayB*1e8)/70e12*100).toFixed(2) } : null);
       _estimateMktBreakdown(todayB,0);
       _renderMktVolSVG([],0);
       return;
@@ -6994,10 +6992,12 @@ async function loadMarketVolume(){
     }
 
     _renderMktVolSVG(slice20, avgB);
-    // 換手率：以修正後的成交金額(元) / 上市總市值估算（Worker /turnover 同欄位錯位，故前端自算）
-    let _turn = turnoverData;
-    if((!_turn || !(_turn.turnover>0)) && latest?.value>0){
-      _turn = { turnover: +((latest.value)/55e12*100).toFixed(2) };
+    // 換手率：一律用修正後的成交金額(元) / 上市總市值自算
+    // （Worker /turnover 端點欄位錯位會回傳極小值如 0.01%，不可信任，故完全忽略 turnoverData）
+    const TSE_MKTCAP = 70e12;  // 上市總市值約 70 兆（2026 規模）
+    let _turn = null;
+    if(latest?.value>0){
+      _turn = { turnover: +((latest.value)/TSE_MKTCAP*100).toFixed(2) };
     }
     _setTurnoverDOM(_turn);
     _estimateMktBreakdown(todayB, yesterB);
@@ -7011,7 +7011,7 @@ async function loadMarketVolume(){
     sh('mktVolCompare','<span style="color:var(--text3)">暫無即時資料</span>');
     if(chipEl){chipEl.textContent='—';chipEl.className='chip';}
     _renderMktVolSVG([],0);
-    _setTurnoverDOM(turnoverData);
+    _setTurnoverDOM(null);
   }
 }
 
