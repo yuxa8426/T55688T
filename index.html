@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202606011200">
+<meta name="app-version" content="202606011400">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1780300800 -->
+<!-- build:1780308000 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -299,6 +299,87 @@
           <div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">
             載入中…
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 大盤做空時機監控 ═══ -->
+  <div style="margin:0 16px 14px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px 10px">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:30px;height:30px;border-radius:8px;background:rgba(0,212,170,.12);
+                      display:flex;align-items:center;justify-content:center;font-size:15px">↘</div>
+          <div>
+            <div style="font-size:13px;font-weight:700">大盤做空時機監控</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px" id="stUpdTime">載入中…</div>
+          </div>
+        </div>
+        <button onclick="refreshShortTimer(true)"
+          style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;
+                 color:var(--text3);font-size:13px;cursor:pointer;padding:4px 9px;font-family:inherit">↻</button>
+      </div>
+      <!-- 做空時機評分（依大盤即時資料自動判定）-->
+      <div style="padding:0 14px 12px" id="stMonitorBody">
+        <div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">資料載入中…</div>
+      </div>
+      <!-- 空單損益 / 停損試算 -->
+      <div style="border-top:1px solid var(--border);padding:12px 14px 14px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px">📐 空單損益 / 停損試算</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:2">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">商品</div>
+            <select id="stProd" onchange="_stRerangeStop(true);_stCalcUpdate()"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                     color:var(--text);font-size:12px;padding:8px;font-family:inherit">
+              <option value="TX">大型台指期 (200元/點)</option>
+              <option value="MTX" selected>小型台指期 (50元/點)</option>
+              <option value="TMF">微型台指期 (10元/點)</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">口數</div>
+            <input id="stLots" type="number" min="1" value="1" inputmode="numeric" oninput="_stCalcUpdate()"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                     color:var(--text);font-size:13px;padding:8px;font-family:inherit">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">放空進場價</div>
+            <input id="stEntry" type="number" inputmode="numeric" placeholder="進場指數"
+              oninput="_stCalc.userEntry=true;_stRerangeStop(false);_stCalcUpdate()"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                     color:var(--text);font-size:14px;font-weight:700;padding:8px;font-family:inherit">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">目前指數 <span style="color:var(--green)">●即時</span></div>
+            <input id="stCur" type="number" inputmode="numeric"
+              oninput="_stCalc.userCur=true;_stCalcUpdate()"
+              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                     color:var(--text);font-size:14px;font-weight:700;padding:8px;font-family:inherit">
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="font-size:10px;color:var(--text3)">停損點（空單停損設在進場之上）</span>
+          <span style="font-size:14px;font-weight:800" id="stStopVal">—</span>
+        </div>
+        <input id="stStop" type="range" min="0" max="100" value="50"
+          oninput="_stCalc.userStop=true;_stCalcUpdate()"
+          style="width:100%;accent-color:var(--red)">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">目前未實現損益</div>
+            <div style="font-size:16px;font-weight:800" id="stUnreal">—</div>
+          </div>
+          <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 10px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">觸及停損總損益</div>
+            <div style="font-size:16px;font-weight:800" id="stStopLoss">—</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:8px" id="stCalcNote">
+          輸入放空進場價即可試算（目前指數已自動帶入大盤即時報價）。本工具僅供風控試算，非投資建議。
         </div>
       </div>
     </div>
@@ -18404,6 +18485,294 @@ function updatePulse(instData, indexData, txfData){
   if(chipsEl) chipsEl.innerHTML   = chips.map(([t,c])=>`<span class="chip ${c}">${t}</span>`).join('');
 }
 
+// ════════════════════════════════════════════════════
+// 大盤做空時機監控（每5分鐘）+ 空單損益試算
+// 技術面（①②③④）盤中即時；籌碼/期貨（⑤）為盤後資料
+// ════════════════════════════════════════════════════
+const ST_PV        = { TX:200, MTX:50, TMF:10 };   // 台指期每點價值（元）
+let _stTimer       = null;
+let _stDailyCache  = null;   // 盤後型資料快取（每日只變一次）
+let _stCalc        = { userEntry:false, userCur:false, userStop:false, _liveIdx:null };
+
+function _stTodayStr(){
+  return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'})).toISOString().slice(0,10);
+}
+function _stMean(a){ return a.length ? a.reduce((s,x)=>s+x,0)/a.length : 0; }
+
+// 載入盤後型資料（^TWII 日K、成交值、外資金額、期貨外資未平倉），快取60分鐘/換日
+async function _stLoadDaily(force){
+  const today = _stTodayStr();
+  if(!force && _stDailyCache && _stDailyCache.day===today && (Date.now()-_stDailyCache.stamp < 60*60*1000))
+    return _stDailyCache;
+
+  const out = { day:today, stamp:Date.now(), closes:[], highs:[], lows:[], volRows:[], foreignDays:[], futDays:[] };
+
+  // 1) 加權指數 6 個月日K（算 MA20/MA60/60日高）
+  try{
+    if(API){
+      const r = await fetchWithTimeout(`${API}/intraday?symbol=${encodeURIComponent('^TWII')}&range=6mo&interval=1d`, 12000);
+      if(r.ok){
+        const res = (await r.json())?.chart?.result?.[0];
+        const ts  = res?.timestamp||[];
+        const q   = res?.indicators?.quote?.[0]||{};
+        for(let i=0;i<ts.length;i++){
+          const c=q.close?.[i]; if(c==null||isNaN(c)) continue;
+          out.closes.push(+c);
+          out.highs.push(q.high?.[i]!=null?+q.high[i]:+c);
+          out.lows.push(q.low?.[i]!=null?+q.low[i]:+c);
+        }
+      }
+    }
+  }catch(e){ console.warn('[ShortTimer] twii daily:', e.message); }
+
+  // 2) 大盤成交值（量價背離用）
+  try{
+    if(API){
+      const r = await fetchWithTimeout(`${API}/marketvol`, 10000);
+      if(r.ok){ const j=await r.json(); out.volRows=(j?.rows||[]).filter(x=>x&&x.value>0); }
+    }
+  }catch(e){ console.warn('[ShortTimer] marketvol:', e.message); }
+
+  // 3) 外資全市場買賣超金額（元，近14日）
+  try{
+    const rows = await fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
+      start_date:nDaysAgo(16), end_date:nDaysAgo(0), _optional:true });
+    if(rows && rows.length){
+      const byDate = {};
+      for(const r of rows){
+        const nm  = (r.name||r.institutional_investors||'').toLowerCase();
+        const net = parseFloat(r.buy||0)-parseFloat(r.sell||0);
+        if(nm.includes('外資')||nm.includes('foreign')||nm.includes('fini'))
+          byDate[r.date]=(byDate[r.date]||0)+net;
+      }
+      out.foreignDays = Object.entries(byDate).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>({date:d,net:v}));
+    }
+  }catch(e){ console.warn('[ShortTimer] foreign:', e.message); }
+
+  // 4) 期貨外資 TX 淨未平倉口數（近14日，判斷增空）
+  try{
+    const rows = await fmFetch({ dataset:'TaiwanFuturesInstitutionalInvestors', data_id:'TX',
+      start_date:nDaysAgo(16), end_date:nDaysAgo(0), _optional:true });
+    if(rows && rows.length){
+      const byDate = {};
+      for(const r of rows){
+        const nm = (r.institutional_investors||r.name||'');
+        if(nm.includes('外資')){
+          const net=(parseInt(r.long_open_interest_balance_volume)||0)-(parseInt(r.short_open_interest_balance_volume)||0);
+          byDate[r.date]=net;
+        }
+      }
+      out.futDays = Object.entries(byDate).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>({date:d,net:v}));
+    }
+  }catch(e){ console.warn('[ShortTimer] futures:', e.message); }
+
+  _stDailyCache = out;
+  return out;
+}
+
+// 即時大盤指數（優先用已修正的加權指數1D最後一點）
+function _stCurrentIndex(){
+  try{
+    const d=(typeof _taiexData!=='undefined')?_taiexData?.['1D']:null;
+    if(d?.pts?.length) return d.pts[d.pts.length-1];
+  }catch(e){}
+  if(_stDailyCache?.closes?.length) return _stDailyCache.closes[_stDailyCache.closes.length-1];
+  return null;
+}
+
+// 計算 5 個做空訊號與總分
+function _stCompute(d){
+  const closes=d.closes, highs=d.highs, lows=d.lows;
+  if(closes.length < 60) return null;
+  const cLive = _stCurrentIndex() || closes[closes.length-1];
+  const ma20  = _stMean(closes.slice(-20));
+  const ma60  = _stMean(closes.slice(-60));
+  const hi60  = Math.max(...highs.slice(-60));
+  const sig=[]; let score=0;
+
+  // ① 指數高檔 + 量價背離（量縮）
+  const newHigh = cLive >= hi60*0.999;
+  let volShrink=false, volRatio=null;
+  if(d.volRows.length>=21){
+    const vals=d.volRows.map(r=>r.value);
+    const latest=vals[vals.length-1], avg20=_stMean(vals.slice(-21,-1));
+    if(avg20>0){ volRatio=latest/avg20; volShrink = volRatio < 0.85; }
+  }
+  const s1 = newHigh && volShrink;
+  if(s1) score+=25;
+  sig.push({k:'①',t:'指數高檔 + 量價背離(量縮)',pts:25,on:s1,live:true,
+    note:(newHigh?'指數處60日高檔':'未創新高')+(volRatio!=null?`，近期量能 ${(volRatio*100).toFixed(0)}% 近20日均量`:'')});
+
+  // ② 頭部型態確立（近似偵測：自高點回落 + 跌破前波低 + 在月線下）
+  const peak25 = Math.max(...closes.slice(-25));
+  const drop   = peak25>0 ? (peak25-cLive)/peak25*100 : 0;
+  const prevLow= Math.min(...lows.slice(-15,-1));
+  const s2 = (drop>3) && (cLive<prevLow) && (cLive<ma20);
+  if(s2) score+=25;
+  sig.push({k:'②',t:'頭部型態確立',pts:25,on:s2,live:true,approx:true,
+    note:`自高點回落 ${drop.toFixed(1)}%`+(cLive<prevLow?'、已跌破前波低':'、未破前波低')});
+
+  // ③ 有效跌破月線(20MA)且站不回
+  const ma20prev=_stMean(closes.slice(-21,-1));
+  const s3=(cLive<ma20)&&(closes[closes.length-1]<ma20prev);
+  if(s3) score+=20;
+  sig.push({k:'③',t:'有效跌破月線(20MA)站不回',pts:20,on:s3,live:true,
+    note:`MA20 ${ma20.toFixed(0)}　現 ${Math.round(cLive).toLocaleString()}`});
+
+  // ④ 有效跌破季線(60MA)
+  const s4=cLive<ma60*0.999;
+  if(s4) score+=15;
+  sig.push({k:'④',t:'有效跌破季線(60MA)',pts:15,on:s4,live:true,
+    note:`MA60 ${ma60.toFixed(0)}　現 ${Math.round(cLive).toLocaleString()}`});
+
+  // ⑤ 外資連續大幅賣超 + 期貨增空（盤後資料）
+  let sellStreak=0, foreignLatest=null, foreignDate='';
+  if(d.foreignDays.length){
+    for(let i=d.foreignDays.length-1;i>=0;i--){ if(d.foreignDays[i].net<0) sellStreak++; else break; }
+    foreignLatest=d.foreignDays[d.foreignDays.length-1].net;
+    foreignDate  =d.foreignDays[d.foreignDays.length-1].date;
+  }
+  let futIncShort=false, futNet=null;
+  if(d.futDays.length>=2){
+    const a=d.futDays[d.futDays.length-1].net, b=d.futDays[d.futDays.length-2].net;
+    futNet=a; futIncShort=(a<b)||(a<0);   // 淨空增加 或 已站淨空方
+  }
+  const bigSell = sellStreak>=2 && foreignLatest!=null && foreignLatest < -5e9;  // 連2日且最新賣超>50億
+  const s5 = bigSell && futIncShort;
+  if(s5) score+=15;
+  sig.push({k:'⑤',t:'外資連續大幅賣超 + 期貨增空',pts:15,on:s5,live:false,dataDate:foreignDate,
+    note:(sellStreak>=1?`外資連${sellStreak}日賣超`:'外資未連續賣超')
+      +(foreignLatest!=null?`(最新 ${(foreignLatest/1e8).toFixed(0)} 億)`:'')
+      +(futNet!=null?`、期貨外資淨${futNet>=0?'多':'空'} ${Math.abs(futNet).toLocaleString()} 口`:'')});
+
+  // 綜合評語
+  let verdict, vColor;
+  if(score>=70){ verdict='做空訊號明確，空方條件成熟'; vColor='var(--green)'; }
+  else if(score>=45){ verdict='偏空訊號浮現，宜分批並嚴控風險'; vColor='var(--gold)'; }
+  else if(score>=20){ verdict='訊號零星，不宜重倉逆勢'; vColor='var(--gold)'; }
+  else { verdict='做空訊號不足，逆勢放空風險極高'; vColor='var(--red)'; }
+
+  return { score, sig, verdict, vColor, cLive, ma20, ma60 };
+}
+
+function _stRender(res){
+  const box=document.getElementById('stMonitorBody');
+  if(!box) return;
+  if(!res){
+    box.innerHTML='<div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">大盤資料暫時無法取得，稍後重試</div>';
+    return;
+  }
+  const rows=res.sig.map(s=>{
+    const dot = s.on ? '✔' : '○';
+    const tag = s.live
+      ? '<span style="font-size:9px;color:var(--text3)">即時</span>'
+      : `<span style="font-size:9px;color:var(--gold)">盤後${s.dataDate?'·'+s.dataDate.slice(5):''}</span>`;
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+      <span style="color:${s.on?'var(--green)':'var(--text3)'};font-size:13px;flex-shrink:0;width:14px;text-align:center">${dot}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:${s.on?'var(--text)':'var(--text2)'}">${s.k} ${s.t}
+          <span style="font-size:10px;color:var(--text3)">(${s.pts}分)</span>
+          ${s.approx?'<span style="font-size:9px;color:var(--gold)">近似</span>':''}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.note||''}　${tag}</div>
+      </div></div>`;
+  }).join('');
+  const pct=Math.max(0,Math.min(100,res.score));
+  box.innerHTML = `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">勾選＝目前已出現的訊號（依大盤即時資料自動判定）</div>
+    ${rows}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px">
+      <span style="font-size:12px;color:var(--text2)">做空訊號分數</span>
+      <span style="font-size:28px;font-weight:800;color:${res.vColor}">${res.score}</span>
+    </div>
+    <div style="height:7px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:5px">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--gold),${res.vColor});transition:width .6s"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:${res.vColor};margin-top:8px">${res.verdict}</div>`;
+
+  _stSyncCalcCurrent(res.cLive);
+}
+
+// 把即時指數帶入試算機（使用者未手動修改時才覆蓋）
+function _stSyncCalcCurrent(cLive){
+  if(cLive==null) return;
+  _stCalc._liveIdx=Math.round(cLive);
+  const curEl=document.getElementById('stCur');
+  if(curEl && !_stCalc.userCur) curEl.value=Math.round(cLive);
+  const entryEl=document.getElementById('stEntry');
+  if(entryEl && !_stCalc.userEntry && !entryEl.value) entryEl.value=Math.round(cLive);
+  _stRerangeStop(false);
+  _stCalcUpdate();
+}
+
+// 依進場價/現價動態設定停損 slider 範圍（空單停損在進場之上）
+function _stRerangeStop(reset){
+  const s=document.getElementById('stStop');
+  if(!s) return;
+  const entry=parseFloat(document.getElementById('stEntry')?.value)||0;
+  const cur  =parseFloat(document.getElementById('stCur')?.value)||entry;
+  if(!entry){ return; }
+  const min=Math.round(entry);
+  const max=Math.round(entry+Math.max(3000,(Math.max(cur,entry)-entry)*1.5+1000));
+  s.min=min; s.max=max; s.step=10;
+  if(reset || !s.value || +s.value<min || +s.value>max){
+    const base = cur>entry ? cur : entry+500;
+    s.value=Math.min(max,Math.max(min,Math.ceil(base/10)*10));
+  }
+}
+
+// 試算更新
+function _stCalcUpdate(){
+  const prod=document.getElementById('stProd')?.value||'MTX';
+  const pv=ST_PV[prod]||50;
+  const lots=Math.max(1,parseInt(document.getElementById('stLots')?.value)||1);
+  const entry=parseFloat(document.getElementById('stEntry')?.value)||0;
+  const cur  =parseFloat(document.getElementById('stCur')?.value)||0;
+  const stop =parseFloat(document.getElementById('stStop')?.value)||0;
+
+  const stopValEl=document.getElementById('stStopVal');
+  if(stopValEl) stopValEl.textContent = stop? Math.round(stop).toLocaleString():'—';
+
+  const fmt = v => (v>=0?'+':'') + Math.round(v).toLocaleString('zh-TW') + ' 元';
+  const ur=document.getElementById('stUnreal');
+  const sl=document.getElementById('stStopLoss');
+  const note=document.getElementById('stCalcNote');
+
+  if(!entry || !cur){
+    if(ur){ ur.textContent='—'; ur.style.color='var(--text2)'; }
+    if(sl){ sl.textContent='—'; sl.style.color='var(--text2)'; }
+    if(note) note.textContent='輸入放空進場價即可試算（目前指數已自動帶入大盤即時報價）。本工具僅供風控試算，非投資建議。';
+    return;
+  }
+  // 空單：價跌＝獲利。損益 = (進場 - 現價) × 點值 × 口數
+  const unreal   = (entry-cur)*pv*lots;
+  const stopLoss = (entry-stop)*pv*lots;
+  const adverse  = cur-entry;     // >0 表示空單目前逆向（虧損）
+  const stopDist = stop-entry;
+  // 台股配色：紅＝獲利(正)、綠＝虧損(負)
+  if(ur){ ur.textContent=fmt(unreal);   ur.style.color = unreal>=0?'var(--red)':'var(--green)'; }
+  if(sl){ sl.textContent=fmt(stopLoss); sl.style.color = stopLoss>=0?'var(--red)':'var(--green)'; }
+  if(note){
+    note.textContent = `空單目前${adverse>=0?'逆向':'順向'} ${Math.abs(Math.round(adverse)).toLocaleString()} 點，停損距進場 ${Math.abs(Math.round(stopDist)).toLocaleString()} 點。本工具僅供風控試算，非投資建議。`;
+  }
+}
+
+// 主刷新（盤中5分鐘、盤外30分鐘）
+async function refreshShortTimer(force){
+  const box=document.getElementById('stMonitorBody');
+  if(!box) return;   // 不在總覽頁就不跑
+  try{
+    const d=await _stLoadDaily(!!force);
+    _stRender(_stCompute(d));
+    const tEl=document.getElementById('stUpdTime');
+    if(tEl) tEl.textContent = (typeof twTime==='function'?twTime():'') + ' 更新';
+  }catch(e){ console.warn('[ShortTimer]', e.message); }
+  finally{
+    clearTimeout(_stTimer);
+    const live=(typeof _isTradingHour==='function')&&_isTradingHour();
+    _stTimer=setTimeout(()=>refreshShortTimer(false), live? 5*60*1000 : 30*60*1000);
+  }
+}
+
 let _pulseTimer = null;
 async function refreshPulse(){
   clearTimeout(_pulseTimer);
@@ -18661,6 +19030,9 @@ window.addEventListener('load', async ()=>{
 
   // 第 5 波：趨勢股（3秒後）
   setTimeout(()=>refreshTrendStocks(), 3000);
+
+  // 第 5.5 波：大盤做空時機監控（800ms 後啟動，之後自動每5分鐘刷新）
+  setTimeout(()=>refreshShortTimer(true), 800);
 
   // 第 6 波：累積戰績（2秒後）
   setTimeout(()=>renderBattleBanner(), 2000);
