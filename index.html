@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202606012000">
+<meta name="app-version" content="202606020800">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1780329600 -->
+<!-- build:1780387200 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -12650,6 +12650,30 @@ async function loadDailyScan(){
   }
 }
 
+// 計算某日期(YYYY-MM-DD)距今落後幾個「交易日」（粗略跳過週末，不含國定假日）
+// 回傳 0=最近交易日(今日或最近一個工作日)、≥1=落後
+function _tradingDaysBehind(dateStr){
+  if(!dateStr) return 0;
+  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
+  const data = new Date(dateStr+'T00:00:00+08:00');
+  if(isNaN(data)) return 0;
+  // 今日最近的「應有交易日」：若今日為週末，回推到上週五
+  let ref = new Date(tw);
+  ref.setHours(0,0,0,0);
+  // 盤後資料約 15:00 後才有今日，盤中/盤前則最新應為前一交易日
+  const afterClose = tw.getHours() > 15 || (tw.getHours()===15 && tw.getMinutes()>=30);
+  if(!afterClose) ref.setDate(ref.getDate()-1);
+  // ref 落在週末 → 回推至週五
+  while(ref.getDay()===0 || ref.getDay()===6) ref.setDate(ref.getDate()-1);
+  // 計算 data 到 ref 之間的交易日數
+  let count=0; const cur=new Date(data); cur.setHours(0,0,0,0);
+  while(cur < ref){
+    cur.setDate(cur.getDate()+1);
+    if(cur.getDay()!==0 && cur.getDay()!==6) count++;
+  }
+  return count;
+}
+
 function renderDailyScan(data, tab){
   const list      = document.getElementById('scanTopList');
   const dateEl    = document.getElementById('scanResultDate');
@@ -12658,9 +12682,19 @@ function renderDailyScan(data, tab){
   if(!list || !data) return;
 
   if(dateEl){
-    // 顯示「資料日期」（實際交易日，可能比掃描日早一天）
+    // 顯示「資料日期」並判斷是否為最近交易日（停更時醒目警示，避免誤認為今日股價）
     const dd = data.dataDate || data.date;
-    dateEl.textContent = dd ? '資料日 ' + dd.slice(5) : '';
+    if(dd){
+      const staleDays = _tradingDaysBehind(dd);
+      if(staleDays >= 1){
+        // 資料落後 ≥1 個交易日 → 紅字警示
+        dateEl.innerHTML = `<span style="color:var(--red);font-weight:700">⚠️ ${dd.slice(5)} 收盤（非今日）</span>`;
+      } else {
+        dateEl.textContent = '資料日 ' + dd.slice(5) + ' 收盤';
+      }
+    } else {
+      dateEl.textContent = '';
+    }
   }
   if(insightEl && insightTx && data.aiInsight?.market){
     insightTx.textContent = data.aiInsight.market;
