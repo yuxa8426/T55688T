@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="app-version" content="202606020800">
+<meta name="app-version" content="202605180736">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- build:1780387200 -->
+<!-- build:1777642240 -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>股析 StockAI · 台股 AI 智能分析</title>
 <meta name="description" content="股析 StockAI — 台股 AI 智能分析平台。即時法人籌碼、策略選股、VIX 恐慌指數、趨勢股排行。免費使用，數據來源台灣期交所與 TWSE。">
@@ -247,7 +247,7 @@
         <div style="font-size:13px;font-weight:700" id="pmTwse">—</div>
       </div>
       <div style="flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.07)">
-        <div style="font-size:9px;color:rgba(245,200,66,.7);margin-bottom:2px">台指期盤後</div>
+        <div style="font-size:9px;color:rgba(245,200,66,.7);margin-bottom:2px">台指期</div>
         <div style="font-size:13px;font-weight:700" id="pmTxf">—</div>
         <div style="font-size:9px;margin-top:2px">
           <a href="https://www.taifex.com.tw/cht/3/futContractsDate" target="_blank"
@@ -299,87 +299,6 @@
           <div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">
             載入中…
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ 大盤做空時機監控 ═══ -->
-  <div style="margin:0 16px 14px">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px 10px">
-        <div style="display:flex;align-items:center;gap:9px">
-          <div style="width:30px;height:30px;border-radius:8px;background:rgba(0,212,170,.12);
-                      display:flex;align-items:center;justify-content:center;font-size:15px">↘</div>
-          <div>
-            <div style="font-size:13px;font-weight:700">大盤做空時機監控</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px" id="stUpdTime">載入中…</div>
-          </div>
-        </div>
-        <button onclick="refreshShortTimer(true)"
-          style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;
-                 color:var(--text3);font-size:13px;cursor:pointer;padding:4px 9px;font-family:inherit">↻</button>
-      </div>
-      <!-- 做空時機評分（依大盤即時資料自動判定）-->
-      <div style="padding:0 14px 12px" id="stMonitorBody">
-        <div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">資料載入中…</div>
-      </div>
-      <!-- 空單損益 / 停損試算 -->
-      <div style="border-top:1px solid var(--border);padding:12px 14px 14px">
-        <div style="font-size:12px;font-weight:700;margin-bottom:10px">📐 空單損益 / 停損試算</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <div style="flex:2">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">商品</div>
-            <select id="stProd" onchange="_stRerangeStop(true);_stCalcUpdate()"
-              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
-                     color:var(--text);font-size:12px;padding:8px;font-family:inherit">
-              <option value="TX">大型台指期 (200元/點)</option>
-              <option value="MTX" selected>小型台指期 (50元/點)</option>
-              <option value="TMF">微型台指期 (10元/點)</option>
-            </select>
-          </div>
-          <div style="flex:1">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">口數</div>
-            <input id="stLots" type="number" min="1" value="1" inputmode="numeric" oninput="_stCalcUpdate()"
-              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
-                     color:var(--text);font-size:13px;padding:8px;font-family:inherit">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <div style="flex:1">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">放空進場價</div>
-            <input id="stEntry" type="number" inputmode="numeric" placeholder="進場指數"
-              oninput="_stCalc.userEntry=true;_stRerangeStop(false);_stCalcUpdate()"
-              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
-                     color:var(--text);font-size:14px;font-weight:700;padding:8px;font-family:inherit">
-          </div>
-          <div style="flex:1">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">目前指數 <span style="color:var(--green)">●即時</span></div>
-            <input id="stCur" type="number" inputmode="numeric"
-              oninput="_stCalc.userCur=true;_stCalcUpdate()"
-              style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
-                     color:var(--text);font-size:14px;font-weight:700;padding:8px;font-family:inherit">
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="font-size:10px;color:var(--text3)">停損點（空單停損設在進場之上）</span>
-          <span style="font-size:14px;font-weight:800" id="stStopVal">—</span>
-        </div>
-        <input id="stStop" type="range" min="0" max="100" value="50"
-          oninput="_stCalc.userStop=true;_stCalcUpdate()"
-          style="width:100%;accent-color:var(--red)">
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 10px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">目前未實現損益</div>
-            <div style="font-size:16px;font-weight:800" id="stUnreal">—</div>
-          </div>
-          <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 10px">
-            <div style="font-size:10px;color:var(--text3);margin-bottom:3px">觸及停損總損益</div>
-            <div style="font-size:16px;font-weight:800" id="stStopLoss">—</div>
-          </div>
-        </div>
-        <div style="font-size:10px;color:var(--text3);line-height:1.5;margin-top:8px" id="stCalcNote">
-          輸入放空進場價即可試算（目前指數已自動帶入大盤即時報價）。本工具僅供風控試算，非投資建議。
         </div>
       </div>
     </div>
@@ -6858,77 +6777,6 @@ function renderVolBars(isUp, histData, period){
 // 來源1：Worker /marketvol → TWSE FMTQIK（每日歷史）
 // 來源2：Worker /marketvol → TWSE MIS（盤中即時）
 // ════════════════════════════════════════════════════
-// ── 原始 FMTQIK 解析（修正 Worker 欄位錯位的備援）──────────
-// TWSE FMTQIK 欄位：[0]日期 [1]成交股數 [2]成交金額 [3]成交筆數 [4]發行量加權股價指數 [5]漲跌點數
-// 為避免欄位順序爭議，成交金額取 [1][2][3] 三欄數值中最大者（金額恆大於股數、筆數）
-function _rocToISO(d){
-  if(d==null) return '';
-  d = String(d).trim();
-  let m = d.match(/^(\d{2,3})\/(\d{1,2})\/(\d{1,2})$/);        // 民國年 114/05/29
-  if(m){ const y=(+m[1])+((+m[1]<1911)?1911:0);
-    return `${y}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`; }
-  m = d.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);        // 西元 2026-05-29 / 2026/05/29
-  if(m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
-  m = d.match(/^(\d{4})(\d{2})(\d{2})$/);                       // 純數字西元 20260529
-  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = d.match(/^(\d{3})(\d{2})(\d{2})$/);                       // 純數字民國 1150529
-  if(m){ const y=(+m[1])+1911; return `${y}-${m[2]}-${m[3]}`; }
-  return '';   // 無法解析 → 回空（呼叫端會丟棄該列，不會塌成今天）
-}
-async function _fetchFMTQIKrawRows(){
-  if(!API) return [];
-  const tw=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  // 多抓近 3 個月，確保湊得到 20 個交易日
-  const months=[0,1,2].map(i=>{const dt=new Date(tw.getFullYear(),tw.getMonth()-i,1);
-    return `${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}01`;});
-  const merged={};
-  await Promise.all(months.map(async ds=>{
-    try{
-      const r=await fetchWithTimeout(
-        `${API}/twse?path=${encodeURIComponent('rwd/zh/afterTrading/FMTQIK')}&response=json&date=${ds}`, 12000);
-      if(!r.ok) return;
-      const j=await r.json();
-      const data=j?.data||j?.Data||[];
-      for(const row of (Array.isArray(data)?data:[])){
-        if(!Array.isArray(row)||row.length<5) continue;
-        const date=_rocToISO(row[0]);
-        if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;   // 解析失敗的列直接丟棄
-        // 成交金額：取 [1][2][3] 三欄最大值（避免欄位順序爭議；金額恆大於股數、筆數）
-        const nums=[1,2,3].map(i=>parseFloat(String(row[i]||'0').replace(/,/g,''))||0);
-        const value=Math.max(...nums);
-        let taiex=0;
-        for(let i=4;i<row.length;i++){
-          const v=parseFloat(String(row[i]||'0').replace(/,/g,''))||0;
-          if(v>=3000&&v<=60000){ taiex=v; break; }
-        }
-        if(value>1e8) merged[date]={date,value,taiex};   // 單日成交額需 >1億（過濾異常列）
-      }
-    }catch(e){ console.warn('[FMTQIK raw]',ds,e.message); }
-  }));
-  const out=Object.values(merged).sort((a,b)=>a.date<b.date?-1:1);
-  console.log(`[FMTQIK raw] 取得 ${out.length} 個交易日`);
-  return out;
-}
-// 取得大盤成交值序列：優先 Worker /marketvol（需多日且金額合理），否則原始 FMTQIK
-async function _getMarketVolRows(){
-  try{
-    if(API){
-      const r=await fetchWithTimeout(`${API}/marketvol`,12000);
-      if(r.ok){
-        const j=await r.json();
-        if(j.source==='TWSE_FMTQIK' && j.rows?.length>=5){
-          const uniqDates=new Set(j.rows.map(x=>x.date)).size;
-          const sorted=[...j.rows.map(x=>x.value||0)].sort((a,b)=>a-b);
-          const med=sorted[Math.floor(sorted.length/2)]||0;
-          // 需：多日(≥5)、日期不重複、金額中位數≥100億 才採信 Worker
-          if(uniqDates>=5 && med/1e8>=100) return j.rows;
-        }
-      }
-    }
-  }catch(e){}
-  return await _fetchFMTQIKrawRows();
-}
-
 async function loadMarketVolume(){
   const se=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=val;};
   const sh=(id,val)=>{const e=document.getElementById(id);if(e)e.innerHTML=val;};
@@ -6938,16 +6786,23 @@ async function loadMarketVolume(){
   const twNow=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
   const nowStr=String(twNow.getHours()).padStart(2,'0')+':'+String(twNow.getMinutes()).padStart(2,'0');
 
-  // 抓 Worker 多月成交量（換手率改由前端依成交金額自算，不再請求壞掉的 /turnover）
-  const volRes = await fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null);
+  // 並行抓：Worker多月成交量 + 換手率
+  const [volRes, turnoverData] = await Promise.all([
+    fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null),
+    _fetchMarketTurnover().catch(()=>null),
+  ]);
 
   try{
     let rows=[];
 
-    let json=null;
-    if(volRes?.ok){ try{ json = await volRes.json(); }catch(e){} }
+    if(!volRes?.ok) throw new Error('Worker HTTP '+(volRes?.status||'err'));
+    const json = await volRes.json();
 
-    if(json && json.source==='TWSE_MIS' && json.today){
+    if(json.source==='TWSE_FMTQIK' && json.rows?.length>=1){
+      if(noteEl) noteEl.style.display='none';
+      rows = json.rows;
+
+    } else if(json.source==='TWSE_MIS' && json.today){
       // 盤中即時
       const todayB=Math.round((json.today.value||0)/10000);
       if(bigEl) bigEl.innerHTML=`${todayB>0?todayB.toLocaleString():'—'} <span>億元</span>`;
@@ -6955,43 +6810,27 @@ async function loadMarketVolume(){
       if(chipEl){chipEl.textContent='盤中';chipEl.className='chip';}
       se('mktVolUpdateTime',`盤中 · ${nowStr}`);
       se('mktVolYest','—億'); se('mktVolAvg','—億');
-      // 換手率：盤中以即時成交額(億→元)/總市值自算
-      _setTurnoverDOM(todayB>0 ? { turnover:+((todayB*1e8)/70e12*100).toFixed(2) } : null);
+      _setTurnoverDOM(turnoverData);
       _estimateMktBreakdown(todayB,0);
       _renderMktVolSVG([],0);
       return;
+
+    } else {
+      throw new Error('no valid data from Worker');
     }
 
-    if(json && json.source==='TWSE_FMTQIK' && json.rows?.length>=1){
-      rows = json.rows;
-      // 驗證：①金額需合理（避免欄位錯位把筆數當金額）②日期需多日不重複（避免昨日=今日、bar全平）
-      const _sorted=[...rows.map(r=>r.value||0)].sort((a,b)=>a-b);
-      const _med=_sorted[Math.floor(_sorted.length/2)]||0;
-      const _uniqDates=new Set(rows.map(r=>r.date)).size;
-      if(_med/1e8 < 100 || _uniqDates < 5) rows = [];
-    }
-    // Worker 無資料 / 非 FMTQIK / 金額異常 / 日期重複 → 直接抓原始 FMTQIK
-    if(!rows.length) rows = await _fetchFMTQIKrawRows();
-    // 保底：raw 仍不足多日，但 Worker 原本金額合理（只是日期重複）→ 退而用 Worker rows
-    if((!rows.length || new Set(rows.map(r=>r.date)).size < 2)
-        && json?.source==='TWSE_FMTQIK' && json.rows?.length>=2){
-      const _med=[...json.rows.map(r=>r.value||0)].sort((a,b)=>a-b)[Math.floor(json.rows.length/2)]||0;
-      if(_med/1e8>=100) rows = json.rows;
-    }
     if(!rows.length) throw new Error('rows empty');
-
-    // 同日去重保險（保留最後一筆），並依日期排序
-    {
-      const _byDate={};
-      for(const r of rows){ if(r&&r.date) _byDate[r.date]=r; }
-      rows=Object.values(_byDate).sort((a,b)=>a.date<b.date?-1:1);
-    }
-    if(noteEl) noteEl.style.display='none';
 
     const slice20 = rows.slice(-20);
     const latest  = slice20[slice20.length-1];
     const prev    = slice20[slice20.length-2];
-    const toB     = v => Math.round((v||0)/1e8);  // value 單位：元 → 億（/1e8）
+    // 存全域：供上半部加權指數成交量區塊在「今日無盤中量」時 fallback 用
+    try{
+      window._mktVolDaily = slice20.map(r=>({date:r.date, value:r.value, taiex:r.taiex}));
+      // 成交量資料就緒後，重繪一次上半部加權指數圖（補上成交量柱狀）
+      if(typeof _renderTaiexChart === 'function') _renderTaiexChart();
+    }catch(e){}
+    const toB     = v => Math.round((v||0)/1e8);  // Worker value 單位：元 → 億（/1e8）
     const todayB  = toB(latest?.value);
     const yesterB = toB(prev?.value);
     const avgB    = Math.round(slice20.reduce((s,r)=>s+(r.value||0),0)/slice20.length/1e8);
@@ -7002,42 +6841,24 @@ async function loadMarketVolume(){
     // 成交額自適應顯示：≥10000億顯示「X.XX 兆」，否則「XXXX 億」
     const fmtVol = (b) => b >= 10000 ? (b/10000).toFixed(2)+' <span>兆元</span>' : b.toLocaleString()+' <span>億元</span>';
     if(bigEl) bigEl.innerHTML = fmtVol(todayB);
-
-    const hasHistory = slice20.length >= 2 && yesterB > 0;
-    if(hasHistory){
-      sh('mktVolCompare',
-        `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
-        +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
-      se('mktVolYest', yesterB.toLocaleString()+'億');
-      se('mktVolAvg',  avgB.toLocaleString()+'億');
-    } else {
-      // 只有當日資料，無歷史可比
-      sh('mktVolCompare','<span style="color:var(--text3)">歷史資料載入中…</span>');
-      se('mktVolYest','—億');
-      se('mktVolAvg', avgB>0 ? avgB.toLocaleString()+'億' : '—億');
-    }
+    sh('mktVolCompare',
+      `較昨日 <strong class="${vsYest>=0?'up':'dn'}">${vsYest>=0?'+':''}${vsYest.toFixed(1)}%</strong>`
+      +`　較月均 ${vsAvg>=0?'+':''}${vsAvg.toFixed(1)}%`);
+    se('mktVolYest', yesterB+'億');
+    se('mktVolAvg',  avgB+'億');
 
     if(chipEl){
-      if(!hasHistory){ chipEl.textContent='—'; chipEl.className='chip'; }
-      else if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
+      if(ratio>=1.5){chipEl.textContent='爆量';chipEl.className='chip up';}
       else if(ratio>=1.1){chipEl.textContent='放量';chipEl.className='chip up';}
       else if(ratio<=0.7){chipEl.textContent='縮量';chipEl.className='chip dn';}
       else{chipEl.textContent='正常';chipEl.className='chip';}
     }
 
-    // bar 圖：至少 2 個不同交易日才畫（避免單筆撐滿成全平色塊）
-    _renderMktVolSVG(slice20.length>=2 ? slice20 : [], avgB);
-    // 換手率：一律用修正後的成交金額(元) / 上市總市值自算
-    // （Worker /turnover 端點欄位錯位會回傳極小值如 0.01%，不可信任，故完全忽略 turnoverData）
-    const TSE_MKTCAP = 70e12;  // 上市總市值約 70 兆（2026 規模）
-    let _turn = null;
-    if(latest?.value>0){
-      _turn = { turnover: +((latest.value)/TSE_MKTCAP*100).toFixed(2) };
-    }
-    _setTurnoverDOM(_turn);
+    _renderMktVolSVG(slice20, avgB);
+    _setTurnoverDOM(turnoverData);
     _estimateMktBreakdown(todayB, yesterB);
     se('mktVolUpdateTime', (latest?.date ? latest.date.slice(5,10).replace('-','/')+' 收盤' : twTime()+' 更新'));
-    _runMktVolAI(slice20, todayB, yesterB, avgB, ratio, _turn);
+    _runMktVolAI(slice20, todayB, yesterB, avgB, ratio, turnoverData);
 
   }catch(e){
     console.warn('[MktVol]', e.message);
@@ -7046,7 +6867,7 @@ async function loadMarketVolume(){
     sh('mktVolCompare','<span style="color:var(--text3)">暫無即時資料</span>');
     if(chipEl){chipEl.textContent='—';chipEl.className='chip';}
     _renderMktVolSVG([],0);
-    _setTurnoverDOM(null);
+    _setTurnoverDOM(turnoverData);
   }
 }
 
@@ -7166,11 +6987,12 @@ async function _fetchMarketTurnover(){
     if(r.ok){
       const d=await r.json();
       const last=d?.data?.[d.data.length-1];
-      // FMTQIK 欄位：[0]=日期 [1]=成交股數 [2]=成交金額 [3]=成交筆數 [4]=發行量加權股價指數 [5]=漲跌點數
-      // 成交金額取 [1][2][3] 三欄最大值（避免欄位順序爭議；金額恆大於股數、筆數）
-      if(last){
-        const tradeVal=Math.max(...[1,2,3].map(i=>parseFloat(String(last[i]||'0').replace(/,/g,''))||0));
-        // 台灣上市總市值約55兆，換手率≈成交金額(元)/總市值(元)×100；FMTQIK 金額單位為「元」
+      // FMTQIK 欄位：[0]=日期 [1]=成交股數 [2]=成交筆數 [3]=成交金額 [4]=發行量加權股價指數 [5]=漲跌點數
+      // 換手率不在此表，改抓股價成交量統計 TWTB4U
+      if(last&&last[3]){
+        const tradeVal=parseFloat((last[3]||'0').replace(/,/g,''));
+        // 台灣上市總市值約55兆，換手率≈成交金額(元)/總市值(元)×100
+        // FMTQIK 成交金額單位為「元」，直接除總市值，不需×1000
         const mktCap=55e12;
         if(tradeVal>0) return {turnover:+(tradeVal/mktCap*100).toFixed(2)};
       }
@@ -7406,14 +7228,8 @@ async function _taiexTab(period, btn){
 
 async function loadTaiexChart(){
   const loadEl = document.getElementById('taiexChartLoading');
-  // 是否真的在交易時段（台灣 09:00~13:45 平日）
-  const _liveNow = (typeof _isTradingHour === 'function') ? _isTradingHour() : false;
-
-  // 盤中：用 TWSE tse_t00 即時分鐘資料（此時 y 欄位＝當日參考昨收，正確）
-  // ⚠️ 非盤中（盤前/盤後/假日）TWSE tse_t00 的 y 會被重置成「剛結束那場的收盤價」，
-  //    導致 漲跌＝最後一點−y＝0；故非盤中改用 Yahoo ^TWII（提供正確前一交易日收盤）
   try{
-    if(API && _liveNow){
+    if(API){
       const r = await fetchWithTimeout(
         `${API}/intraday?symbol=${encodeURIComponent('tse_t00.tw')}&src=twse`, 10000);
       if(r.ok){
@@ -7425,52 +7241,29 @@ async function loadTaiexChart(){
             times:   body.times||[],
             vol:     body.vol||[],
             prevClose: body.y || body.prevClose || null,
-            isLive:  true,
-            dataDate:null,
           };
+        } else if(body?.chart?.result?.[0]){
+          // Yahoo Finance 格式備援
+          const res = body.chart.result[0];
+          const ts    = res.timestamp||[];
+          const close = res.indicators?.quote?.[0]?.close||[];
+          const vol   = res.indicators?.quote?.[0]?.volume||[];
+          const pts2=[], times2=[], vols2=[];
+          for(let i=0;i<ts.length;i++){
+            if(close[i]==null||isNaN(close[i])) continue;
+            const d=new Date(ts[i]*1000+8*3600000);
+            times2.push(String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'));
+            pts2.push(close[i]);
+            vols2.push(vol[i]||0);
+          }
+          if(pts2.length > 2){
+            const yPrev = res.meta?.chartPreviousClose||0;
+            _taiexData['1D'] = { pts:pts2, times:times2, vol:vols2, prevClose:yPrev||null };
+          }
         }
       }
     }
   }catch(e){}
-
-  // 非盤中，或盤中即時資料抓取失敗 → Yahoo ^TWII 當日資料（含正確 chartPreviousClose）
-  if(!_taiexData['1D']?.pts?.length){
-    try{
-      if(API){
-        const r = await fetchWithTimeout(
-          `${API}/intraday?symbol=${encodeURIComponent('^TWII')}&range=1d&interval=1m`, 10000);
-        if(r.ok){
-          const body = await r.json();
-          const res  = body?.chart?.result?.[0];
-          if(res){
-            const ts    = res.timestamp||[];
-            const close = res.indicators?.quote?.[0]?.close||[];
-            const vol   = res.indicators?.quote?.[0]?.volume||[];
-            const pts2=[], times2=[], vols2=[];
-            let lastTs = 0;
-            for(let i=0;i<ts.length;i++){
-              if(close[i]==null||isNaN(close[i])) continue;
-              const d=new Date(ts[i]*1000+8*3600000);
-              times2.push(String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0'));
-              pts2.push(close[i]);
-              vols2.push(vol[i]||0);
-              lastTs = ts[i];
-            }
-            if(pts2.length > 2){
-              const yPrev = res.meta?.chartPreviousClose||0;
-              const dDate = lastTs ? new Date(lastTs*1000+8*3600000).toISOString().slice(0,10) : null;
-              _taiexData['1D'] = {
-                pts:pts2, times:times2, vol:vols2,
-                prevClose: yPrev||null,
-                isLive:    _liveNow,   // 盤中走到此路徑＝即時備援，仍視為盤中
-                dataDate:  dDate,      // 資料實際交易日（非盤中用於顯示「收盤」）
-              };
-            }
-          }
-        }
-      }
-    }catch(e){}
-  }
 
   // 週/月/季：透過 Worker Yahoo Finance 取 ^TWII 歷史資料
   // 月/季：載入 OHLC K 線資料（Yahoo Finance 日 K）
@@ -7727,21 +7520,12 @@ function _renderTaiexChart(){
   if(_dtEl){
     const _twn = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
     if(_taiexPeriod === '1D'){
-      if(data.isLive){
-        const _hh = String(_twn.getHours()).padStart(2,'0');
-        const _mm = String(_twn.getMinutes()).padStart(2,'0');
-        _dtEl.textContent = _twn.getFullYear()+'/'
-          +String(_twn.getMonth()+1).padStart(2,'0')+'/'
-          +String(_twn.getDate()).padStart(2,'0')
-          +' · 盤中截至 '+_hh+':'+_mm;
-      } else {
-        // 非交易時段：顯示資料實際交易日 + 收盤（避免誤標為盤中）
-        const _d = data.dataDate;
-        _dtEl.textContent = (_d
-          ? _d.replace(/-/g,'/')
-          : _twn.getFullYear()+'/'+String(_twn.getMonth()+1).padStart(2,'0')+'/'+String(_twn.getDate()).padStart(2,'0')
-        ) + ' 收盤';
-      }
+      const _hh = String(_twn.getHours()).padStart(2,'0');
+      const _mm = String(_twn.getMinutes()).padStart(2,'0');
+      _dtEl.textContent = _twn.getFullYear()+'/'
+        +String(_twn.getMonth()+1).padStart(2,'0')+'/'
+        +String(_twn.getDate()).padStart(2,'0')
+        +' · 盤中截至 '+_hh+':'+_mm;
     } else {
       // 月/季：顯示資料區間
       const firstT = times[0]||'', lastT = times[times.length-1]||'';
@@ -7778,11 +7562,35 @@ function _renderTaiexChart(){
   const volAxis=document.getElementById('taiexVolAxis');
   const volLbl =document.getElementById('taiexVolLabel');
   if(volBars && vols.length){
+    // H4 修正：整段成交量全為 0（加權指數即時資料常無量）→ 改用下方「市場成交量」的近20日日成交額補值
+    let volSum = vols.reduce((s,v)=>s+(v||0),0);
+    let _useDailyVol = false, _dailyVolRows = null;
+    if(volSum === 0 && window._mktVolDaily && window._mktVolDaily.length){
+      // 用近20日每日成交額（元）取代分時量，畫日成交量柱狀圖
+      _dailyVolRows = window._mktVolDaily;
+      vols = _dailyVolRows.map(r => r.value || 0);
+      volSum = vols.reduce((s,v)=>s+(v||0),0);
+      _useDailyVol = true;
+    }
+    if(volSum === 0){
+      // 連日成交量都沒有 → 才顯示提示
+      volBars.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;height:40px;color:var(--text3);font-size:11px">暫無成交量資料</div>';
+      if(volLbl){ volLbl.textContent='—'; volLbl.style.color='var(--text3)'; }
+      if(volAxis) volAxis.innerHTML='';
+      return;
+    }
     const maxV=Math.max(...vols,1), lastV=vols[vols.length-1], avgV=vols.reduce((s,v)=>s+v,0)/vols.length;
     if(volLbl){
-      const b = lastV >= 1e8 ? (lastV/1e8).toFixed(0)+'億'
-              : lastV >= 1e4 ? (lastV/1e4).toFixed(0)+'萬'
-              : lastV > 0    ? lastV.toLocaleString() : '—';
+      let b;
+      if(_useDailyVol){
+        // 日成交額（元）：≥1兆顯示兆，否則億
+        const yi = lastV/1e8;
+        b = yi >= 10000 ? (yi/10000).toFixed(2)+'兆' : Math.round(yi)+'億';
+      } else {
+        b = lastV >= 1e8 ? (lastV/1e8).toFixed(0)+'億'
+          : lastV >= 1e4 ? (lastV/1e4).toFixed(0)+'萬'
+          : lastV > 0    ? lastV.toLocaleString() : '—';
+      }
       volLbl.textContent = b;
       volLbl.style.color = lastV>=avgV?'var(--red)':'var(--green)';
     }
@@ -7792,6 +7600,11 @@ function _renderTaiexChart(){
       if(isKLine && data.ohlc?.[i]){
         // K線模式：依開收判斷漲跌
         bg = data.ohlc[i].c >= data.ohlc[i].o ? 'rgba(255,76,106,.7)' : 'rgba(0,212,170,.7)';
+      } else if(_useDailyVol && _dailyVolRows){
+        // 補值模式：依當日加權指數相對前一日漲跌上色
+        const tNow = _dailyVolRows[i]?.taiex || 0;
+        const tPrev = i===0 ? tNow : (_dailyVolRows[i-1]?.taiex || tNow);
+        bg = tNow >= tPrev ? 'rgba(255,76,106,.6)' : 'rgba(0,212,170,.6)';
       } else {
         // 今日折線：依該點相對前一點漲跌
         const isBarUp = i === 0 ? true : pts[i] >= pts[i-1];
@@ -7799,13 +7612,20 @@ function _renderTaiexChart(){
       }
       // 今日最後一根：加亮標示 + 月季K線最後一根補盤中成交量
       if(i === vols.length-1){
-        bg = isKLine
-          ? (data.ohlc?.[i]?.c >= data.ohlc?.[i]?.o ? '#ff4c6a' : '#00d4aa')
-          : (isUp ? '#ff4c6a' : '#00d4aa');
-        // 月季最後一根若成交量為 0（今日盤中），用 1D 累計量替代
-        if(isKLine && v === 0 && _taiexData['1D']?.vol?.length){
-          const intraVol = _taiexData['1D'].vol.reduce((s,x)=>s+(x||0), 0);
-          if(intraVol > 0) vols[i] = intraVol; // 動態補值
+        if(_useDailyVol && _dailyVolRows){
+          // 補值模式：最後一根用當日漲跌加亮
+          const tNow = _dailyVolRows[i]?.taiex || 0;
+          const tPrev = i===0 ? tNow : (_dailyVolRows[i-1]?.taiex || tNow);
+          bg = tNow >= tPrev ? '#ff4c6a' : '#00d4aa';
+        } else {
+          bg = isKLine
+            ? (data.ohlc?.[i]?.c >= data.ohlc?.[i]?.o ? '#ff4c6a' : '#00d4aa')
+            : (isUp ? '#ff4c6a' : '#00d4aa');
+          // 月季最後一根若成交量為 0（今日盤中），用 1D 累計量替代
+          if(isKLine && v === 0 && _taiexData['1D']?.vol?.length){
+            const intraVol = _taiexData['1D'].vol.reduce((s,x)=>s+(x||0), 0);
+            if(intraVol > 0) vols[i] = intraVol; // 動態補值
+          }
         }
       }
       return '<div style="flex:1;background:'+bg+';height:'+h+'px;border-radius:2px 2px 0 0;align-self:flex-end"></div>';
@@ -7817,7 +7637,16 @@ function _renderTaiexChart(){
       volAxis.style.height   = '12px';
       volAxis.innerHTML = '';
       picks2.forEach(i => {
-        const t2 = times[Math.min(i, times.length-1)] || '';
+        // 補值模式用日期(MM/DD)，否則用分時時間
+        let t2;
+        if(_useDailyVol && _dailyVolRows && _dailyVolRows[i]?.date){
+          const dstr = _dailyVolRows[i].date;  // 格式 1150529 或 2026-05-29
+          if(/^\d{7}$/.test(dstr)){ t2 = dstr.slice(3,5)+'/'+dstr.slice(5,7); }  // ROC YYYMMDD
+          else if(dstr.includes('-')){ const p=dstr.split('-'); t2 = p[1]+'/'+p[2]; }
+          else t2 = dstr;
+        } else {
+          t2 = times[Math.min(i, times.length-1)] || '';
+        }
         const ratio2 = nv > 1 ? i/(nv-1) : 0;
         const lp2 = (ratio2 * 100).toFixed(1);
         const sp2 = document.createElement('span');
@@ -7834,16 +7663,11 @@ function _renderTaiexChart(){
   const updEl=document.getElementById('taiexUpdateTime');
   if(updEl){
     const _now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-    let _label;
-    if(_taiexPeriod === '1D' && data.isLive === false){
-      // 非盤中：標示資料實際交易日，避免誤認為即時
-      _label = (data.dataDate ? data.dataDate.replace(/-/g,'/') : ((_now.getMonth()+1)+'/'+_now.getDate())) + ' 收盤資料';
-    } else {
-      const _dateStr = (_now.getMonth()+1)+'/'+ _now.getDate();
-      const _timeStr = String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0');
-      _label = _dateStr+' '+_timeStr+' 更新';
-    }
-    updEl.innerHTML = '<span style="color:var(--text3)">'+_label+'</span>';
+    const _dateStr = (_now.getMonth()+1)+'/'+ _now.getDate();
+    const _timeStr = String(_now.getHours()).padStart(2,'0')+':'+String(_now.getMinutes()).padStart(2,'0');
+    updEl.innerHTML = '<span style="color:var(--text3)">'
+      + _dateStr+' '+ _timeStr
+      + '</span>';
   }
 
   // tooltip（簡化版，HTML div）
@@ -12650,30 +12474,6 @@ async function loadDailyScan(){
   }
 }
 
-// 計算某日期(YYYY-MM-DD)距今落後幾個「交易日」（粗略跳過週末，不含國定假日）
-// 回傳 0=最近交易日(今日或最近一個工作日)、≥1=落後
-function _tradingDaysBehind(dateStr){
-  if(!dateStr) return 0;
-  const tw = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'}));
-  const data = new Date(dateStr+'T00:00:00+08:00');
-  if(isNaN(data)) return 0;
-  // 今日最近的「應有交易日」：若今日為週末，回推到上週五
-  let ref = new Date(tw);
-  ref.setHours(0,0,0,0);
-  // 盤後資料約 15:00 後才有今日，盤中/盤前則最新應為前一交易日
-  const afterClose = tw.getHours() > 15 || (tw.getHours()===15 && tw.getMinutes()>=30);
-  if(!afterClose) ref.setDate(ref.getDate()-1);
-  // ref 落在週末 → 回推至週五
-  while(ref.getDay()===0 || ref.getDay()===6) ref.setDate(ref.getDate()-1);
-  // 計算 data 到 ref 之間的交易日數
-  let count=0; const cur=new Date(data); cur.setHours(0,0,0,0);
-  while(cur < ref){
-    cur.setDate(cur.getDate()+1);
-    if(cur.getDay()!==0 && cur.getDay()!==6) count++;
-  }
-  return count;
-}
-
 function renderDailyScan(data, tab){
   const list      = document.getElementById('scanTopList');
   const dateEl    = document.getElementById('scanResultDate');
@@ -12682,19 +12482,9 @@ function renderDailyScan(data, tab){
   if(!list || !data) return;
 
   if(dateEl){
-    // 顯示「資料日期」並判斷是否為最近交易日（停更時醒目警示，避免誤認為今日股價）
+    // 顯示「資料日期」（實際交易日，可能比掃描日早一天）
     const dd = data.dataDate || data.date;
-    if(dd){
-      const staleDays = _tradingDaysBehind(dd);
-      if(staleDays >= 1){
-        // 資料落後 ≥1 個交易日 → 紅字警示
-        dateEl.innerHTML = `<span style="color:var(--red);font-weight:700">⚠️ ${dd.slice(5)} 收盤（非今日）</span>`;
-      } else {
-        dateEl.textContent = '資料日 ' + dd.slice(5) + ' 收盤';
-      }
-    } else {
-      dateEl.textContent = '';
-    }
+    dateEl.textContent = dd ? '資料日 ' + dd.slice(5) : '';
   }
   if(insightEl && insightTx && data.aiInsight?.market){
     insightTx.textContent = data.aiInsight.market;
@@ -18528,25 +18318,36 @@ function updatePulse(instData, indexData, txfData){
     pmTwse.textContent = Number(idxPrice).toLocaleString('zh-TW',{maximumFractionDigits:2});
     pmTwse.style.color = chg ? 'var(--red)' : 'var(--green)';
   }
-  if(pmTxf && txfData?.price){
-    pmTxf.textContent  = Number(txfData.price).toLocaleString('zh-TW',{maximumFractionDigits:0});
-    pmTxf.style.color  = (txfData.change>=0) ? 'var(--red)' : 'var(--green)';
+  if(pmTxf){
+    if(txfData?.price){
+      // 有報價：顯示價格 + 漲跌色
+      pmTxf.textContent  = Number(txfData.price).toLocaleString('zh-TW',{maximumFractionDigits:0});
+      pmTxf.style.color  = (txfData.change>=0) ? 'var(--red)' : 'var(--green)';
+    } else {
+      // H5 修正：無報價時顯示時段狀態，而非孤零零的 —
+      const _s = txfData?.session || '';
+      let _msg = '盤後無報價';
+      if(_s === '夜盤') _msg = '夜盤待開通';   // WTXP 夜盤待元大期貨帳戶開立後串接
+      else if(_s === '盤中') _msg = '盤中';
+      pmTxf.textContent = _msg;
+      pmTxf.style.color = 'var(--text3)';
+      pmTxf.style.fontSize = '11px';
+    }
   }
-  // 格式化買賣超金額（億元）
-  // ⚠️ TaiwanStockTotalInstitutionalInvestors（全市場三大法人）buy/sell 單位為「元（金額）」，
-  //    並非股數，故以億元顯示，符合台股法人買賣超慣用單位（勿再 ÷1000 當張數）
-  const fmtInstAmt = v => {
-    const s   = v >= 0 ? '+' : '-';
-    const yi  = Math.abs(v) / 1e8;   // 元 → 億元
-    if(yi >= 100) return s + yi.toFixed(0) + '億';
-    if(yi >= 1)   return s + yi.toFixed(1) + '億';
-    return s + (Math.abs(v) / 1e4).toFixed(0) + '萬';  // 不足 1 億以萬元顯示
+  // 格式化張數（FinMind 單位：股，÷1000=張）
+  const fmtInst = v => {
+    const lot = v / 1000;  // 股 → 張
+    const abs = Math.abs(lot);
+    const s = lot >= 0 ? '+' : '-';
+    if(abs >= 10000) return s+(abs/10000).toFixed(1)+'萬張';
+    if(abs >= 1000)  return s+(abs/1000).toFixed(1)+'千張';
+    return s+Math.round(abs)+'張';
   };
   // 有資料（instData 不為 null）才顯示；instData 為 null 才顯示 —
   const hasInstData = instData !== null && instData !== undefined;
   if(pmForeign){
     if(hasInstData){
-      pmForeign.textContent = fmtInstAmt(foreign);
+      pmForeign.textContent = fmtInst(foreign);
       pmForeign.style.color = foreign>=0?'var(--red)':'var(--green)';
     } else {
       pmForeign.textContent = '—';
@@ -18555,7 +18356,7 @@ function updatePulse(instData, indexData, txfData){
   }
   if(pmTrust){
     if(hasInstData){
-      pmTrust.textContent = fmtInstAmt(trust);
+      pmTrust.textContent = fmtInst(trust);
       pmTrust.style.color = trust>=0?'var(--red)':'var(--green)';
     } else {
       pmTrust.textContent = '—';
@@ -18620,292 +18421,6 @@ function updatePulse(instData, indexData, txfData){
     : '';
   if(bodyEl)  bodyEl.textContent  = body + dateNote;
   if(chipsEl) chipsEl.innerHTML   = chips.map(([t,c])=>`<span class="chip ${c}">${t}</span>`).join('');
-}
-
-// ════════════════════════════════════════════════════
-// 大盤做空時機監控（每5分鐘）+ 空單損益試算
-// 技術面（①②③④）盤中即時；籌碼/期貨（⑤）為盤後資料
-// ════════════════════════════════════════════════════
-const ST_PV        = { TX:200, MTX:50, TMF:10 };   // 台指期每點價值（元）
-let _stTimer       = null;
-let _stDailyCache  = null;   // 盤後型資料快取（每日只變一次）
-let _stCalc        = { userEntry:false, userCur:false, userStop:false, _liveIdx:null };
-
-function _stTodayStr(){
-  return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Taipei'})).toISOString().slice(0,10);
-}
-function _stMean(a){ return a.length ? a.reduce((s,x)=>s+x,0)/a.length : 0; }
-
-// 載入盤後型資料（^TWII 日K、成交值、外資金額、期貨外資未平倉），快取60分鐘/換日
-async function _stLoadDaily(force){
-  const today = _stTodayStr();
-  if(!force && _stDailyCache && _stDailyCache.day===today && (Date.now()-_stDailyCache.stamp < 60*60*1000))
-    return _stDailyCache;
-
-  const out = { day:today, stamp:Date.now(), closes:[], highs:[], lows:[], volRows:[], foreignDays:[], futDays:[] };
-
-  // 1) 加權指數 6 個月日K（算 MA20/MA60/60日高）
-  try{
-    if(API){
-      const r = await fetchWithTimeout(`${API}/intraday?symbol=${encodeURIComponent('^TWII')}&range=6mo&interval=1d`, 12000);
-      if(r.ok){
-        const res = (await r.json())?.chart?.result?.[0];
-        const ts  = res?.timestamp||[];
-        const q   = res?.indicators?.quote?.[0]||{};
-        for(let i=0;i<ts.length;i++){
-          const c=q.close?.[i]; if(c==null||isNaN(c)) continue;
-          out.closes.push(+c);
-          out.highs.push(q.high?.[i]!=null?+q.high[i]:+c);
-          out.lows.push(q.low?.[i]!=null?+q.low[i]:+c);
-        }
-      }
-    }
-  }catch(e){ console.warn('[ShortTimer] twii daily:', e.message); }
-
-  // 2) 大盤成交值（量價背離用）— 用修正後來源（避免 FMTQIK 欄位錯位）
-  try{
-    const vr = await _getMarketVolRows();
-    out.volRows = (vr||[]).filter(x=>x&&x.value>0);
-  }catch(e){ console.warn('[ShortTimer] marketvol:', e.message); }
-
-  // 3) 外資全市場買賣超金額（元，近14日）
-  try{
-    const rows = await fmFetch({ dataset:'TaiwanStockTotalInstitutionalInvestors',
-      start_date:nDaysAgo(16), end_date:nDaysAgo(0), _optional:true });
-    if(rows && rows.length){
-      const byDate = {};
-      for(const r of rows){
-        const nm  = (r.name||r.institutional_investors||'').toLowerCase();
-        const net = parseFloat(r.buy||0)-parseFloat(r.sell||0);
-        if(nm.includes('外資')||nm.includes('foreign')||nm.includes('fini'))
-          byDate[r.date]=(byDate[r.date]||0)+net;
-      }
-      out.foreignDays = Object.entries(byDate).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>({date:d,net:v}));
-    }
-  }catch(e){ console.warn('[ShortTimer] foreign:', e.message); }
-
-  // 4) 期貨外資 TX 淨未平倉口數（近14日，判斷增空）
-  try{
-    const rows = await fmFetch({ dataset:'TaiwanFuturesInstitutionalInvestors', data_id:'TX',
-      start_date:nDaysAgo(16), end_date:nDaysAgo(0), _optional:true });
-    if(rows && rows.length){
-      const byDate = {};
-      for(const r of rows){
-        const nm = (r.institutional_investors||r.name||'');
-        if(nm.includes('外資')){
-          const net=(parseInt(r.long_open_interest_balance_volume)||0)-(parseInt(r.short_open_interest_balance_volume)||0);
-          byDate[r.date]=net;
-        }
-      }
-      out.futDays = Object.entries(byDate).sort((a,b)=>a[0]<b[0]?-1:1).map(([d,v])=>({date:d,net:v}));
-    }
-  }catch(e){ console.warn('[ShortTimer] futures:', e.message); }
-
-  _stDailyCache = out;
-  return out;
-}
-
-// 即時大盤指數（優先用已修正的加權指數1D最後一點）
-function _stCurrentIndex(){
-  try{
-    const d=(typeof _taiexData!=='undefined')?_taiexData?.['1D']:null;
-    if(d?.pts?.length) return d.pts[d.pts.length-1];
-  }catch(e){}
-  if(_stDailyCache?.closes?.length) return _stDailyCache.closes[_stDailyCache.closes.length-1];
-  return null;
-}
-
-// 計算 5 個做空訊號與總分
-function _stCompute(d){
-  const closes=d.closes, highs=d.highs, lows=d.lows;
-  if(closes.length < 60) return null;
-  const cLive = _stCurrentIndex() || closes[closes.length-1];
-  const ma20  = _stMean(closes.slice(-20));
-  const ma60  = _stMean(closes.slice(-60));
-  const hi60  = Math.max(...highs.slice(-60));
-  const sig=[]; let score=0;
-
-  // ① 指數高檔 + 量價背離（量縮）
-  const newHigh = cLive >= hi60*0.999;
-  let volShrink=false, volRatio=null;
-  if(d.volRows.length>=21){
-    const vals=d.volRows.map(r=>r.value);
-    const latest=vals[vals.length-1], avg20=_stMean(vals.slice(-21,-1));
-    if(avg20>0){ volRatio=latest/avg20; volShrink = volRatio < 0.85; }
-  }
-  const s1 = newHigh && volShrink;
-  if(s1) score+=25;
-  sig.push({k:'①',t:'指數高檔 + 量價背離(量縮)',pts:25,on:s1,live:true,
-    note:(newHigh?'指數處60日高檔':'未創新高')+(volRatio!=null?`，近期量能 ${(volRatio*100).toFixed(0)}% 近20日均量`:'')});
-
-  // ② 頭部型態確立（近似偵測：自高點回落 + 跌破前波低 + 在月線下）
-  const peak25 = Math.max(...closes.slice(-25));
-  const drop   = peak25>0 ? (peak25-cLive)/peak25*100 : 0;
-  const prevLow= Math.min(...lows.slice(-15,-1));
-  const s2 = (drop>3) && (cLive<prevLow) && (cLive<ma20);
-  if(s2) score+=25;
-  sig.push({k:'②',t:'頭部型態確立',pts:25,on:s2,live:true,approx:true,
-    note:`自高點回落 ${drop.toFixed(1)}%`+(cLive<prevLow?'、已跌破前波低':'、未破前波低')});
-
-  // ③ 有效跌破月線(20MA)且站不回
-  const ma20prev=_stMean(closes.slice(-21,-1));
-  const s3=(cLive<ma20)&&(closes[closes.length-1]<ma20prev);
-  if(s3) score+=20;
-  sig.push({k:'③',t:'有效跌破月線(20MA)站不回',pts:20,on:s3,live:true,
-    note:`MA20 ${ma20.toFixed(0)}　現 ${Math.round(cLive).toLocaleString()}`});
-
-  // ④ 有效跌破季線(60MA)
-  const s4=cLive<ma60*0.999;
-  if(s4) score+=15;
-  sig.push({k:'④',t:'有效跌破季線(60MA)',pts:15,on:s4,live:true,
-    note:`MA60 ${ma60.toFixed(0)}　現 ${Math.round(cLive).toLocaleString()}`});
-
-  // ⑤ 外資連續大幅賣超 + 期貨增空（盤後資料）
-  let sellStreak=0, foreignLatest=null, foreignDate='';
-  if(d.foreignDays.length){
-    for(let i=d.foreignDays.length-1;i>=0;i--){ if(d.foreignDays[i].net<0) sellStreak++; else break; }
-    foreignLatest=d.foreignDays[d.foreignDays.length-1].net;
-    foreignDate  =d.foreignDays[d.foreignDays.length-1].date;
-  }
-  let futIncShort=false, futNet=null;
-  if(d.futDays.length>=2){
-    const a=d.futDays[d.futDays.length-1].net, b=d.futDays[d.futDays.length-2].net;
-    futNet=a; futIncShort=(a<b)||(a<0);   // 淨空增加 或 已站淨空方
-  }
-  const bigSell = sellStreak>=2 && foreignLatest!=null && foreignLatest < -5e9;  // 連2日且最新賣超>50億
-  const s5 = bigSell && futIncShort;
-  if(s5) score+=15;
-  sig.push({k:'⑤',t:'外資連續大幅賣超 + 期貨增空',pts:15,on:s5,live:false,dataDate:foreignDate,
-    note:(sellStreak>=1?`外資連${sellStreak}日賣超`:'外資未連續賣超')
-      +(foreignLatest!=null?`(最新 ${(foreignLatest/1e8).toFixed(0)} 億)`:'')
-      +(futNet!=null?`、期貨外資淨${futNet>=0?'多':'空'} ${Math.abs(futNet).toLocaleString()} 口`:'')});
-
-  // 綜合評語
-  let verdict, vColor;
-  if(score>=70){ verdict='做空訊號明確，空方條件成熟'; vColor='var(--green)'; }
-  else if(score>=45){ verdict='偏空訊號浮現，宜分批並嚴控風險'; vColor='var(--gold)'; }
-  else if(score>=20){ verdict='訊號零星，不宜重倉逆勢'; vColor='var(--gold)'; }
-  else { verdict='做空訊號不足，逆勢放空風險極高'; vColor='var(--red)'; }
-
-  return { score, sig, verdict, vColor, cLive, ma20, ma60 };
-}
-
-function _stRender(res){
-  const box=document.getElementById('stMonitorBody');
-  if(!box) return;
-  if(!res){
-    box.innerHTML='<div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">大盤資料暫時無法取得，稍後重試</div>';
-    return;
-  }
-  const rows=res.sig.map(s=>{
-    const dot = s.on ? '✔' : '○';
-    const tag = s.live
-      ? '<span style="font-size:9px;color:var(--text3)">即時</span>'
-      : `<span style="font-size:9px;color:var(--gold)">盤後${s.dataDate?'·'+s.dataDate.slice(5):''}</span>`;
-    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">
-      <span style="color:${s.on?'var(--green)':'var(--text3)'};font-size:13px;flex-shrink:0;width:14px;text-align:center">${dot}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:${s.on?'var(--text)':'var(--text2)'}">${s.k} ${s.t}
-          <span style="font-size:10px;color:var(--text3)">(${s.pts}分)</span>
-          ${s.approx?'<span style="font-size:9px;color:var(--gold)">近似</span>':''}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.note||''}　${tag}</div>
-      </div></div>`;
-  }).join('');
-  const pct=Math.max(0,Math.min(100,res.score));
-  box.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">勾選＝目前已出現的訊號（依大盤即時資料自動判定）</div>
-    ${rows}
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:10px">
-      <span style="font-size:12px;color:var(--text2)">做空訊號分數</span>
-      <span style="font-size:28px;font-weight:800;color:${res.vColor}">${res.score}</span>
-    </div>
-    <div style="height:7px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:5px">
-      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--gold),${res.vColor});transition:width .6s"></div>
-    </div>
-    <div style="font-size:12px;font-weight:700;color:${res.vColor};margin-top:8px">${res.verdict}</div>`;
-
-  _stSyncCalcCurrent(res.cLive);
-}
-
-// 把即時指數帶入試算機（使用者未手動修改時才覆蓋）
-function _stSyncCalcCurrent(cLive){
-  if(cLive==null) return;
-  _stCalc._liveIdx=Math.round(cLive);
-  const curEl=document.getElementById('stCur');
-  if(curEl && !_stCalc.userCur) curEl.value=Math.round(cLive);
-  const entryEl=document.getElementById('stEntry');
-  if(entryEl && !_stCalc.userEntry && !entryEl.value) entryEl.value=Math.round(cLive);
-  _stRerangeStop(false);
-  _stCalcUpdate();
-}
-
-// 依進場價/現價動態設定停損 slider 範圍（空單停損在進場之上）
-function _stRerangeStop(reset){
-  const s=document.getElementById('stStop');
-  if(!s) return;
-  const entry=parseFloat(document.getElementById('stEntry')?.value)||0;
-  const cur  =parseFloat(document.getElementById('stCur')?.value)||entry;
-  if(!entry){ return; }
-  const min=Math.round(entry);
-  const max=Math.round(entry+Math.max(3000,(Math.max(cur,entry)-entry)*1.5+1000));
-  s.min=min; s.max=max; s.step=10;
-  if(reset || !s.value || +s.value<min || +s.value>max){
-    const base = cur>entry ? cur : entry+500;
-    s.value=Math.min(max,Math.max(min,Math.ceil(base/10)*10));
-  }
-}
-
-// 試算更新
-function _stCalcUpdate(){
-  const prod=document.getElementById('stProd')?.value||'MTX';
-  const pv=ST_PV[prod]||50;
-  const lots=Math.max(1,parseInt(document.getElementById('stLots')?.value)||1);
-  const entry=parseFloat(document.getElementById('stEntry')?.value)||0;
-  const cur  =parseFloat(document.getElementById('stCur')?.value)||0;
-  const stop =parseFloat(document.getElementById('stStop')?.value)||0;
-
-  const stopValEl=document.getElementById('stStopVal');
-  if(stopValEl) stopValEl.textContent = stop? Math.round(stop).toLocaleString():'—';
-
-  const fmt = v => (v>=0?'+':'') + Math.round(v).toLocaleString('zh-TW') + ' 元';
-  const ur=document.getElementById('stUnreal');
-  const sl=document.getElementById('stStopLoss');
-  const note=document.getElementById('stCalcNote');
-
-  if(!entry || !cur){
-    if(ur){ ur.textContent='—'; ur.style.color='var(--text2)'; }
-    if(sl){ sl.textContent='—'; sl.style.color='var(--text2)'; }
-    if(note) note.textContent='輸入放空進場價即可試算（目前指數已自動帶入大盤即時報價）。本工具僅供風控試算，非投資建議。';
-    return;
-  }
-  // 空單：價跌＝獲利。損益 = (進場 - 現價) × 點值 × 口數
-  const unreal   = (entry-cur)*pv*lots;
-  const stopLoss = (entry-stop)*pv*lots;
-  const adverse  = cur-entry;     // >0 表示空單目前逆向（虧損）
-  const stopDist = stop-entry;
-  // 台股配色：紅＝獲利(正)、綠＝虧損(負)
-  if(ur){ ur.textContent=fmt(unreal);   ur.style.color = unreal>=0?'var(--red)':'var(--green)'; }
-  if(sl){ sl.textContent=fmt(stopLoss); sl.style.color = stopLoss>=0?'var(--red)':'var(--green)'; }
-  if(note){
-    note.textContent = `空單目前${adverse>=0?'逆向':'順向'} ${Math.abs(Math.round(adverse)).toLocaleString()} 點，停損距進場 ${Math.abs(Math.round(stopDist)).toLocaleString()} 點。本工具僅供風控試算，非投資建議。`;
-  }
-}
-
-// 主刷新（盤中5分鐘、盤外30分鐘）
-async function refreshShortTimer(force){
-  const box=document.getElementById('stMonitorBody');
-  if(!box) return;   // 不在總覽頁就不跑
-  try{
-    const d=await _stLoadDaily(!!force);
-    _stRender(_stCompute(d));
-    const tEl=document.getElementById('stUpdTime');
-    if(tEl) tEl.textContent = (typeof twTime==='function'?twTime():'') + ' 更新';
-  }catch(e){ console.warn('[ShortTimer]', e.message); }
-  finally{
-    clearTimeout(_stTimer);
-    const live=(typeof _isTradingHour==='function')&&_isTradingHour();
-    _stTimer=setTimeout(()=>refreshShortTimer(false), live? 5*60*1000 : 30*60*1000);
-  }
 }
 
 let _pulseTimer = null;
@@ -19165,9 +18680,6 @@ window.addEventListener('load', async ()=>{
 
   // 第 5 波：趨勢股（3秒後）
   setTimeout(()=>refreshTrendStocks(), 3000);
-
-  // 第 5.5 波：大盤做空時機監控（800ms 後啟動，之後自動每5分鐘刷新）
-  setTimeout(()=>refreshShortTimer(true), 800);
 
   // 第 6 波：累積戰績（2秒後）
   setTimeout(()=>renderBattleBanner(), 2000);
