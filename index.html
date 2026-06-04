@@ -6827,8 +6827,8 @@ async function loadMarketVolume(){
     // 存全域：供上半部加權指數成交量區塊在「今日無盤中量」時 fallback 用
     try{
       window._mktVolDaily = slice20.map(r=>({date:r.date, value:r.value, taiex:r.taiex}));
-      // 成交量資料就緒後，重繪一次上半部加權指數圖（補上成交量柱狀）
-      if(typeof _renderTaiexChart === 'function') _renderTaiexChart();
+      // 成交量資料就緒後，延遲重繪上半部加權指數圖（脫離當前流程，避免干擾成交量本身渲染）
+      setTimeout(()=>{ try{ if(typeof _renderTaiexChart === 'function') _renderTaiexChart(); }catch(e){} }, 0);
     }catch(e){}
     const toB     = v => Math.round((v||0)/1e8);  // Worker value 單位：元 → 億（/1e8）
     const todayB  = toB(latest?.value);
@@ -6981,23 +6981,7 @@ async function _fetchMarketTurnover(){
     const r=await fetchWithTimeout(`${API}/turnover`,8000);
     if(r.ok){const d=await r.json();if(d?.turnover!=null)return d;}
   }catch(e){}
-  try{
-    // 走 Worker proxy 避免 CORS 問題
-    const r=await fetchWithTimeout(API.replace(/\/$/,'')+'/turnover', 8000);
-    if(r.ok){
-      const d=await r.json();
-      const last=d?.data?.[d.data.length-1];
-      // FMTQIK 欄位：[0]=日期 [1]=成交股數 [2]=成交筆數 [3]=成交金額 [4]=發行量加權股價指數 [5]=漲跌點數
-      // 換手率不在此表，改抓股價成交量統計 TWTB4U
-      if(last&&last[3]){
-        const tradeVal=parseFloat((last[3]||'0').replace(/,/g,''));
-        // 台灣上市總市值約55兆，換手率≈成交金額(元)/總市值(元)×100
-        // FMTQIK 成交金額單位為「元」，直接除總市值，不需×1000
-        const mktCap=55e12;
-        if(tradeVal>0) return {turnover:+(tradeVal/mktCap*100).toFixed(2)};
-      }
-    }
-  }catch(e){}
+  // 換手率改由 Worker /turnover 統一計算（已用欄位名稱定位成交金額，TWSE 改格式也不壞）
   return null;
 }
 
@@ -7640,10 +7624,11 @@ function _renderTaiexChart(){
         // 補值模式用日期(MM/DD)，否則用分時時間
         let t2;
         if(_useDailyVol && _dailyVolRows && _dailyVolRows[i]?.date){
-          const dstr = _dailyVolRows[i].date;  // 格式 1150529 或 2026-05-29
-          if(/^\d{7}$/.test(dstr)){ t2 = dstr.slice(3,5)+'/'+dstr.slice(5,7); }  // ROC YYYMMDD
-          else if(dstr.includes('-')){ const p=dstr.split('-'); t2 = p[1]+'/'+p[2]; }
-          else t2 = dstr;
+          const dstr = _dailyVolRows[i].date;  // 可能格式：115/06/04 或 1150529 或 2026-05-29
+          if(/^\d{2,3}\/\d{2}\/\d{2}$/.test(dstr)){ t2 = dstr.slice(-5); }       // ROC帶斜線 115/06/04 → 06/04
+          else if(/^\d{7}$/.test(dstr)){ t2 = dstr.slice(3,5)+'/'+dstr.slice(5,7); }  // ROC無斜線 1150604
+          else if(dstr.includes('-')){ const p=dstr.split('-'); t2 = p[1]+'/'+p[2]; } // 西元 2026-06-04
+          else t2 = dstr.slice(-5);
         } else {
           t2 = times[Math.min(i, times.length-1)] || '';
         }
