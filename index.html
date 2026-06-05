@@ -72,13 +72,22 @@
 
 <script>
 (function(){
-  const APP_VER = '202605180736';
+  const APP_VER = '202606051213';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
-    if('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs=>regs.forEach(r=>r.unregister()));
-    if('caches' in window) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-    if(STORED) location.reload(true);
+    // 版本更新：清掉所有 SW 快取（含 API 回應快取），確保抓到最新資料
+    if('caches' in window){
+      caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});
+    }
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.getRegistrations().then(regs=>{
+        regs.forEach(r=>r.unregister());
+        if(STORED) setTimeout(()=>location.reload(true), 100);  // 清完再重載
+      }).catch(()=>{ if(STORED) location.reload(true); });
+    } else if(STORED){
+      location.reload(true);
+    }
   }
 })();
 </script>
