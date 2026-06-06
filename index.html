@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606051213';
+  const APP_VER = '202606060100';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -6864,7 +6864,15 @@ async function loadMarketVolume(){
     }
 
     _renderMktVolSVG(slice20, avgB);
-    _setTurnoverDOM(turnoverData);
+    // 換手率：優先用 Worker /turnover，無效時用今日成交額(todayB億)前端計算
+    let _turnoverFinal = turnoverData;
+    if(!(_turnoverFinal?.turnover > 0) && todayB > 0){
+      // todayB 單位「億」，×1e8=元；台股總市值2026約85兆元
+      const _mktCap = 85e12;
+      const _tr = +(todayB * 1e8 / _mktCap * 100).toFixed(2);
+      if(_tr > 0) _turnoverFinal = { turnover: _tr };
+    }
+    _setTurnoverDOM(_turnoverFinal);
     _estimateMktBreakdown(todayB, yesterB);
     // 日期格式通用處理：115/06/04(ROC斜線) / 1150604(ROC無斜線) / 2026-06-04(西元) → MM/DD
     const _fmtDateMD = (d) => {
