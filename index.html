@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606060444';
+  const APP_VER = '202606060807';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -6920,8 +6920,10 @@ async function loadMarketVolume(){
   const nowStr=String(twNow.getHours()).padStart(2,'0')+':'+String(twNow.getMinutes()).padStart(2,'0');
 
   // 並行抓：Worker多月成交量 + 換手率
+  // 加 cache-busting：每5分鐘換一個值，破除 PWA/瀏覽器舊快取（避免跨月資料被舊快取卡住）
+  const _cb = Math.floor(Date.now()/300000);
   const [volRes, turnoverData] = await Promise.all([
-    fetchWithTimeout(`${API}/marketvol`,15000).catch(()=>null),
+    fetchWithTimeout(`${API}/marketvol?t=${_cb}`,15000).catch(()=>null),
     _fetchMarketTurnover().catch(()=>null),
   ]);
 
