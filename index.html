@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606061145';
+  const APP_VER = '202606061514';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -852,9 +852,9 @@
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <div class="tabs">
-          <button class="tab active" onclick="setTab(this,'1D')">1日</button>
+          <button class="tab" onclick="setTab(this,'1D')">1日</button>
           <button class="tab" onclick="setTab(this,'1W')">1週</button>
-          <button class="tab" onclick="setTab(this,'1M')">月</button>
+          <button class="tab active" onclick="setTab(this,'1M')">月</button>
           <button class="tab" onclick="setTab(this,'3M')">季</button>
           <button class="tab" onclick="setTab(this,'6M')">半年</button>
           <button class="tab" onclick="setTab(this,'1Y')">年</button>
@@ -3887,7 +3887,7 @@ const FB_CHIPS = null;
 // ── 載入狀態追蹤 ──────────────────────────────────────
 let currentTicker = '2330.TW';
 let currentName   = '台積電';
-let currentPeriod = '1D';
+let currentPeriod = '1M';  // 預設月線（K線含B/S訊號）
 
 // ── 統一時間格式 ─────────────────────────────────────────
 // 台灣時間 HH:MM 格式
@@ -11115,8 +11115,11 @@ async function selectStock(el, name, ticker){
     renderVolBars(isUp, histData, currentPeriod);
     const pts   = (histData?.close||[]).filter(v=>v!=null&&!isNaN(v));
     const dates = histData?.dates||[];
-    // 1D 圖：優先用分鐘K（已並行取得），fallback 用日K近5日
-    if(intra && intra.pts.length > 2){
+    // 預設月線 K 線圖（含 B/S 共振訊號）；histData 已有，直接畫
+    if(histData && histData.close && histData.close.length >= 20){
+      drawCandlestick(histData, '1M');
+    } else if(intra && intra.pts.length > 2){
+      // 月線資料不足時，fallback 用分鐘K折線
       drawChart(intra.pts, isUp?'#ff4c6a':'#00d4aa', intra.times, '1D');
     } else {
       const pts1d   = pts.slice(-5);
