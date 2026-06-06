@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606060100';
+  const APP_VER = '202606060444';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -884,6 +884,23 @@
       <circle id="chartHoverDot" r="4" fill="white" stroke="#00d4aa" stroke-width="2" display="none"/>
       <circle id="chartDot" r="5" fill="#00d4aa"/>
     </svg>
+    <!-- B/S 共振訊號圖例（僅 K 線模式顯示）-->
+    <div id="bsLegend" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;
+         margin-top:6px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:8px;font-size:10px">
+      <span style="display:inline-flex;align-items:center;gap:3px">
+        <span style="display:inline-flex;width:13px;height:13px;border-radius:50%;background:#ff4c6a;
+              color:#fff;font-weight:700;align-items:center;justify-content:center;font-size:8px">B</span>
+        <span style="color:var(--text3)">買進共振</span>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:3px">
+        <span style="display:inline-flex;width:13px;height:13px;border-radius:50%;background:#00d4aa;
+              color:#fff;font-weight:700;align-items:center;justify-content:center;font-size:8px">S</span>
+        <span style="color:var(--text3)">賣出共振</span>
+      </span>
+      <span style="color:var(--text3);font-size:9px;flex:1;min-width:120px">
+        ⚠️ KD+MACD+均線 多指標同向共振點，僅供技術參考，非投資建議
+      </span>
+    </div>
     <!-- 懸浮 tooltip（長按查價）-->
     <div id="chartTooltip" style="display:none;position:absolute;background:rgba(14,14,22,.95);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5)">
       <div style="font-size:14px;font-weight:800;color:var(--text);letter-spacing:.3px" id="ttPrice">—</div>
@@ -6411,6 +6428,86 @@ function updateChartTimeLabels(dates, total){
 // ══════════════════════════════════════════════════════
 // K 線圖（月/季 Tab）
 // ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// B/S 共振訊號計算：多指標同時觸發才標記（精準少訊號）
+// 回傳 [{idx, type:'B'|'S', reasons:[...], strength:N}]
+// ══════════════════════════════════════════════════════
+function _calcBSSignals(O, H, L, C){
+  const n = C.length;
+  if(n < 30) return [];  // 資料太少不算（KD9+MACD26暖機，至少30根）
+
+  // ── KD（9日）──
+  const kArr=[], dArr=[];
+  { let k=50, d=50;
+    for(let i=0;i<n;i++){
+      if(i<8){ kArr.push(50); dArr.push(50); continue; }
+      const hh=Math.max(...H.slice(i-8,i+1));
+      const ll=Math.min(...L.slice(i-8,i+1));
+      const rsv = hh!==ll ? (C[i]-ll)/(hh-ll)*100 : 50;
+      k = k*2/3 + rsv/3;
+      d = d*2/3 + k/3;
+      kArr.push(k); dArr.push(d);
+    }
+  }
+
+  // ── MACD（12,26,9）──
+  const difArr=[], deaArr=[], histArr=[];
+  { const k12=2/13, k26=2/27, k9=2/10;
+    let e12=C[0], e26=C[0], dea=0; let started=false;
+    for(let i=0;i<n;i++){
+      e12 = C[i]*k12 + e12*(1-k12);
+      e26 = C[i]*k26 + e26*(1-k26);
+      const dif = e12 - e26;
+      if(i===25){ dea=dif; started=true; }
+      else if(started){ dea = dif*k9 + dea*(1-k9); }
+      difArr.push(dif); deaArr.push(started?dea:0);
+      histArr.push(started?(dif-dea):0);
+    }
+  }
+
+  // ── 均線 MA5/MA20 ──
+  const ma = (arr,i,p)=> i<p-1 ? null : arr.slice(i-p+1,i+1).reduce((a,b)=>a+b,0)/p;
+
+  // ── 逐日判斷共振 ──
+  const signals=[];
+  for(let i=29;i<n;i++){
+    const reasons=[]; let bull=0, bear=0;
+
+    // KD 金叉/死叉
+    const kdGolden = kArr[i-1]<dArr[i-1] && kArr[i]>=dArr[i];
+    const kdDead   = kArr[i-1]>dArr[i-1] && kArr[i]<=dArr[i];
+    if(kdGolden){ bull++; reasons.push('KD金叉'); }
+    if(kdDead && kArr[i]>20){ bear++; reasons.push('KD死叉'); }
+
+    // MACD 柱由負轉正 / 由正轉負
+    const macdUp   = histArr[i-1]<=0 && histArr[i]>0;
+    const macdDown = histArr[i-1]>=0 && histArr[i]<0;
+    if(macdUp){ bull++; reasons.push('MACD翻多'); }
+    if(macdDown){ bear++; reasons.push('MACD翻空'); }
+
+    // 均線：站上/跌破 MA20
+    const ma20n = ma(C,i,20), ma20p = ma(C,i-1,20);
+    if(ma20n!=null && ma20p!=null){
+      if(C[i-1]<=ma20p && C[i]>ma20n){ bull++; reasons.push('站上月線'); }
+      if(C[i-1]>=ma20p && C[i]<ma20n){ bear++; reasons.push('跌破月線'); }
+    }
+
+    // 多頭排列 MA5>MA20（輔助確認，不單獨計）
+    const ma5n = ma(C,i,5);
+    const bullAlign = ma5n!=null && ma20n!=null && ma5n>ma20n;
+
+    // 共振判定：至少 2 個同向訊號才標記（精準少訊號）
+    if(bull>=2 && bull>bear){
+      signals.push({ idx:i, type:'B', reasons:reasons.filter(r=>!r.includes('死')&&!r.includes('空')&&!r.includes('跌')), strength:bull + (bullAlign?1:0) });
+    } else if(bear>=2 && bear>bull){
+      signals.push({ idx:i, type:'S', reasons:reasons.filter(r=>r.includes('死')||r.includes('空')||r.includes('跌')), strength:bear });
+    }
+  }
+
+  // 只保留最近 3-5 個訊號（避免雜亂）
+  return signals.slice(-5);
+}
+
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
   if(!svg || !histData) return;
@@ -6501,6 +6598,33 @@ function drawCandlestick(histData, period){
       svgContent += `<rect x="${(cx-barW/2).toFixed(1)}" y="${bodyT.toFixed(1)}" width="${barW}" height="${bodyH.toFixed(1)}" fill="none" stroke="${col}" stroke-width="1.2" rx="1"/>`;
     }
   });
+
+  // ── B/S 共振訊號標籤 ──────────────────────────────
+  try{
+    const bsSignals = _calcBSSignals(O, H, L, C);
+    _chartData.bsSignals = bsSignals;  // 存給 tooltip 用
+    // 顯示 B/S 圖例（K線模式）
+    const _bsLeg = document.getElementById('bsLegend');
+    if(_bsLeg) _bsLeg.style.display = bsSignals.length ? 'flex' : 'none';
+    bsSignals.forEach(sig=>{
+      const i = sig.idx;
+      if(i<0 || i>=C.length) return;
+      const cx = padL + (i + 0.5) * stepW;
+      const isBuy = sig.type==='B';
+      // B 標在低點下方、S 標在高點上方
+      const anchorY = isBuy ? toY(L[i]) + 9 : toY(H[i]) - 9;
+      const bg = isBuy ? '#ff4c6a' : '#00d4aa';
+      const txt = isBuy ? 'B' : 'S';
+      // 三角指示 + 圓底標籤
+      const triY = isBuy ? toY(L[i]) + 2 : toY(H[i]) - 2;
+      const tri = isBuy
+        ? `${cx},${triY} ${cx-3},${triY+3.5} ${cx+3},${triY+3.5}`
+        : `${cx},${triY} ${cx-3},${triY-3.5} ${cx+3},${triY-3.5}`;
+      svgContent += `<polygon points="${tri}" fill="${bg}" opacity="0.9"/>`;
+      svgContent += `<circle cx="${cx.toFixed(1)}" cy="${anchorY.toFixed(1)}" r="6" fill="${bg}"/>`;
+      svgContent += `<text x="${cx.toFixed(1)}" y="${(anchorY+2.8).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${txt}</text>`;
+    });
+  }catch(e){ /* 訊號計算失敗不影響K線 */ }
 
   // 保留 crosshair 元素（hover 用）
   svgContent += `
@@ -7138,6 +7262,7 @@ async function setTab(btn, period){
 
   // ── 1日：折線（分鐘K）────────────────────────────────
   if(period === '1D'){
+    const _bsLeg0=document.getElementById('bsLegend'); if(_bsLeg0) _bsLeg0.style.display='none';
     const intra = await fetchIntraday(sid);
     setLoading('chartSvg', false);
     if(intra && intra.pts.length > 2){
