@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606061514';
+  const APP_VER = '202606061606';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -12783,9 +12783,11 @@ function renderDailyScan(data, tab){
     const extraHtml = extra ? `<div style="display:inline-block;margin-top:6px;padding:3px 8px;background:rgba(255,255,255,.06);border-radius:20px;font-size:10px;font-weight:600;color:${extra.color}"><span style="color:var(--text3)">${extra.label}</span> ${extra.val}</div>` : '';
 
     // 股價 + 當日漲跌幅
-    const px = s.close != null ? s.close : null;
+    // round 到小數1位（修 Yahoo 浮點誤差，如 86.0999→86.1）
+    const _r1 = v => v!=null ? Math.round(v*10)/10 : null;
+    const px = _r1(s.close);
     const chg = s.changePct;
-    const chgV = s.changeVal;
+    const chgV = _r1(s.changeVal);
     const chgColor = chg!=null ? (chg>=0?'var(--red)':'var(--green)') : 'var(--text3)';
     const pxHtml = px != null
       ? `<div style="text-align:right">
