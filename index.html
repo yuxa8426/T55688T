@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606060807';
+  const APP_VER = '202606061145';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -898,7 +898,7 @@
         <span style="color:var(--text3)">賣出共振</span>
       </span>
       <span style="color:var(--text3);font-size:9px;flex:1;min-width:120px">
-        ⚠️ KD+MACD+均線 多指標同向共振點，僅供技術參考，非投資建議
+        ⚠️ KD+MACD+均線+ADX+量能+法人籌碼 多指標窗口共振，僅供技術參考，非投資建議
       </span>
     </div>
     <!-- 懸浮 tooltip（長按查價）-->
@@ -4686,6 +4686,8 @@ async function fmShareholder(stockId='2330', days=60){
 
   const sortedDates = Object.keys(byDate).sort();
   latestDate = sortedDates[sortedDates.length-1] || '';
+  // 存全域：供 K 線 B/S 共振訊號用日期對應查當日法人籌碼（外資+投信淨額，單位張）
+  try{ window._instByDate = byDate; }catch(e){}
 
   // 累計淨買超
   for(const d of sortedDates){
@@ -6429,12 +6431,14 @@ function updateChartTimeLabels(dates, total){
 // K 線圖（月/季 Tab）
 // ══════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════
-// B/S 共振訊號計算：多指標同時觸發才標記（精準少訊號）
+// B/S 共振訊號計算 v2：多指標 + 時間窗口共振（更貼近實戰判斷）
+// 指標：KD金叉死叉 / MACD翻多翻空 / 均線站上跌破 / ADX趨勢過濾 / 量能確認
+// 邏輯：在 N 根 K 棒的滑動窗口內，累積同向訊號達門檻即標記
 // 回傳 [{idx, type:'B'|'S', reasons:[...], strength:N}]
 // ══════════════════════════════════════════════════════
-function _calcBSSignals(O, H, L, C){
+function _calcBSSignals(O, H, L, C, V, D){
   const n = C.length;
-  if(n < 30) return [];  // 資料太少不算（KD9+MACD26暖機，至少30根）
+  if(n < 30) return [];
 
   // ── KD（9日）──
   const kArr=[], dArr=[];
@@ -6451,7 +6455,7 @@ function _calcBSSignals(O, H, L, C){
   }
 
   // ── MACD（12,26,9）──
-  const difArr=[], deaArr=[], histArr=[];
+  const histArr=[];
   { const k12=2/13, k26=2/27, k9=2/10;
     let e12=C[0], e26=C[0], dea=0; let started=false;
     for(let i=0;i<n;i++){
@@ -6460,7 +6464,6 @@ function _calcBSSignals(O, H, L, C){
       const dif = e12 - e26;
       if(i===25){ dea=dif; started=true; }
       else if(started){ dea = dif*k9 + dea*(1-k9); }
-      difArr.push(dif); deaArr.push(started?dea:0);
       histArr.push(started?(dif-dea):0);
     }
   }
@@ -6468,46 +6471,131 @@ function _calcBSSignals(O, H, L, C){
   // ── 均線 MA5/MA20 ──
   const ma = (arr,i,p)=> i<p-1 ? null : arr.slice(i-p+1,i+1).reduce((a,b)=>a+b,0)/p;
 
-  // ── 逐日判斷共振 ──
-  const signals=[];
-  for(let i=29;i<n;i++){
-    const reasons=[]; let bull=0, bear=0;
+  // ── ADX（14）趨勢強度：過濾盤整假訊號 ──
+  const adxArr = new Array(n).fill(0);
+  { const p=14;
+    const tr=[], plusDM=[], minusDM=[];
+    for(let i=0;i<n;i++){
+      if(i===0){ tr.push(0); plusDM.push(0); minusDM.push(0); continue; }
+      const up = H[i]-H[i-1], dn = L[i-1]-L[i];
+      plusDM.push(up>dn && up>0 ? up : 0);
+      minusDM.push(dn>up && dn>0 ? dn : 0);
+      tr.push(Math.max(H[i]-L[i], Math.abs(H[i]-C[i-1]), Math.abs(L[i]-C[i-1])));
+    }
+    // Wilder 平滑
+    const smooth = (arr)=>{ const out=new Array(n).fill(0); let s=0;
+      for(let i=1;i<=p;i++) s+=arr[i]||0; out[p]=s;
+      for(let i=p+1;i<n;i++){ s = s - s/p + arr[i]; out[i]=s; } return out; };
+    const trS=smooth(tr), pDMs=smooth(plusDM), mDMs=smooth(minusDM);
+    const dx=new Array(n).fill(0);
+    for(let i=p;i<n;i++){
+      const pDI = trS[i]>0 ? pDMs[i]/trS[i]*100 : 0;
+      const mDI = trS[i]>0 ? mDMs[i]/trS[i]*100 : 0;
+      const sum = pDI+mDI;
+      dx[i] = sum>0 ? Math.abs(pDI-mDI)/sum*100 : 0;
+    }
+    // ADX = DX 的平滑
+    let adxStart=0; for(let i=p;i<2*p && i<n;i++) adxStart+=dx[i];
+    if(2*p<n){ adxArr[2*p-1]=adxStart/p;
+      for(let i=2*p;i<n;i++) adxArr[i]=(adxArr[i-1]*(p-1)+dx[i])/p; }
+  }
 
-    // KD 金叉/死叉
-    const kdGolden = kArr[i-1]<dArr[i-1] && kArr[i]>=dArr[i];
-    const kdDead   = kArr[i-1]>dArr[i-1] && kArr[i]<=dArr[i];
-    if(kdGolden){ bull++; reasons.push('KD金叉'); }
-    if(kdDead && kArr[i]>20){ bear++; reasons.push('KD死叉'); }
+  // ── 量能：20日均量 ──
+  const volMA = (i)=>{ if(!V||i<19) return 0; let s=0,c=0;
+    for(let j=i-19;j<=i;j++){ if(V[j]>0){s+=V[j];c++;} } return c>0?s/c:0; };
 
-    // MACD 柱由負轉正 / 由正轉負
-    const macdUp   = histArr[i-1]<=0 && histArr[i]>0;
-    const macdDown = histArr[i-1]>=0 && histArr[i]<0;
-    if(macdUp){ bull++; reasons.push('MACD翻多'); }
-    if(macdDown){ bear++; reasons.push('MACD翻空'); }
+  // ── 逐日打分，存到 events ──
+  // 每根 K 棒記錄當日觸發的多/空事件
+  const events = [];  // {i, bull:[reasons], bear:[reasons], adxOK, volRatio}
+  for(let i=1;i<n;i++){
+    const bull=[], bear=[];
 
-    // 均線：站上/跌破 MA20
-    const ma20n = ma(C,i,20), ma20p = ma(C,i-1,20);
+    // KD 交叉
+    if(kArr[i-1]<dArr[i-1] && kArr[i]>=dArr[i]) bull.push('KD金叉');
+    if(kArr[i-1]>dArr[i-1] && kArr[i]<=dArr[i] && kArr[i]>20) bear.push('KD死叉');
+
+    // MACD 柱翻向
+    if(histArr[i-1]<=0 && histArr[i]>0) bull.push('MACD翻多');
+    if(histArr[i-1]>=0 && histArr[i]<0) bear.push('MACD翻空');
+
+    // 均線站上/跌破 MA20
+    const ma20n=ma(C,i,20), ma20p=ma(C,i-1,20);
     if(ma20n!=null && ma20p!=null){
-      if(C[i-1]<=ma20p && C[i]>ma20n){ bull++; reasons.push('站上月線'); }
-      if(C[i-1]>=ma20p && C[i]<ma20n){ bear++; reasons.push('跌破月線'); }
+      if(C[i-1]<=ma20p && C[i]>ma20n) bull.push('站上月線');
+      if(C[i-1]>=ma20p && C[i]<ma20n) bear.push('跌破月線');
     }
 
-    // 多頭排列 MA5>MA20（輔助確認，不單獨計）
-    const ma5n = ma(C,i,5);
-    const bullAlign = ma5n!=null && ma20n!=null && ma5n>ma20n;
+    // 量能確認（爆量 >1.5倍均量）
+    const vm = volMA(i);
+    const volRatio = (vm>0 && V&&V[i]>0) ? V[i]/vm : 1;
+    const volOK = volRatio >= 1.5;
+    if(volOK && bull.length>0) bull.push('帶量');
+    if(volOK && bear.length>0) bear.push('帶量');
 
-    // 共振判定：至少 2 個同向訊號才標記（精準少訊號）
-    if(bull>=2 && bull>bear){
-      signals.push({ idx:i, type:'B', reasons:reasons.filter(r=>!r.includes('死')&&!r.includes('空')&&!r.includes('跌')), strength:bull + (bullAlign?1:0) });
-    } else if(bear>=2 && bear>bull){
-      signals.push({ idx:i, type:'S', reasons:reasons.filter(r=>r.includes('死')||r.includes('空')||r.includes('跌')), strength:bear });
+    // ADX 趨勢強度（>20 才算有效趨勢，過濾盤整）
+    const adxOK = adxArr[i] >= 20;
+
+    // 籌碼面：用日期對應查當日法人淨額（外資+投信，單位張）
+    let chipNet = 0;
+    try{
+      if(D && D[i] && window._instByDate){
+        const key = D[i];  // K線日期，需與籌碼日期格式一致
+        const c = window._instByDate[key];
+        if(c) chipNet = (c.foreign||0) + (c.trust||0);
+      }
+    }catch(e){}
+    // 法人明顯買超(>500張)當多方訊號、明顯賣超當空方訊號
+    if(chipNet > 500 && bull.length>0) bull.push('法人買超');
+    if(chipNet < -500 && bear.length>0) bear.push('法人賣超');
+
+    if(bull.length>0 || bear.length>0){
+      events.push({ i, bull, bear, adxOK, volRatio:+volRatio.toFixed(2), chipNet });
     }
   }
 
-  // 只保留最近 3-5 個訊號（避免雜亂）
-  return signals.slice(-5);
-}
+  // ── 時間窗口共振：WINDOW 根 K 棒內累積 ≥2 個同向訊號 ──
+  const WINDOW = 4;        // 窗口大小（4根K棒內）
+  const MIN_SIGNALS = 2;   // 至少2個同向訊號
+  const signals = [];
+  const usedIdx = new Set();
 
+  for(let e=0;e<events.length;e++){
+    const base = events[e];
+    // 收集窗口內（base.i 起算往後 WINDOW 根）的同向訊號
+    const bullReasons = new Set(), bearReasons = new Set();
+    let lastBullIdx = -1, lastBearIdx = -1, adxConfirm = false;
+    for(let f=e; f<events.length; f++){
+      if(events[f].i - base.i >= WINDOW) break;
+      events[f].bull.forEach(r=>bullReasons.add(r));
+      events[f].bear.forEach(r=>bearReasons.add(r));
+      if(events[f].bull.length) lastBullIdx = events[f].i;
+      if(events[f].bear.length) lastBearIdx = events[f].i;
+      if(events[f].adxOK) adxConfirm = true;
+    }
+    // 帶量不算獨立訊號（是確認），計算核心指標數
+    const bullCore = [...bullReasons].filter(r=>r!=='帶量'&&r!=='法人買超');
+    const bearCore = [...bearReasons].filter(r=>r!=='帶量'&&r!=='法人賣超');
+
+    // B 訊號：窗口內 ≥2 核心多方訊號，標在最後一個訊號的 K 棒
+    if(bullCore.length >= MIN_SIGNALS && bullCore.length > bearCore.length && lastBullIdx>=0 && !usedIdx.has(lastBullIdx)){
+      const reasons = [...bullReasons];
+      if(adxConfirm) reasons.push('趨勢確認');
+      signals.push({ idx:lastBullIdx, type:'B', reasons, strength:bullCore.length + (adxConfirm?1:0) });
+      usedIdx.add(lastBullIdx);
+    }
+    // S 訊號
+    else if(bearCore.length >= MIN_SIGNALS && bearCore.length > bullCore.length && lastBearIdx>=0 && !usedIdx.has(lastBearIdx)){
+      const reasons = [...bearReasons];
+      if(adxConfirm) reasons.push('趨勢確認');
+      signals.push({ idx:lastBearIdx, type:'S', reasons, strength:bearCore.length + (adxConfirm?1:0) });
+      usedIdx.add(lastBearIdx);
+    }
+  }
+
+  // 依 idx 排序，保留最近 6 個
+  signals.sort((a,b)=>a.idx-b.idx);
+  return signals.slice(-6);
+}
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
   if(!svg || !histData) return;
@@ -6601,7 +6689,7 @@ function drawCandlestick(histData, period){
 
   // ── B/S 共振訊號標籤 ──────────────────────────────
   try{
-    const bsSignals = _calcBSSignals(O, H, L, C);
+    const bsSignals = _calcBSSignals(O, H, L, C, V, D);
     _chartData.bsSignals = bsSignals;  // 存給 tooltip 用
     // 顯示 B/S 圖例（K線模式）
     const _bsLeg = document.getElementById('bsLegend');
