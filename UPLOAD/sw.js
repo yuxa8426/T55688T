@@ -4,7 +4,7 @@
 //   • 靜態資源（HTML/JS/CSS/圖示）→ Stale-While-Revalidate（先給快取秒開，背景更新）
 // 這樣可根治「後端更新了但 App 顯示舊資料」的問題
 
-const SW_VERSION = 'stockai-v202606090945';
+const SW_VERSION = 'stockai-v202606091123';
 const STATIC_CACHE = SW_VERSION + '-static';
 const RUNTIME_CACHE = SW_VERSION + '-runtime';
 
