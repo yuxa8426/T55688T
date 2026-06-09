@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606090945';
+  const APP_VER = '202606091123';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -6763,6 +6763,22 @@ function drawCandlestick(histData, period){
     // 顯示 Volume Profile 工具列（K線模式都顯示）
     const _vpTb = document.getElementById('vpToolbar');
     if(_vpTb) _vpTb.style.display = 'flex';
+    // 同步按鈕外觀與當前 VP 開關狀態
+    const _vpBtn = document.getElementById('vpToggleBtn');
+    const _vpInfo = document.getElementById('vpInfo');
+    if(_vpBtn){
+      if(window._showVolProfile){
+        _vpBtn.style.background='rgba(245,200,66,.18)'; _vpBtn.style.borderColor='rgba(245,200,66,.5)'; _vpBtn.style.color='var(--gold)';
+        if(_vpInfo && _chartData && _chartData.volProfile){
+          const _vp=_chartData.volProfile; const _r=v=>Math.round(v*10)/10;
+          _vpInfo.innerHTML=`POC <b style="color:var(--gold)">${_r(_vp.poc)}</b> · 價值區 ${_r(_vp.vaLow)}~${_r(_vp.vaHigh)}`;
+          _vpInfo.style.display='inline';
+        }
+      } else {
+        _vpBtn.style.background='rgba(255,255,255,.06)'; _vpBtn.style.borderColor='var(--border)'; _vpBtn.style.color='var(--text3)';
+        if(_vpInfo) _vpInfo.style.display='none';
+      }
+    }
     bsSignals.forEach(sig=>{
       const i = sig.idx;
       if(i<0 || i>=C.length) return;
@@ -11352,11 +11368,10 @@ function _toggleVolProfile(){
       if(info) info.style.display = 'none';
     }
   }
-  // 重繪當前 K 線圖（套用/移除 VP）
-  if(typeof _renderTaiexChart === 'function' && currentPeriod !== '1D'){
-    // 個股圖：重新觸發當前周期
+  // 重繪當前 K 線圖（套用/移除 VP）：直接重觸發個股當前周期
+  if(currentPeriod && currentPeriod !== '1D'){
     const activeTab = document.querySelector('.tab.active');
-    if(activeTab) setTab(activeTab, currentPeriod);
+    if(activeTab && typeof setTab === 'function') setTab(activeTab, currentPeriod);
   }
   // 更新 POC/VA 資訊顯示
   setTimeout(()=>{
