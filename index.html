@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606061606';
+  const APP_VER = '202606090945';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -884,6 +884,15 @@
       <circle id="chartHoverDot" r="4" fill="white" stroke="#00d4aa" stroke-width="2" display="none"/>
       <circle id="chartDot" r="5" fill="#00d4aa"/>
     </svg>
+    <!-- Volume Profile 切換 + POC/VA 顯示（僅 K 線模式顯示）-->
+    <div id="vpToolbar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button id="vpToggleBtn" onclick="_toggleVolProfile()"
+        style="flex-shrink:0;padding:4px 10px;border-radius:7px;font-size:10px;font-weight:700;
+               background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text3);cursor:pointer;transition:all .2s">
+        📊 籌碼分布
+      </button>
+      <span id="vpInfo" style="font-size:10px;color:var(--text3);display:none"></span>
+    </div>
     <!-- B/S 共振訊號圖例（僅 K 線模式顯示）-->
     <div id="bsLegend" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;
          margin-top:6px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:8px;font-size:10px">
@@ -6596,6 +6605,63 @@ function _calcBSSignals(O, H, L, C, V, D){
   signals.sort((a,b)=>a.idx-b.idx);
   return signals.slice(-6);
 }
+// ══════════════════════════════════════════════════════
+// Volume Profile 籌碼分布計算
+// 將每日成交量依當日高低範圍分配到價格區間，找 POC + Value Area
+// 日K近似法：當日量平均分配到 H~L 區間（非tick級，但波段判斷夠用）
+// 回傳 { bins:[{priceLo,priceHi,vol}], poc, vaHigh, vaLow, maxVol }
+// ══════════════════════════════════════════════════════
+function _calcVolumeProfile(H, L, C, V, priceMin, priceMax, nBins){
+  if(!V || !V.length || priceMax<=priceMin) return null;
+  const BINS = nBins || 24;  // 價格分成幾格
+  const binSize = (priceMax - priceMin) / BINS;
+  if(binSize <= 0) return null;
+
+  // 初始化每個價格區間
+  const bins = [];
+  for(let b=0;b<BINS;b++){
+    bins.push({ priceLo: priceMin + b*binSize, priceHi: priceMin + (b+1)*binSize, vol: 0 });
+  }
+
+  // 把每天的量分配到該天 H~L 涵蓋的價格區間
+  for(let i=0;i<C.length;i++){
+    const vol = V[i] || 0;
+    if(vol<=0) continue;
+    const hi = H[i]>0 ? H[i] : C[i];
+    const lo = L[i]>0 ? L[i] : C[i];
+    if(hi<=0 || lo<=0) continue;
+    // 找出這天涵蓋的區間範圍
+    const bLo = Math.max(0, Math.floor((lo - priceMin) / binSize));
+    const bHi = Math.min(BINS-1, Math.floor((hi - priceMin) / binSize));
+    const span = bHi - bLo + 1;
+    if(span<=0) continue;
+    // 量平均分配到涵蓋的區間（近似：假設當天在高低區間均勻成交）
+    const volPerBin = vol / span;
+    for(let b=bLo;b<=bHi;b++) bins[b].vol += volPerBin;
+  }
+
+  // POC：成交量最大的區間
+  let pocIdx = 0, maxVol = 0;
+  bins.forEach((b,i)=>{ if(b.vol>maxVol){ maxVol=b.vol; pocIdx=i; } });
+  const poc = (bins[pocIdx].priceLo + bins[pocIdx].priceHi) / 2;
+
+  // Value Area：從 POC 向上下擴展，直到涵蓋 70% 總量
+  const totalVol = bins.reduce((s,b)=>s+b.vol,0);
+  const targetVol = totalVol * 0.7;
+  let vaVol = bins[pocIdx].vol;
+  let up = pocIdx, down = pocIdx;
+  while(vaVol < targetVol && (up<BINS-1 || down>0)){
+    const upVol   = up<BINS-1   ? bins[up+1].vol   : -1;
+    const downVol = down>0      ? bins[down-1].vol : -1;
+    if(upVol >= downVol){ up++; vaVol += bins[up].vol; }
+    else { down--; vaVol += bins[down].vol; }
+  }
+  const vaHigh = bins[up].priceHi;
+  const vaLow  = bins[down].priceLo;
+
+  return { bins, poc, vaHigh, vaLow, maxVol, pocIdx };
+}
+
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
   if(!svg || !histData) return;
@@ -6694,6 +6760,9 @@ function drawCandlestick(histData, period){
     // 顯示 B/S 圖例（K線模式）
     const _bsLeg = document.getElementById('bsLegend');
     if(_bsLeg) _bsLeg.style.display = bsSignals.length ? 'flex' : 'none';
+    // 顯示 Volume Profile 工具列（K線模式都顯示）
+    const _vpTb = document.getElementById('vpToolbar');
+    if(_vpTb) _vpTb.style.display = 'flex';
     bsSignals.forEach(sig=>{
       const i = sig.idx;
       if(i<0 || i>=C.length) return;
@@ -6713,6 +6782,38 @@ function drawCandlestick(histData, period){
       svgContent += `<text x="${cx.toFixed(1)}" y="${(anchorY+2.8).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#fff">${txt}</text>`;
     });
   }catch(e){ /* 訊號計算失敗不影響K線 */ }
+
+  // ── Volume Profile 籌碼分布（預設關，由開關控制）──────
+  try{
+    if(window._showVolProfile){
+      const vp = _calcVolumeProfile(H, L, C, V, priceMin, priceMax, 24);
+      if(vp){
+        const profileW = chartW * 0.30;  // 分布圖佔左側30%寬度
+        const leftEdge = padL;  // 從左邊緣往右畫（不擋右側最新K棒）
+        vp.bins.forEach((bin,i)=>{
+          if(bin.vol<=0) return;
+          const y1 = toY(bin.priceHi), y2 = toY(bin.priceLo);
+          const barH = Math.max(1, y2 - y1 - 0.5);
+          const w = vp.maxVol>0 ? (bin.vol/vp.maxVol) * profileW : 0;
+          const midPrice = (bin.priceLo+bin.priceHi)/2;
+          // 顏色：POC 金色、Value Area 內紫色、區外灰
+          const inVA = midPrice >= vp.vaLow && midPrice <= vp.vaHigh;
+          const isPOC = (i === vp.pocIdx);
+          const color = isPOC ? 'rgba(245,200,66,.5)' : inVA ? 'rgba(124,108,255,.28)' : 'rgba(255,255,255,.1)';
+          svgContent += `<rect x="${leftEdge.toFixed(1)}" y="${y1.toFixed(1)}" width="${w.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}"/>`;
+        });
+        // POC 橫線（金色虛線，全寬）
+        const pocY = toY(vp.poc);
+        svgContent += `<line x1="${padL}" x2="${padL+chartW}" y1="${pocY.toFixed(1)}" y2="${pocY.toFixed(1)}" stroke="rgba(245,200,66,.75)" stroke-width="0.8" stroke-dasharray="4,2"/>`;
+        // Value Area 上下界（紫色細虛線）
+        const vaHiY = toY(vp.vaHigh), vaLoY = toY(vp.vaLow);
+        svgContent += `<line x1="${padL}" x2="${padL+chartW}" y1="${vaHiY.toFixed(1)}" y2="${vaHiY.toFixed(1)}" stroke="rgba(124,108,255,.4)" stroke-width="0.5" stroke-dasharray="2,2"/>`;
+        svgContent += `<line x1="${padL}" x2="${padL+chartW}" y1="${vaLoY.toFixed(1)}" y2="${vaLoY.toFixed(1)}" stroke="rgba(124,108,255,.4)" stroke-width="0.5" stroke-dasharray="2,2"/>`;
+        // 存給圖例/說明用
+        _chartData.volProfile = { poc:vp.poc, vaHigh:vp.vaHigh, vaLow:vp.vaLow };
+      }
+    }
+  }catch(e){ /* VP 計算失敗不影響K線 */ }
 
   // 保留 crosshair 元素（hover 用）
   svgContent += `
@@ -7352,7 +7453,7 @@ async function setTab(btn, period){
 
   // ── 1日：折線（分鐘K）────────────────────────────────
   if(period === '1D'){
-    const _bsLeg0=document.getElementById('bsLegend'); if(_bsLeg0) _bsLeg0.style.display='none';
+    const _bsLeg0=document.getElementById('bsLegend'); if(_bsLeg0) _bsLeg0.style.display='none'; const _vpTb0=document.getElementById('vpToolbar'); if(_vpTb0) _vpTb0.style.display='none';
     const intra = await fetchIntraday(sid);
     setLoading('chartSvg', false);
     if(intra && intra.pts.length > 2){
@@ -11233,6 +11334,39 @@ function _updateChartWlBtn(){
   btn.style.background  = inWL ? 'rgba(245,200,66,.12)' : 'rgba(255,255,255,.08)';
   btn.style.borderColor = inWL ? 'rgba(245,200,66,.4)' : 'var(--border)';
   btn.title = inWL ? '已加入自選，點擊移除' : '加入自選股';
+}
+
+function _toggleVolProfile(){
+  window._showVolProfile = !window._showVolProfile;
+  const btn = document.getElementById('vpToggleBtn');
+  const info = document.getElementById('vpInfo');
+  if(btn){
+    if(window._showVolProfile){
+      btn.style.background = 'rgba(245,200,66,.18)';
+      btn.style.borderColor = 'rgba(245,200,66,.5)';
+      btn.style.color = 'var(--gold)';
+    } else {
+      btn.style.background = 'rgba(255,255,255,.06)';
+      btn.style.borderColor = 'var(--border)';
+      btn.style.color = 'var(--text3)';
+      if(info) info.style.display = 'none';
+    }
+  }
+  // 重繪當前 K 線圖（套用/移除 VP）
+  if(typeof _renderTaiexChart === 'function' && currentPeriod !== '1D'){
+    // 個股圖：重新觸發當前周期
+    const activeTab = document.querySelector('.tab.active');
+    if(activeTab) setTab(activeTab, currentPeriod);
+  }
+  // 更新 POC/VA 資訊顯示
+  setTimeout(()=>{
+    if(window._showVolProfile && info && _chartData && _chartData.volProfile){
+      const vp = _chartData.volProfile;
+      const r1 = v => Math.round(v*10)/10;
+      info.innerHTML = `POC <b style="color:var(--gold)">${r1(vp.poc)}</b> · 價值區 ${r1(vp.vaLow)}~${r1(vp.vaHigh)}`;
+      info.style.display = 'inline';
+    }
+  }, 150);
 }
 
 function _toggleChartWatchlist(){
