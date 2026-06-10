@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606091445';
+  const APP_VER = '202606100925';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -6761,6 +6761,8 @@ function _calcRSI(C, period){
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
   if(!svg || !histData) return;
+  // 存當前資料，供指標開關切換時直接重畫（不用重抓資料）
+  window._lastCandleData = { histData, period };
 
   // ⚠️ 清空 SVG：清除折線/填色，確保 K 線不與折線疊加
   const chartLine = document.getElementById('chartLine');
@@ -11546,8 +11548,30 @@ function _updateChartWlBtn(){
   btn.title = inWL ? '已加入自選，點擊移除' : '加入自選股';
 }
 
+// 指標開關切換後，用快取資料直接重畫（不重抓，避免殘留與延遲）
+// 同步指標按鈕外觀（關閉狀態）
+function _syncIndicatorBtn(btnId, on){
+  const b = document.getElementById(btnId);
+  if(!b) return;
+  if(on){ b.style.background='rgba(245,200,66,.18)'; b.style.borderColor='rgba(245,200,66,.5)'; b.style.color='var(--gold)'; }
+  else { b.style.background='rgba(255,255,255,.06)'; b.style.borderColor='var(--border)'; b.style.color='var(--text3)'; }
+  // 關閉時也隱藏對應資訊
+  if(!on){
+    const info = btnId==='vpToggleBtn' ? document.getElementById('vpInfo')
+               : btnId==='stToggleBtn' ? document.getElementById('stInfo') : null;
+    if(info) info.style.display='none';
+  }
+}
+
+function _redrawCandleWithIndicators(){
+  if(window._lastCandleData && typeof drawCandlestick === 'function'){
+    drawCandlestick(window._lastCandleData.histData, window._lastCandleData.period);
+  }
+}
+
 function _toggleVolProfile(){
   window._showVolProfile = !window._showVolProfile;
+  if(window._showVolProfile){ window._showSupertrend=false; _syncIndicatorBtn('stToggleBtn',false); }  // VP與Supertrend互斥(都疊主圖)
   const btn = document.getElementById('vpToggleBtn');
   const info = document.getElementById('vpInfo');
   if(btn){
@@ -11562,11 +11586,8 @@ function _toggleVolProfile(){
       if(info) info.style.display = 'none';
     }
   }
-  // 重繪當前 K 線圖（套用/移除 VP）：直接重觸發個股當前周期
-  if(currentPeriod && currentPeriod !== '1D'){
-    const activeTab = document.querySelector('.tab.active');
-    if(activeTab && typeof setTab === 'function') setTab(activeTab, currentPeriod);
-  }
+  // 重繪（用快取資料，不重抓）
+  _redrawCandleWithIndicators();
   // 更新 POC/VA 資訊顯示
   setTimeout(()=>{
     if(window._showVolProfile && info && _chartData && _chartData.volProfile){
@@ -11580,6 +11601,7 @@ function _toggleVolProfile(){
 
 function _toggleSupertrend(){
   window._showSupertrend = !window._showSupertrend;
+  if(window._showSupertrend){ window._showVolProfile=false; _syncIndicatorBtn('vpToggleBtn',false); }  // Supertrend與VP互斥
   const btn = document.getElementById('stToggleBtn');
   const info = document.getElementById('stInfo');
   if(btn){
@@ -11590,10 +11612,7 @@ function _toggleSupertrend(){
       if(info) info.style.display='none';
     }
   }
-  if(currentPeriod && currentPeriod !== '1D'){
-    const activeTab = document.querySelector('.tab.active');
-    if(activeTab && typeof setTab === 'function') setTab(activeTab, currentPeriod);
-  }
+  _redrawCandleWithIndicators();
   setTimeout(()=>{
     if(window._showSupertrend && info && _chartData && _chartData.supertrend){
       const st = _chartData.supertrend;
@@ -11615,10 +11634,7 @@ function _toggleRSI(){
       btn.style.background='rgba(255,255,255,.06)'; btn.style.borderColor='var(--border)'; btn.style.color='var(--text3)';
     }
   }
-  if(currentPeriod && currentPeriod !== '1D'){
-    const activeTab = document.querySelector('.tab.active');
-    if(activeTab && typeof setTab === 'function') setTab(activeTab, currentPeriod);
-  }
+  _redrawCandleWithIndicators();
 }
 
 function _toggleChartWatchlist(){
