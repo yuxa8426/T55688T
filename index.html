@@ -72,7 +72,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606100925';
+  const APP_VER = '202606101453';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -895,11 +895,6 @@
         style="flex-shrink:0;padding:4px 10px;border-radius:7px;font-size:10px;font-weight:700;
                background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text3);cursor:pointer;transition:all .2s">
         📈 趨勢停損
-      </button>
-      <button id="rsiToggleBtn" onclick="_toggleRSI()"
-        style="flex-shrink:0;padding:4px 10px;border-radius:7px;font-size:10px;font-weight:700;
-               background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text3);cursor:pointer;transition:all .2s">
-        RSI
       </button>
       <span id="vpInfo" style="font-size:10px;color:var(--text3);display:none"></span>
       <span id="stInfo" style="font-size:10px;color:var(--text3);display:none"></span>
@@ -6730,33 +6725,6 @@ function _calcSupertrend(H, L, C, period, mult){
   return { st, dir, flips };
 }
 
-// ══════════════════════════════════════════════════════
-// RSI 相對強弱指標（14日，Wilder 平滑）
-// ══════════════════════════════════════════════════════
-function _calcRSI(C, period){
-  const n = C.length;
-  const p = period || 14;
-  if(n < p+1) return null;
-  const rsi = new Array(n).fill(null);
-  let avgGain=0, avgLoss=0;
-  // 初始平均
-  for(let i=1;i<=p;i++){
-    const ch = C[i]-C[i-1];
-    if(ch>=0) avgGain+=ch; else avgLoss+=-ch;
-  }
-  avgGain/=p; avgLoss/=p;
-  rsi[p] = avgLoss===0 ? 100 : 100 - 100/(1 + avgGain/avgLoss);
-  // Wilder 平滑
-  for(let i=p+1;i<n;i++){
-    const ch = C[i]-C[i-1];
-    const gain = ch>0 ? ch : 0;
-    const loss = ch<0 ? -ch : 0;
-    avgGain = (avgGain*(p-1)+gain)/p;
-    avgLoss = (avgLoss*(p-1)+loss)/p;
-    rsi[i] = avgLoss===0 ? 100 : 100 - 100/(1 + avgGain/avgLoss);
-  }
-  return rsi;
-}
 
 function drawCandlestick(histData, period){
   const svg = document.getElementById('chartSvg');
@@ -6828,6 +6796,17 @@ function drawCandlestick(histData, period){
     <line x1="0" x2="${W}" y1="${(padT+chartH*2/3).toFixed(1)}" y2="${(padT+chartH*2/3).toFixed(1)}" stroke="rgba(255,255,255,.04)" stroke-width="1"/>
   `;
 
+  // ── Y 軸價格刻度（右側標 4 個價位）──────────────────
+  {
+    const _r1 = v => Math.round(v*10)/10;
+    const ticks = 4;
+    for(let t=0;t<=ticks;t++){
+      const price = priceMax - (priceMax-priceMin)*t/ticks;
+      const ty = padT + (chartH * t/ticks);
+      svgContent += `<text x="${(W-1).toFixed(1)}" y="${(ty+3).toFixed(1)}" text-anchor="end" font-size="7" fill="rgba(255,255,255,.4)">${_r1(price)}</text>`;
+    }
+  }
+
   C.forEach((c_,i)=>{
     const o=O[i]||c_, h=H[i]||c_, l=L[i]||c_;
     const isBull = c_ >= o;
@@ -6891,15 +6870,6 @@ function drawCandlestick(histData, period){
       } else {
         _stBtn.style.background='rgba(255,255,255,.06)'; _stBtn.style.borderColor='var(--border)'; _stBtn.style.color='var(--text3)';
         if(_stInfo) _stInfo.style.display='none';
-      }
-    }
-    // 同步 RSI 按鈕
-    const _rsiBtn = document.getElementById('rsiToggleBtn');
-    if(_rsiBtn){
-      if(window._showRSI){
-        _rsiBtn.style.background='rgba(124,108,255,.18)'; _rsiBtn.style.borderColor='rgba(124,108,255,.5)'; _rsiBtn.style.color='var(--purple)';
-      } else {
-        _rsiBtn.style.background='rgba(255,255,255,.06)'; _rsiBtn.style.borderColor='var(--border)'; _rsiBtn.style.color='var(--text3)';
       }
     }
     bsSignals.forEach(sig=>{
@@ -6996,37 +6966,23 @@ function drawCandlestick(histData, period){
         const lastSt = stData.st[C.length-1];
         const lastDir = stData.dir[C.length-1];
         _chartData.supertrend = { stopLine: lastSt, dir: lastDir };
+        // 在圖上標停損價（最新Supertrend線位置 + 價格標籤）
+        if(lastSt!=null){
+          const slY = toY(lastSt);
+          const slColor = lastDir===1 ? '#00d4aa' : '#ff4c6a';
+          const _r1 = v => Math.round(v*10)/10;
+          // 停損水平虛線（全寬）
+          svgContent += `<line x1="${padL}" x2="${(padL+chartW).toFixed(1)}" y1="${slY.toFixed(1)}" y2="${slY.toFixed(1)}" stroke="${slColor}" stroke-width="0.7" stroke-dasharray="3,2" opacity="0.7"/>`;
+          // 停損價標籤（左側，帶背景色塊）
+          const lblTxt = '停損 ' + _r1(lastSt);
+          svgContent += `<rect x="${padL}" y="${(slY-5).toFixed(1)}" width="42" height="10" rx="2" fill="${slColor}" opacity="0.9"/>`;
+          svgContent += `<text x="${(padL+3).toFixed(1)}" y="${(slY+2.5).toFixed(1)}" font-size="7" font-weight="700" fill="#fff">${lblTxt}</text>`;
+        }
       }
     }
   }catch(e){ /* Supertrend 失敗不影響K線 */ }
 
-  // ── RSI（畫在圖底部的迷你副圖）──────────────────────
-  try{
-    if(window._showRSI){
-      const rsiArr = _calcRSI(C, 14);
-      if(rsiArr){
-        const rsiH = 18;  // RSI 副圖高度
-        const rsiTop = H_SVG - rsiH - 2;
-        // RSI 50/70/30 參考線
-        const rsiY = v => rsiTop + (1 - v/100) * rsiH;
-        svgContent += `<line x1="${padL}" x2="${padL+chartW}" y1="${rsiY(70).toFixed(1)}" y2="${rsiY(70).toFixed(1)}" stroke="rgba(255,76,106,.25)" stroke-width="0.5" stroke-dasharray="2,2"/>`;
-        svgContent += `<line x1="${padL}" x2="${padL+chartW}" y1="${rsiY(30).toFixed(1)}" y2="${rsiY(30).toFixed(1)}" stroke="rgba(0,212,170,.25)" stroke-width="0.5" stroke-dasharray="2,2"/>`;
-        // RSI 線
-        let rsiPts=[];
-        for(let i=0;i<C.length;i++){
-          if(rsiArr[i]==null) continue;
-          const cx = padL + (i + 0.5) * stepW;
-          rsiPts.push(`${cx.toFixed(1)},${rsiY(rsiArr[i]).toFixed(1)}`);
-        }
-        if(rsiPts.length>1){
-          svgContent += `<polyline points="${rsiPts.join(' ')}" fill="none" stroke="rgba(124,108,255,.85)" stroke-width="1"/>`;
-        }
-        const lastRsi = rsiArr[C.length-1];
-        if(lastRsi!=null) _chartData.rsi = Math.round(lastRsi);
-      }
-    }
-  }catch(e){ /* RSI 失敗不影響K線 */ }
-
+  
   // 保留 crosshair 元素（hover 用）
   svgContent += `
     <line id="chartCross" x1="0" x2="0" y1="0" y2="${H_SVG}" stroke="rgba(255,255,255,.3)" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
@@ -11624,18 +11580,6 @@ function _toggleSupertrend(){
   }, 150);
 }
 
-function _toggleRSI(){
-  window._showRSI = !window._showRSI;
-  const btn = document.getElementById('rsiToggleBtn');
-  if(btn){
-    if(window._showRSI){
-      btn.style.background='rgba(124,108,255,.18)'; btn.style.borderColor='rgba(124,108,255,.5)'; btn.style.color='var(--purple)';
-    } else {
-      btn.style.background='rgba(255,255,255,.06)'; btn.style.borderColor='var(--border)'; btn.style.color='var(--text3)';
-    }
-  }
-  _redrawCandleWithIndicators();
-}
 
 function _toggleChartWatchlist(){
   if(!currentTicker || !currentName) return;
