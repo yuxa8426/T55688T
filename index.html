@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606111210';
+  const APP_VER = '202606130823';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -7650,7 +7650,6 @@ function _estimateMktBreakdown(todayB,yesterB){
 
 function renderMktBarsStatic(){ _renderMktVolSVG([],0); }
 function renderMktBars(){ renderMktBarsStatic(); }
-function renderMktBars(){ renderMktBarsStatic(); }
 
 // ── 時間軸 Tab 切換 ───────────────────────────────────
 // 1D: Yahoo Finance 分鐘K | 其他: FinMind 日K
@@ -13317,12 +13316,7 @@ function _scanGoPage(p){
   if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
-// 搜尋狀態 + handler
-var _scanSearchKw = '';
-function _onScanSearch(kw){
-  _scanSearchKw = kw;
-  if(_scanData) renderDailyScan(_scanData, _scanCurrentTab || 'top');
-}
+// 搜尋狀態
 
 function toggleScanLegend(){
   const el = document.getElementById('scanLegend');
