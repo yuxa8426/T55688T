@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606140557';
+  const APP_VER = '202606141403';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1350,7 +1350,7 @@
             </div>
             <div id="marginCallCard" style="display:none;margin-bottom:8px">
               <div style="background:var(--card);border-radius:12px;padding:12px 14px;border:1px solid var(--border)">
-                <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px">⚠️ 融資維持率分析<span style="font-size:9px;font-weight:400;color:var(--text3)">安全線 166%・追繳線 130%</span></div>
+                <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px">⚠️ 融資維持率分析<span style="font-size:9px;font-weight:400;color:var(--text3)">以20日均價估算・安全166%/追繳130%</span></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
                   <div style="text-align:center;background:var(--surface);border-radius:8px;padding:8px 4px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">融資維持率</div><div style="font-size:15px;font-weight:800" id="marginCallRatio">—</div><div style="font-size:9px;color:var(--text3);margin-top:2px">%</div></div>
                   <div style="text-align:center;background:var(--surface);border-radius:8px;padding:8px 4px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">追繳警戒價</div><div style="font-size:14px;font-weight:800;color:var(--green)" id="marginCallPrice">—</div><div style="font-size:9px;color:var(--text3);margin-top:2px">元</div></div>
@@ -14023,7 +14023,11 @@ async function loadFundamentals(stockId){
   if(marginData?.length && _price > 0){
     const _ml = [...marginData].sort((a,b)=>a.date>b.date?1:-1).slice(-1)[0];
     const _mBal = Math.round(parseFloat(_ml?.MarginPurchaseTodayBalance||0)/1000);
-    renderMarginCall(_price, Math.max(_mBal, 1), marginData);
+    // 傳入 MA20 當市場融資成本基準（無則用 _closes 算）
+    let _costBase = _ma20;
+    if(!_costBase && _closes.length>=20){ _costBase = _closes.slice(-20).reduce((a,b)=>a+b,0)/20; }
+    if(!_costBase && _closes.length>0){ _costBase = _closes.reduce((a,b)=>a+b,0)/_closes.length; }
+    renderMarginCall(_price, Math.max(_mBal, 1), marginData, _costBase);
   }
 
   // ⑥ 外資持股趨勢
@@ -14690,29 +14694,20 @@ function _getSectorAvgPE(sector){
 // 融資維持率 = 股價 / 融資成本 × 100%
 // 追繳線 130%，強制回補 120%，安全線 166%
 // ══════════════════════════════════════════════════════
-function renderMarginCall(price, marginBal, marginData){
+function renderMarginCall(price, marginBal, marginData, costBase){
   const card = document.getElementById('marginCallCard');
   if(!card || !price || !marginBal || marginBal <= 0) return;
 
-  // 估算融資成本（取近期成交均價作為融資價格）
-  // 實際融資成本需要個別帳戶資料，這裡用近期均線估算
-  let estimatedCost = null;
-  if(marginData?.length){
-    const sorted = [...marginData].sort((a,b)=>a.date>b.date?1:-1);
-    // 用最早一筆有融資的日期估算（近似法）
-    const earliest = sorted.find(r=>parseFloat(r.MarginPurchaseTodayBalance||0)>0);
-    if(earliest){
-      const ep = parseFloat(earliest.MarginPurchaseYesterdayBalance||0);
-      // 無法精確得知融資成本，改用當前股價×0.85（融資成數60%，安全估算）
-      estimatedCost = price * 0.85;
-    }
-  }
-  if(!estimatedCost) estimatedCost = price * 0.85;
+  // 融資成本基準：用近20日均價（市場融資戶平均成本估算）
+  // 若無均價基準，退而用現價（此時維持率=166%基準值，僅供參考）
+  const buyCost = (costBase && costBase > 0) ? costBase : price;
 
-  // 融資維持率（以市值/融資金額計算）
-  // 融資成數台股一般 60%，即融資金額 = 股價 × 0.6 × 張數
+  // 融資維持率 = 股票現值 ÷ 融資金額 × 100%
+  // 融資成數 60%：融資金額 = 買進成本 × 0.6
+  // 維持率 = 現價 ÷ (買進成本 × 0.6) × 100%
+  // → 現價 vs 融資戶平均成本(均價)，反映目前維持率水準（每檔不同）
   const loanPct   = 0.6;  // 融資成數
-  const loanAmt   = estimatedCost * loanPct;  // 每股融資金額
+  const loanAmt   = buyCost * loanPct;  // 每股融資金額（基於均價成本）
   const maintRatio = (price / loanAmt * 100);  // 維持率 = 市值/融資金額
 
   // 追繳警戒價 = 融資金額 × 130%（追繳線）
