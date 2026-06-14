@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606130823';
+  const APP_VER = '202606140557';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -13069,6 +13069,15 @@ function fundReset(){
   if(supportCard) supportCard.style.display='none';
   const ftChart = document.getElementById('foreignTrendChart');
   if(ftChart) ftChart.innerHTML='';
+  // 清空籌碼深度的數字（不只隱藏卡片，避免換股殘留舊值）
+  ['marginCallRatio','marginCallPrice','marginCallGap',
+   'chipForeign','chipForeignChg','chipMargin','chipMarginChg',
+   'chipShortRatio','stockMarginBal','stockShortBal',
+   'fundForeignRatio','fundForeignChg','fundHoldDate',
+   'stockMarginBalance','stockShortBalance','stockShortMarginRatio'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){ el.textContent='—'; el.style.color=''; }
+  });
   const spinner = document.getElementById('fundLoadSpinner');
   if(spinner) spinner.style.display='inline';
 }
