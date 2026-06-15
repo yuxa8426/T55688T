@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606141403';
+  const APP_VER = '202606151413';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1281,7 +1281,7 @@
             </div>
             <div style="background:var(--card);border-radius:10px;padding:10px 12px;border:1px solid var(--border)">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--text2)">月營收趨勢</div><div style="font-size:10px;color:var(--text3)" id="fund-rev-month">—</div></div>
-              <svg id="fundRevChart" viewBox="0 0 280 40" style="width:100%;height:40px;overflow:visible" preserveAspectRatio="none"><path id="fundRevLine" fill="none" stroke="var(--purple)" stroke-width="2" stroke-linejoin="round"/><path id="fundRevFill" fill="rgba(155,127,254,.12)"/></svg>
+              <svg id="fundRevChart" viewBox="0 0 280 78" style="width:100%;height:78px;overflow:visible"><path id="fundRevFill" fill="rgba(155,127,254,.12)"/><path id="fundRevLine" fill="none" stroke="var(--purple)" stroke-width="1.5" stroke-linejoin="round"/><g id="fundRevAxis"></g></svg>
               <div style="display:flex;justify-content:space-between;margin-top:6px">
                 <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">月增率</div><div style="font-size:12px;font-weight:700" id="fund-rev-mom">—</div></div>
                 <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">年增率</div><div style="font-size:12px;font-weight:700" id="fund-rev-yoy">—</div></div>
@@ -13612,8 +13612,8 @@ async function loadFundamentals(stockId){
     }
 
     // 月營收迷你折線圖
-    const revPts  = last12.slice(-12).map(r=>parseFloat(r.revenue||0)).filter(v=>v>0);
-    if(revPts.length >= 3) _drawFundRevChart(revPts);
+    const revRows = last12.slice(-12).filter(r=>parseFloat(r.revenue||0)>0);
+    if(revRows.length >= 3) _drawFundRevChart(revRows);
   }
 
   // ── 解析 PER/PBR ──────────────────────────────────────
@@ -14042,28 +14042,62 @@ async function loadFundamentals(stockId){
 }
 
 // 月營收迷你折線圖
-function _drawFundRevChart(pts){
+function _drawFundRevChart(rows){
   const lineEl = document.getElementById('fundRevLine');
   const fillEl = document.getElementById('fundRevFill');
-  if(!lineEl || !pts.length) return;
+  const axisEl = document.getElementById('fundRevAxis');
+  if(!lineEl || !rows || !rows.length) return;
 
-  const W=280, H=40, pad=4;
+  // 取營收(億元)與月份
+  const pts = rows.map(r=>parseFloat(r.revenue||0)/1e8);  // 元→億元
+  const months = rows.map(r=>{
+    const d = (r.date||r.revenue_month||'').toString();
+    // FinMind 月營收 date 格式 YYYY-MM-DD 或 revenue_month
+    const m = d.match(/(\d{4})-(\d{2})/);
+    return m ? m[2]+'月' : '';
+  });
+
+  const W=280, H=78;
+  const padL=30, padR=6, padT=6, padB=14;  // 左留Y軸、下留X軸
+  const chartW = W-padL-padR, chartH = H-padT-padB;
   const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||mn*0.1||1;
-  const toX = i=>(i/(pts.length-1))*(W-pad*2)+pad;
-  const toY = v=>H-pad-((v-mn)/rng)*(H-pad*2);
+  const toX = i=>padL + (pts.length>1 ? i/(pts.length-1)*chartW : chartW/2);
+  const toY = v=>padT + (1-(v-mn)/rng)*chartH;
+  const _r1 = v => v>=100 ? Math.round(v) : Math.round(v*10)/10;
 
+  // 折線
   const d = pts.map((v,i)=>`${i===0?'M':'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
   lineEl.setAttribute('d', d);
-
   const last = pts[pts.length-1];
   const isUp = pts.length>1 && last >= pts[0];
   lineEl.setAttribute('stroke', isUp?'var(--red)':'var(--green)');
 
-  // 填充區域
-  const fillD = d + ` L${toX(pts.length-1).toFixed(1)},${H} L${pad},${H} Z`;
-  fillEl.setAttribute('d', fillD);
-  fillEl.setAttribute('fill', isUp?'rgba(255,76,106,.12)':'rgba(0,212,170,.12)');
+  // 填充
+  if(fillEl){
+    const fillD = d + ` L${toX(pts.length-1).toFixed(1)},${(padT+chartH).toFixed(1)} L${toX(0).toFixed(1)},${(padT+chartH).toFixed(1)} Z`;
+    fillEl.setAttribute('d', fillD);
+    fillEl.setAttribute('fill', isUp?'rgba(255,76,106,.1)':'rgba(0,212,170,.1)');
+  }
+
+  // 軸標籤
+  if(axisEl){
+    let ax = '';
+    // Y軸：最高、最低營收(億元)
+    ax += `<text x="${padL-3}" y="${(toY(mx)+3).toFixed(1)}" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.45)">${_r1(mx)}</text>`;
+    ax += `<text x="${padL-3}" y="${(toY(mn)+3).toFixed(1)}" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.45)">${_r1(mn)}</text>`;
+    ax += `<text x="2" y="${(padT+2).toFixed(1)}" font-size="5.5" fill="rgba(255,255,255,.3)">億元</text>`;
+    // X軸：首、中、尾月份
+    const idxs = pts.length<=4 ? pts.map((_,i)=>i) : [0, Math.floor((pts.length-1)/2), pts.length-1];
+    idxs.forEach(i=>{
+      if(months[i]) ax += `<text x="${toX(i).toFixed(1)}" y="${(H-3).toFixed(1)}" text-anchor="middle" font-size="6.5" fill="rgba(255,255,255,.45)">${months[i]}</text>`;
+    });
+    // 最新值標記點
+    ax += `<circle cx="${toX(pts.length-1).toFixed(1)}" cy="${toY(last).toFixed(1)}" r="2" fill="${isUp?'var(--red)':'var(--green)'}"/>`;
+    ax += `<text x="${(toX(pts.length-1)-2).toFixed(1)}" y="${(toY(last)-4).toFixed(1)}" text-anchor="end" font-size="6.5" font-weight="700" fill="${isUp?'var(--red)':'var(--green)'}">${_r1(last)}</text>`;
+    axisEl.innerHTML = ax;
+  }
 }
+
 
 // AI 基本面簡短評語
 // ── 財報 AI 解讀快取 ──────────────────────────────────
@@ -14857,7 +14891,16 @@ function renderDivFillHistory(divData, perData){
   // 統計
   const validDivs = recentDivs.filter(r=>getCashDiv(r)>0);
   const totalYears = new Set(validDivs.map(r=>(r.year||r.date||'').slice(0,4))).size;
-  const annualDiv  = validDivs.slice(-4).reduce((s,r)=>s+getCashDiv(r),0);
+  // 近一年合計配息 = 最近一個除息年度的配息加總（同年可能多次配息，如季配/半年配）
+  // 統一用 date(除息日) 的西元年份分組，避免 year 欄位是民國年造成干擾
+  const _divYear = r => {
+    const d = (r.date||'').toString();
+    const m = d.match(/(\d{4})/);  // 抓西元年
+    return m ? m[1] : (r.year||'').toString();
+  };
+  const _sortedDivs = [...validDivs].sort((a,b)=>((a.date||'')>(b.date||'')?1:-1));
+  const _latestYear = _sortedDivs.length ? _divYear(_sortedDivs[_sortedDivs.length-1]) : '';
+  const annualDiv  = validDivs.filter(r=>_divYear(r)===_latestYear).reduce((s,r)=>s+getCashDiv(r),0);
 
   const summEl = document.getElementById('divFillSummary');
   if(summEl){
