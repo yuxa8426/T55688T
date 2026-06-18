@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606151413';
+  const APP_VER = '202606181327';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1737,6 +1737,23 @@
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">載入中…</div>
     </div><!-- /intlNewsPanel -->
 
+    </div>
+
+    <!-- ═══ 題材熱度分析 ═══ -->
+    <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <h2>🎯 題材熱度</h2>
+      <button onclick="loadThemeAnalysis()" id="themeRefreshBtn"
+        style="font-size:11px;padding:4px 12px;border-radius:8px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer">
+        分析
+      </button>
+    </div>
+    <div id="themeAnalysisCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
+      <div id="themeContent" style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">
+        點擊「分析」查看當前題材熱度與未來事件
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--text3);margin-bottom:12px;padding:0 4px;line-height:1.5">
+      ⚠️ 基於當前真實資金流與已知事件的客觀分析，非預測未來題材。市場題材常突發（政策/事件），無法提前準確預知，請理性參考。
     </div>
 
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
@@ -3959,6 +3976,81 @@ function setUpdateTime(id, dateStr){
 }
 
 // ── Page switch ──────────────────────────────────────
+async function loadThemeAnalysis(){
+  const btn = document.getElementById('themeRefreshBtn');
+  const content = document.getElementById('themeContent');
+  if(!content) return;
+  if(btn){ btn.textContent='分析中…'; btn.disabled=true; }
+  content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">🔄 分析題材熱度中（含AI解讀，約10-20秒）…</div>';
+
+  try{
+    const r = await fetchWithTimeout(`${API}/theme-analysis`, 30000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    if(d.error){ content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">'+(d.message||'暫無資料，請稍後再試')+'</div>'; return; }
+
+    const _r1 = v => Math.round(v*10)/10;
+    let h = '';
+
+    // 資料日期
+    h += `<div style="font-size:10px;color:var(--text3);margin-bottom:10px">資料日 ${d.dataDate||'—'}</div>`;
+
+    // AI 題材解讀
+    if(d.aiTheme){
+      const a = d.aiTheme;
+      h += `<div style="background:linear-gradient(135deg,rgba(124,108,255,.12),rgba(0,212,170,.06));border:1px solid rgba(124,108,255,.25);border-radius:10px;padding:11px;margin-bottom:12px">`;
+      h += `<div style="font-size:11px;font-weight:700;color:var(--purple);margin-bottom:6px">🤖 AI 題材解讀</div>`;
+      if(a.hotThemes && a.hotThemes.length){
+        a.hotThemes.forEach(t=>{
+          h += `<div style="font-size:11px;margin-bottom:5px;line-height:1.5"><strong style="color:var(--text)">${t.theme}</strong>　<span style="color:var(--text2)">${t.momentum||''}</span>　<span style="color:var(--text3)">續航:${t.continuity||''}</span></div>`;
+        });
+      }
+      if(a.outlook) h += `<div style="font-size:11px;color:var(--text2);margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.08);line-height:1.5">📅 ${a.outlook}</div>`;
+      if(a.caveat) h += `<div style="font-size:10px;color:var(--gold);margin-top:5px">⚠️ ${a.caveat}</div>`;
+      h += `</div>`;
+    }
+
+    // 題材熱度排行
+    if(d.themes && d.themes.length){
+      h += `<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">📊 題材熱度排行（依當前資金流）</div>`;
+      const maxHeat = Math.max(...d.themes.map(t=>t.heat), 1);
+      d.themes.slice(0,8).forEach((t,i)=>{
+        const barW = Math.max(5, t.heat/maxHeat*100);
+        const chgColor = t.avgChg>=0 ? 'var(--red)' : 'var(--green)';
+        h += `<div style="margin-bottom:9px">`;
+        h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">`;
+        h += `<span style="font-size:11px;font-weight:700;color:var(--text)">${i+1}. ${t.theme}</span>`;
+        h += `<span style="font-size:10px;color:${chgColor}">均${t.avgChg>=0?'+':''}${t.avgChg}% · ${t.upRatio}%紅</span>`;
+        h += `</div>`;
+        h += `<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${barW}%;background:linear-gradient(90deg,var(--purple),var(--accent));border-radius:3px"></div></div>`;
+        // 領頭股
+        if(t.leaders && t.leaders.length){
+          h += `<div style="display:flex;gap:5px;flex-wrap:wrap">`;
+          t.leaders.forEach(s=>{
+            h += `<span onclick="selectStock('${s.id}','${s.name}')" style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.05);color:var(--text2);cursor:pointer">${s.name}${s.foreignBuyDays>=3?' 🔥':''}</span>`;
+          });
+          h += `</div>`;
+        }
+        h += `</div>`;
+      });
+    }
+
+    // 已知未來事件
+    if(d.events && d.events.length){
+      h += `<div style="font-size:11px;font-weight:700;color:var(--text2);margin:12px 0 7px">📅 已知未來事件（行事曆）</div>`;
+      d.events.forEach(e=>{
+        h += `<div style="font-size:10px;color:var(--text3);margin-bottom:4px;padding-left:12px;position:relative"><span style="position:absolute;left:0">·</span>${e}</div>`;
+      });
+    }
+
+    content.innerHTML = h;
+  }catch(e){
+    content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">分析失敗：'+e.message+'<br>請稍後再試</div>';
+  }finally{
+    if(btn){ btn.textContent='重新分析'; btn.disabled=false; }
+  }
+}
+
 function switchPage(n){
   document.querySelectorAll('.page').forEach(p=>{
     p.classList.remove('active');
