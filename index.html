@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606181327';
+  const APP_VER = '202606201039';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -3992,8 +3992,22 @@ async function loadThemeAnalysis(){
     const _r1 = v => Math.round(v*10)/10;
     let h = '';
 
-    // 資料日期
-    h += `<div style="font-size:10px;color:var(--text3);margin-bottom:10px">資料日 ${d.dataDate||'—'}</div>`;
+    // 資料日期 + 分析資訊
+    h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">`;
+    h += `<span style="font-size:10px;color:var(--text3)">資料日 ${d.dataDate||'—'}</span>`;
+    h += `<span onclick="document.getElementById('themeMethodBox').style.display=document.getElementById('themeMethodBox').style.display==='none'?'block':'none'" style="font-size:10px;color:var(--purple);cursor:pointer">ℹ️ 篩選標準說明</span>`;
+    h += `</div>`;
+    // 篩選標準/期間/有效期 說明（預設摺疊）
+    h += `<div id="themeMethodBox" style="display:none;background:rgba(124,108,255,.06);border:1px solid rgba(124,108,255,.2);border-radius:9px;padding:10px;margin-bottom:12px;font-size:10px;color:var(--text2);line-height:1.7">`;
+    h += `<div style="font-weight:700;color:var(--text);margin-bottom:4px">📐 熱度怎麼算？</div>`;
+    h += `熱度分數 = 平均漲幅×2 ＋ 上漲家數比例×30 ＋ 外資買超加權。三者越高，題材越熱。<br><br>`;
+    h += `<div style="font-weight:700;color:var(--text);margin-bottom:4px">🎯 領頭股怎麼選？</div>`;
+    h += `取該題材中「AI綜合評分」最高的前3檔（評分結合KD/MACD/布林/法人/基本面）。🔥=外資連續買超3天以上。<br><br>`;
+    h += `<div style="font-weight:700;color:var(--text);margin-bottom:4px">📅 分析期間</div>`;
+    h += `基於最近一次盤後掃描（資料日 ${d.dataDate||'—'}）的當日數據，涵蓋市值前300大個股。<br><br>`;
+    h += `<div style="font-weight:700;color:var(--text);margin-bottom:4px">⏱️ 有效期間</div>`;
+    h += `此為「當日快照」，建議每日盤後更新一次。題材熱度變化快，隔日資金可能輪動，請勿視為長期有效。`;
+    h += `</div>`;
 
     // AI 題材解讀
     if(d.aiTheme){
@@ -4010,37 +4024,64 @@ async function loadThemeAnalysis(){
       h += `</div>`;
     }
 
-    // 題材熱度排行
+    // 題材熱度排行（白話化）
     if(d.themes && d.themes.length){
-      h += `<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">📊 題材熱度排行（依當前資金流）</div>`;
+      h += `<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px">📊 哪些題材正熱？</div>`;
+      h += `<div style="font-size:10px;color:var(--text3);margin-bottom:10px">依當前法人買超、漲幅、上漲家數綜合排序</div>`;
       const maxHeat = Math.max(...d.themes.map(t=>t.heat), 1);
       d.themes.slice(0,8).forEach((t,i)=>{
-        const barW = Math.max(5, t.heat/maxHeat*100);
+        const heatRatio = t.heat/maxHeat;
+        // 火焰等級（直觀呈現熱度）
+        const fireCount = heatRatio>0.75?3 : heatRatio>0.45?2 : 1;
+        const fire = '🔥'.repeat(fireCount);
+        const barW = Math.max(8, heatRatio*100);
         const chgColor = t.avgChg>=0 ? 'var(--red)' : 'var(--green)';
-        h += `<div style="margin-bottom:9px">`;
-        h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">`;
-        h += `<span style="font-size:11px;font-weight:700;color:var(--text)">${i+1}. ${t.theme}</span>`;
-        h += `<span style="font-size:10px;color:${chgColor}">均${t.avgChg>=0?'+':''}${t.avgChg}% · ${t.upRatio}%紅</span>`;
+        // 白話描述
+        const upDesc = t.upRatio>=80 ? '幾乎全數上漲' : t.upRatio>=60 ? '多數上漲' : t.upRatio>=40 ? '漲跌互見' : '偏弱';
+        const foreignDesc = t.foreignWan>500 ? '外資大買' : t.foreignWan>0 ? '外資買超' : t.foreignWan<-500 ? '外資大賣' : '外資中性';
+
+        h += `<div style="margin-bottom:12px;padding:9px;background:rgba(255,255,255,.02);border-radius:9px">`;
+        // 標題列：排名 + 題材 + 火焰
+        h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">`;
+        h += `<span style="font-size:12px;font-weight:700;color:var(--text)">${i+1}. ${t.theme} <span style="font-size:11px">${fire}</span></span>`;
+        h += `<span style="font-size:9px;color:var(--text3)">${t.count}檔</span>`;
         h += `</div>`;
-        h += `<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:3px"><div style="height:100%;width:${barW}%;background:linear-gradient(90deg,var(--purple),var(--accent));border-radius:3px"></div></div>`;
+        // 熱度條
+        h += `<div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:6px"><div style="height:100%;width:${barW}%;background:linear-gradient(90deg,#ff6b35,#f53)"></div></div>`;
+        // 白話數據（取代抽象數字）
+        h += `<div style="font-size:10px;color:var(--text2);margin-bottom:6px;line-height:1.5">`;
+        h += `<span style="color:${chgColor}">平均${t.avgChg>=0?'漲':'跌'} ${Math.abs(t.avgChg)}%</span>`;
+        h += ` · ${upDesc}（${t.upRatio}%紅K）`;
+        h += ` · <span style="color:${t.foreignWan>0?'var(--red)':'var(--text3)'}">${foreignDesc}</span>`;
+        h += `</div>`;
         // 領頭股
         if(t.leaders && t.leaders.length){
-          h += `<div style="display:flex;gap:5px;flex-wrap:wrap">`;
+          h += `<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">`;
+          h += `<span style="font-size:9px;color:var(--text3)">領頭：</span>`;
           t.leaders.forEach(s=>{
-            h += `<span onclick="selectStock('${s.id}','${s.name}')" style="font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.05);color:var(--text2);cursor:pointer">${s.name}${s.foreignBuyDays>=3?' 🔥':''}</span>`;
+            const hot = s.foreignBuyDays>=3;
+            h += `<span onclick="selectStock('${s.id}','${s.name}')" style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(124,108,255,.1);color:var(--text2);cursor:pointer">${s.name}${hot?' 🔥':''}</span>`;
           });
           h += `</div>`;
         }
         h += `</div>`;
       });
+      // 圖示說明
+      h += `<div style="font-size:9px;color:var(--text3);margin:2px 0 12px;line-height:1.6;padding:7px;background:rgba(255,255,255,.02);border-radius:7px">`;
+      h += `🔥🔥🔥 熱度等級（資金集中度）　·　🔥 標記=外資連續買超3天以上<br>`;
+      h += `「紅K」=當日上漲的個股比例　·　平均漲幅=該題材所有個股的平均`;
+      h += `</div>`;
     }
 
     // 已知未來事件
     if(d.events && d.events.length){
-      h += `<div style="font-size:11px;font-weight:700;color:var(--text2);margin:12px 0 7px">📅 已知未來事件（行事曆）</div>`;
+      h += `<div style="font-size:12px;font-weight:700;color:var(--text);margin:14px 0 3px">📅 接下來有哪些確定事件？</div>`;
+      h += `<div style="font-size:9px;color:var(--text3);margin-bottom:8px">以下是「已排定會發生」的事件，非預測</div>`;
+      h += `<div style="background:rgba(255,255,255,.02);border-radius:9px;padding:10px">`;
       d.events.forEach(e=>{
-        h += `<div style="font-size:10px;color:var(--text3);margin-bottom:4px;padding-left:12px;position:relative"><span style="position:absolute;left:0">·</span>${e}</div>`;
+        h += `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;padding-left:16px;position:relative;line-height:1.5"><span style="position:absolute;left:0;color:var(--accent)">📌</span>${e}</div>`;
       });
+      h += `</div>`;
     }
 
     content.innerHTML = h;
