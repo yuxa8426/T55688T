@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606201039';
+  const APP_VER = '202606201218';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1742,10 +1742,17 @@
     <!-- ═══ 題材熱度分析 ═══ -->
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <h2>🎯 題材熱度</h2>
-      <button onclick="loadThemeAnalysis()" id="themeRefreshBtn"
-        style="font-size:11px;padding:4px 12px;border-radius:8px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer">
-        分析
-      </button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="themeUpdateTime" style="font-size:9px;color:var(--text3)"></span>
+        <button onclick="loadThemeAnalysis()" id="themeRefreshBtn"
+          style="font-size:11px;padding:4px 12px;border-radius:8px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer">
+          分析
+        </button>
+        <button onclick="_toggleThemeCollapse()" id="themeCollapseBtn"
+          style="font-size:13px;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text3);cursor:pointer;display:none">
+          ▾
+        </button>
+      </div>
     </div>
     <div id="themeAnalysisCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
       <div id="themeContent" style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">
@@ -3976,17 +3983,73 @@ function setUpdateTime(id, dateStr){
 }
 
 // ── Page switch ──────────────────────────────────────
-async function loadThemeAnalysis(){
+// 題材分析：收合切換
+function _toggleThemeCollapse(){
+  const card = document.getElementById('themeAnalysisCard');
+  const btn = document.getElementById('themeCollapseBtn');
+  if(!card) return;
+  const collapsed = card.style.display === 'none';
+  card.style.display = collapsed ? 'block' : 'none';
+  if(btn) btn.textContent = collapsed ? '▾' : '▸';
+  try{ localStorage.setItem('stockai_theme_collapsed', collapsed ? '0' : '1'); }catch(e){}
+}
+
+// 更新「最後分析時間」顯示
+function _updateThemeTime(ts){
+  const el = document.getElementById('themeUpdateTime');
+  if(!el || !ts) return;
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff/60000);
+  let txt;
+  if(mins < 1) txt = '剛剛更新';
+  else if(mins < 60) txt = `${mins}分鐘前`;
+  else if(mins < 1440) txt = `${Math.floor(mins/60)}小時前`;
+  else txt = `${Math.floor(mins/1440)}天前`;
+  el.textContent = '更新於 ' + txt;
+}
+
+// 進頁面時讀本機暫存（不重新分析）
+function _loadThemeCache(){
+  try{
+    const raw = localStorage.getItem('stockai_theme_cache');
+    if(!raw) return;
+    const cached = JSON.parse(raw);
+    if(!cached.data) return;
+    // 用快取資料渲染
+    loadThemeAnalysis(cached.data, cached.savedAt);
+    // 套用收合狀態
+    const collapsed = localStorage.getItem('stockai_theme_collapsed') === '1';
+    if(collapsed){
+      const card = document.getElementById('themeAnalysisCard');
+      const btn = document.getElementById('themeCollapseBtn');
+      if(card) card.style.display='none';
+      if(btn) btn.textContent='▸';
+    }
+  }catch(e){}
+}
+
+async function loadThemeAnalysis(cachedData, cachedTime){
   const btn = document.getElementById('themeRefreshBtn');
   const content = document.getElementById('themeContent');
   if(!content) return;
-  if(btn){ btn.textContent='分析中…'; btn.disabled=true; }
-  content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">🔄 分析題材熱度中（含AI解讀，約10-20秒）…</div>';
+
+  // 若傳入快取資料 → 直接渲染（不重抓）
+  const fromCache = cachedData && typeof cachedData === 'object' && cachedData.themes;
+
+  if(!fromCache){
+    if(btn){ btn.textContent='分析中…'; btn.disabled=true; }
+    content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">🔄 分析題材熱度中（含AI解讀，約10-20秒）…</div>';
+  }
 
   try{
-    const r = await fetchWithTimeout(`${API}/theme-analysis`, 30000);
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json();
+    let d;
+    if(fromCache){
+      d = cachedData;
+    } else {
+      const r = await fetchWithTimeout(`${API}/theme-analysis`, 30000);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      d = await r.json();
+    }
     if(d.error){ content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">'+(d.message||'暫無資料，請稍後再試')+'</div>'; return; }
 
     const _r1 = v => Math.round(v*10)/10;
@@ -4085,10 +4148,24 @@ async function loadThemeAnalysis(){
     }
 
     content.innerHTML = h;
+    // 顯示收合按鈕
+    const _cb = document.getElementById('themeCollapseBtn');
+    if(_cb) _cb.style.display='inline-block';
+    if(fromCache){
+      // 快取渲染：用快取的時間
+      _updateThemeTime(cachedTime || Date.now());
+    } else {
+      // 新分析：存本機暫存
+      try{
+        localStorage.setItem('stockai_theme_cache', JSON.stringify({ data:d, savedAt:Date.now() }));
+      }catch(e){}
+      _updateThemeTime(Date.now());
+    }
   }catch(e){
     content.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3)">分析失敗：'+e.message+'<br>請稍後再試</div>';
   }finally{
-    if(btn){ btn.textContent='重新分析'; btn.disabled=false; }
+    if(btn && !fromCache){ btn.textContent='重新分析'; btn.disabled=false; }
+    else if(btn){ btn.textContent='重新分析'; }
   }
 }
 
@@ -4128,6 +4205,8 @@ function switchPage(n){
   if(n==='portfolio'){ if(!_alertLoaded) setTimeout(()=>refreshAlertStocks(),50); else renderAlertList(_alertTab); }
   if(n==='profile') setTimeout(()=>initPushUI(),100);
   if(n==='explore'){
+    // 讀題材分析本機暫存（若有，直接顯示上次結果）
+    _loadThemeCache();
     const unloaded = Object.keys(SECTORS).filter(k=>!_sectorPreviewCache[k]);
     if(unloaded.length > 0){
       loadAllSectorPreviews().then(()=>{
