@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606211409';
+  const APP_VER = '202606241143';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -2482,6 +2482,24 @@
     </div>
   </div>
   <!-- ══ 投資組合 & 盈虧紀錄 ══ -->
+  <!-- ═══ 決策日誌入口 ═══ -->
+  <div class="sec" style="margin-top:4px"><h2>📓 決策日誌</h2></div>
+  <div onclick="openJournal()" style="background:linear-gradient(135deg,rgba(124,108,255,.15),rgba(0,212,170,.08));border:1px solid rgba(124,108,255,.3);border-radius:14px;padding:16px;margin-bottom:8px;cursor:pointer">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:26px">📓</span>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">決策日誌 & 復盤</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px" id="journalSummaryLine">記錄決策・追蹤結果・檢討提升</div>
+        </div>
+      </div>
+      <span style="font-size:18px;color:var(--text3)">›</span>
+    </div>
+  </div>
+  <div style="font-size:9px;color:var(--text3);margin-bottom:14px;padding:0 4px;line-height:1.5">
+    💡 重點不是追求高勝率，而是建立決策紀律：記錄理由、檢討結果、找出系統性盲點。改善的是「決策品質」，非預測神準。
+  </div>
+
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
     <h2>📈 投資組合 & 盈虧</h2>
     <div style="display:flex;gap:6px">
@@ -2792,6 +2810,53 @@
 
   <!-- 底部安全間距（避免最後一個元素被導覽列遮擋）-->
   <div style="height:calc(80px + env(safe-area-inset-bottom,0px))"></div>
+
+  <!-- ═══ 決策日誌 Modal（全螢幕，四模組）═══ -->
+  <div id="journalModal" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;overflow-y:auto">
+    <div style="max-width:480px;margin:0 auto;padding:16px 16px 80px">
+      <!-- 標題列 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-top:8px">
+        <h1 style="font-size:20px;font-weight:700">📓 決策日誌</h1>
+        <button onclick="closeJournal()" style="font-size:14px;padding:6px 14px;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text2);cursor:pointer">✕ 關閉</button>
+      </div>
+
+      <!-- 四模組分頁 -->
+      <div style="display:flex;gap:4px;margin-bottom:14px;background:rgba(255,255,255,.04);border-radius:10px;padding:3px">
+        <button class="journal-tab active" data-jtab="record" onclick="switchJournalTab('record')" style="flex:1;font-size:11px;padding:8px 4px;border-radius:8px;border:none;background:var(--purple);color:#fff;cursor:pointer;font-weight:700">📝 紀錄</button>
+        <button class="journal-tab" data-jtab="track" onclick="switchJournalTab('track')" style="flex:1;font-size:11px;padding:8px 4px;border-radius:8px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-weight:700">📍 追蹤</button>
+        <button class="journal-tab" data-jtab="stats" onclick="switchJournalTab('stats')" style="flex:1;font-size:11px;padding:8px 4px;border-radius:8px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-weight:700">📊 統計</button>
+        <button class="journal-tab" data-jtab="review" onclick="switchJournalTab('review')" style="flex:1;font-size:11px;padding:8px 4px;border-radius:8px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-weight:700">🔍 復盤</button>
+      </div>
+
+      <!-- 模組1：決策紀錄 -->
+      <div id="jtab-record" class="journal-panel">
+        <button onclick="_showDecisionForm()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--purple),var(--accent));border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:14px">＋ 新增決策紀錄</button>
+        <div id="openDecisionsList"></div>
+      </div>
+
+      <!-- 模組2：結果追蹤 -->
+      <div id="jtab-track" class="journal-panel" style="display:none">
+        <div id="trackDecisionsList"></div>
+      </div>
+
+      <!-- 模組3：統計儀表板 -->
+      <div id="jtab-stats" class="journal-panel" style="display:none">
+        <div id="statsDashboard"></div>
+      </div>
+
+      <!-- 模組4：每日復盤 -->
+      <div id="jtab-review" class="journal-panel" style="display:none">
+        <div id="reviewContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 決策表單 Modal -->
+  <div id="decisionFormModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end;justify-content:center">
+    <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:18px;max-height:88vh;overflow-y:auto">
+      <div id="decisionFormContent"></div>
+    </div>
+  </div>
 
   <!-- 刪除選單 Modal -->
   <div id="clearMenuModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:flex-end;justify-content:center">
@@ -3983,6 +4048,610 @@ function setUpdateTime(id, dateStr){
 }
 
 // ── Page switch ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════
+// 決策日誌系統（四模組）
+// ═══════════════════════════════════════════════════════
+let _journalData = [];      // 所有決策
+let _editingDecisionId = null;
+
+// 開關 Modal
+function openJournal(){
+  document.getElementById('journalModal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  loadJournalData();
+}
+function closeJournal(){
+  document.getElementById('journalModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// 分頁切換
+function switchJournalTab(tab){
+  document.querySelectorAll('.journal-panel').forEach(p=>p.style.display='none');
+  const panel = document.getElementById('jtab-'+tab);
+  if(panel) panel.style.display='block';
+  document.querySelectorAll('.journal-tab').forEach(b=>{
+    const on = b.dataset.jtab === tab;
+    b.style.background = on ? 'var(--purple)' : 'transparent';
+    b.style.color = on ? '#fff' : 'var(--text3)';
+  });
+  // 切到對應模組時渲染
+  if(tab==='track') _renderTrackList();
+  if(tab==='stats') _renderStatsDashboard();
+  if(tab==='review') _renderReview();
+}
+
+// 從雲端 KV 載入
+async function loadJournalData(){
+  try{
+    const r = await fetchWithTimeout(`${API}/journal`, 15000);
+    if(r.ok){
+      const d = await r.json();
+      _journalData = d.decisions || [];
+    }
+  }catch(e){ console.warn('journal load failed', e); }
+  _renderOpenList();
+  _updateJournalSummary();
+}
+
+// 存一筆到雲端
+async function _saveDecisionToKV(dec){
+  try{
+    const r = await fetchWithTimeout(`${API}/journal/save`, 15000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ decision: dec })
+    });
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+// 刪一筆
+async function _deleteDecision(id){
+  if(!confirm('確定刪除這筆決策紀錄？')) return;
+  try{
+    await fetchWithTimeout(`${API}/journal/delete`, 15000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id })
+    });
+    _journalData = _journalData.filter(d=>d.id!==id);
+    _renderOpenList(); _renderTrackList(); _updateJournalSummary();
+  }catch(e){ alert('刪除失敗：'+e.message); }
+}
+
+// profile 入口的摘要文字
+function _updateJournalSummary(){
+  const el = document.getElementById('journalSummaryLine');
+  if(!el) return;
+  const open = _journalData.filter(d=>d.status==='open').length;
+  const closed = _journalData.filter(d=>d.status==='closed').length;
+  if(_journalData.length===0){ el.textContent='記錄決策・追蹤結果・檢討提升'; return; }
+  el.textContent = `持倉中 ${open} 筆・已結算 ${closed} 筆`;
+}
+
+// ── 模組1：決策紀錄表單（事前）──────────────────────
+const BASIS_OPTIONS = ['B/S共振','籌碼買超','題材熱度','突破型態','均線多頭','法人連買','基本面佳','技術超賣','其他'];
+
+function _showDecisionForm(prefill){
+  _editingDecisionId = prefill?.id || null;
+  const d = prefill || {};
+  const basisChecked = d.basis || [];
+  const formHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="font-size:16px;font-weight:700">${_editingDecisionId?'編輯':'新增'}決策紀錄</h2>
+      <button onclick="_closeDecisionForm()" style="font-size:18px;background:none;border:none;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:12px">📌 進場前先填寫，強迫自己講清楚決策理由（避免事後合理化）</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label style="font-size:10px;color:var(--text3)">股票代號</label>
+        <input id="jf-stockId" value="${d.stockId||''}" placeholder="2330" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3)">股票名稱</label>
+        <input id="jf-stockName" value="${d.stockName||''}" placeholder="台積電" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label style="font-size:10px;color:var(--text3)">方向</label>
+        <div style="display:flex;gap:5px;margin-top:3px">
+          <button id="jf-dir-long" onclick="_setJfDir('long')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:${(d.direction||'long')==='long'?'rgba(255,76,106,.2)':'var(--surface)'};color:${(d.direction||'long')==='long'?'var(--red)':'var(--text3)'};font-size:12px;font-weight:700;cursor:pointer">做多</button>
+          <button id="jf-dir-short" onclick="_setJfDir('short')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:${d.direction==='short'?'rgba(0,212,170,.2)':'var(--surface)'};color:${d.direction==='short'?'var(--green)':'var(--text3)'};font-size:12px;font-weight:700;cursor:pointer">做空</button>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3)">進場價</label>
+        <input id="jf-entryPrice" type="number" step="0.01" value="${d.entryPrice||''}" placeholder="600" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text3)">決策依據（可多選）</label>
+      <div id="jf-basis" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">
+        ${BASIS_OPTIONS.map(b=>`<button onclick="_toggleBasis(this)" data-basis="${b}" style="font-size:11px;padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:${basisChecked.includes(b)?'rgba(124,108,255,.2)':'var(--surface)'};color:${basisChecked.includes(b)?'var(--purple)':'var(--text3)'};cursor:pointer">${b}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:10px;color:var(--text3)">信心度</label>
+      <div id="jf-conf" style="display:flex;gap:5px;margin-top:5px">
+        ${[1,2,3,4,5].map(n=>`<button onclick="_setJfConf(${n})" data-conf="${n}" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:${(d.confidence||3)===n?'rgba(245,200,66,.2)':'var(--surface)'};color:${(d.confidence||3)===n?'var(--gold)':'var(--text3)'};font-size:13px;font-weight:700;cursor:pointer">${n}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label style="font-size:10px;color:var(--text3)">停損價</label>
+        <input id="jf-stopLoss" type="number" step="0.01" value="${d.stopLoss||''}" placeholder="選填" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3)">停利價</label>
+        <input id="jf-takeProfit" type="number" step="0.01" value="${d.takeProfit||''}" placeholder="選填" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="font-size:10px;color:var(--text3)">進場理由筆記</label>
+      <textarea id="jf-note" placeholder="為什麼現在進場？" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px;min-height:50px;resize:vertical">${d.note||''}</textarea>
+    </div>
+
+    <button onclick="_submitDecision()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--purple),var(--accent));border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer">${_editingDecisionId?'儲存修改':'儲存決策'}</button>
+  `;
+  document.getElementById('decisionFormContent').innerHTML = formHtml;
+  document.getElementById('decisionFormModal').style.display = 'flex';
+  // 暫存表單狀態
+  window._jfState = { direction: d.direction||'long', confidence: d.confidence||3 };
+}
+
+function _closeDecisionForm(){ document.getElementById('decisionFormModal').style.display='none'; }
+function _setJfDir(dir){
+  window._jfState.direction = dir;
+  document.getElementById('jf-dir-long').style.background = dir==='long'?'rgba(255,76,106,.2)':'var(--surface)';
+  document.getElementById('jf-dir-long').style.color = dir==='long'?'var(--red)':'var(--text3)';
+  document.getElementById('jf-dir-short').style.background = dir==='short'?'rgba(0,212,170,.2)':'var(--surface)';
+  document.getElementById('jf-dir-short').style.color = dir==='short'?'var(--green)':'var(--text3)';
+}
+function _setJfConf(n){
+  window._jfState.confidence = n;
+  document.querySelectorAll('#jf-conf button').forEach(b=>{
+    const on = +b.dataset.conf === n;
+    b.style.background = on?'rgba(245,200,66,.2)':'var(--surface)';
+    b.style.color = on?'var(--gold)':'var(--text3)';
+  });
+}
+function _toggleBasis(btn){
+  const on = btn.style.color.includes('124') || btn.style.background.includes('124');
+  btn.style.background = on?'var(--surface)':'rgba(124,108,255,.2)';
+  btn.style.color = on?'var(--text3)':'var(--purple)';
+}
+
+async function _submitDecision(){
+  const stockId = document.getElementById('jf-stockId').value.trim();
+  const stockName = document.getElementById('jf-stockName').value.trim();
+  const entryPrice = parseFloat(document.getElementById('jf-entryPrice').value);
+  if(!stockId || !entryPrice){ alert('請填寫股票代號與進場價'); return; }
+
+  const basis = [...document.querySelectorAll('#jf-basis button')]
+    .filter(b=>b.style.color.includes('124') || b.style.background.includes('124'))
+    .map(b=>b.dataset.basis);
+
+  const existing = _editingDecisionId ? _journalData.find(d=>d.id===_editingDecisionId) : null;
+  const dec = {
+    id: _editingDecisionId || ('dec_'+Date.now()),
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    stockId, stockName: stockName||stockId,
+    direction: window._jfState.direction,
+    entryPrice,
+    basis,
+    confidence: window._jfState.confidence,
+    stopLoss: parseFloat(document.getElementById('jf-stopLoss').value) || null,
+    takeProfit: parseFloat(document.getElementById('jf-takeProfit').value) || null,
+    note: document.getElementById('jf-note').value.trim(),
+    status: existing?.status || 'open',
+    // 保留結算資料（編輯時）
+    exitPrice: existing?.exitPrice, exitAt: existing?.exitAt,
+    pnl: existing?.pnl, pnlPct: existing?.pnlPct, holdDays: existing?.holdDays,
+    disciplined: existing?.disciplined, reviewNote: existing?.reviewNote, mistake: existing?.mistake,
+  };
+
+  const okSave = await _saveDecisionToKV(dec);
+  if(!okSave){ alert('儲存失敗，請檢查網路'); return; }
+  // 更新本地
+  const idx = _journalData.findIndex(d=>d.id===dec.id);
+  if(idx>=0) _journalData[idx]=dec; else _journalData.push(dec);
+  _closeDecisionForm();
+  _renderOpenList();
+  _updateJournalSummary();
+}
+
+// 渲染持倉中決策列表
+function _renderOpenList(){
+  const el = document.getElementById('openDecisionsList');
+  if(!el) return;
+  const open = _journalData.filter(d=>d.status==='open').sort((a,b)=>b.createdAt>a.createdAt?1:-1);
+  if(!open.length){ el.innerHTML='<div style="text-align:center;padding:30px 0;color:var(--text3);font-size:12px">尚無持倉中的決策<br>點上方「新增決策紀錄」開始</div>'; return; }
+  el.innerHTML = open.map(d=>{
+    const dirColor = d.direction==='long'?'var(--red)':'var(--green)';
+    const dirTxt = d.direction==='long'?'多':'空';
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${d.stockName}</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:5px;background:${dirColor};color:#fff;font-weight:700">${dirTxt}</span>
+          <span style="font-size:10px;color:var(--text3)">${d.stockId}</span>
+        </div>
+        <span style="font-size:10px;color:var(--gold)">信心 ${'★'.repeat(d.confidence||0)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:7px">進場 ${d.entryPrice}${d.stopLoss?` · 停損 ${d.stopLoss}`:''}${d.takeProfit?` · 停利 ${d.takeProfit}`:''}</div>
+      ${d.basis?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px">${d.basis.map(b=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(124,108,255,.12);color:var(--purple)">${b}</span>`).join('')}</div>`:''}
+      ${d.note?`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">${d.note}</div>`:''}
+      <div style="display:flex;gap:6px">
+        <button onclick="_showCloseForm('${d.id}')" style="flex:1;font-size:11px;padding:7px;border-radius:8px;background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);color:var(--accent);cursor:pointer;font-weight:700">結算出場</button>
+        <button onclick="_showDecisionForm(_journalData.find(x=>x.id==='${d.id}'))" style="font-size:11px;padding:7px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text3);cursor:pointer">編輯</button>
+        <button onclick="_deleteDecision('${d.id}')" style="font-size:11px;padding:7px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text3);cursor:pointer">刪</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 模組2：結果追蹤（出場結算）──────────────────────
+const MISTAKE_OPTIONS = ['太早停利','凹單不停損','追高進場','恐慌殺低','沒按計畫','過度交易','其他'];
+
+function _showCloseForm(id){
+  const d = _journalData.find(x=>x.id===id);
+  if(!d) return;
+  _editingDecisionId = id;
+  window._closeState = { disciplined: true, mistake: [] };
+  const formHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="font-size:16px;font-weight:700">結算出場</h2>
+      <button onclick="_closeDecisionForm()" style="font-size:18px;background:none;border:none;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div style="background:var(--surface);border-radius:10px;padding:10px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">${d.stockName} ${d.direction==='long'?'做多':'做空'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">進場 ${d.entryPrice}${d.stopLoss?` · 停損 ${d.stopLoss}`:''}</div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;color:var(--text3)">出場價</label>
+      <input id="cf-exitPrice" type="number" step="0.01" placeholder="實際出場價" oninput="_calcClosePnl('${id}')" style="width:100%;padding:9px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:14px">
+    </div>
+
+    <div id="cf-pnlPreview" style="display:none;background:var(--surface);border-radius:10px;padding:11px;margin-bottom:12px;text-align:center"></div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;color:var(--text3)">有照原訂紀律執行嗎？</label>
+      <div style="display:flex;gap:6px;margin-top:5px">
+        <button id="cf-disc-yes" onclick="_setDisc(true)" style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:rgba(0,212,170,.2);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">✓ 有紀律</button>
+        <button id="cf-disc-no" onclick="_setDisc(false)" style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text3);font-size:12px;font-weight:700;cursor:pointer">✗ 有破功</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;color:var(--text3)">這次的檢討（可多選犯的錯）</label>
+      <div id="cf-mistake" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">
+        ${MISTAKE_OPTIONS.map(m=>`<button onclick="_toggleMistake(this)" data-mistake="${m}" style="font-size:11px;padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text3);cursor:pointer">${m}</button>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label style="font-size:10px;color:var(--text3)">復盤心得</label>
+      <textarea id="cf-review" placeholder="這次學到什麼？" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px;min-height:50px;resize:vertical"></textarea>
+    </div>
+
+    <button onclick="_submitClose('${id}')" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--purple));border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer">完成結算</button>
+  `;
+  document.getElementById('decisionFormContent').innerHTML = formHtml;
+  document.getElementById('decisionFormModal').style.display = 'flex';
+}
+
+function _calcClosePnl(id){
+  const d = _journalData.find(x=>x.id===id);
+  const exit = parseFloat(document.getElementById('cf-exitPrice').value);
+  const prev = document.getElementById('cf-pnlPreview');
+  if(!d || !exit){ prev.style.display='none'; return; }
+  // 做多：(出-進)/進；做空：(進-出)/進
+  const pnlPct = d.direction==='long'
+    ? (exit - d.entryPrice)/d.entryPrice*100
+    : (d.entryPrice - exit)/d.entryPrice*100;
+  const win = pnlPct >= 0;
+  prev.style.display='block';
+  prev.innerHTML = `<div style="font-size:11px;color:var(--text3)">損益</div><div style="font-size:22px;font-weight:800;color:${win?'var(--red)':'var(--green)'}">${win?'+':''}${pnlPct.toFixed(2)}%</div>`;
+}
+
+function _setDisc(v){
+  window._closeState.disciplined = v;
+  document.getElementById('cf-disc-yes').style.background = v?'rgba(0,212,170,.2)':'var(--surface)';
+  document.getElementById('cf-disc-yes').style.color = v?'var(--accent)':'var(--text3)';
+  document.getElementById('cf-disc-no').style.background = !v?'rgba(255,76,106,.2)':'var(--surface)';
+  document.getElementById('cf-disc-no').style.color = !v?'var(--red)':'var(--text3)';
+}
+function _toggleMistake(btn){
+  const on = btn.style.color.includes('255, 76') || btn.style.background.includes('255, 76');
+  btn.style.background = on?'var(--surface)':'rgba(255,76,106,.15)';
+  btn.style.color = on?'var(--text3)':'var(--red)';
+}
+
+async function _submitClose(id){
+  const d = _journalData.find(x=>x.id===id);
+  if(!d) return;
+  const exitPrice = parseFloat(document.getElementById('cf-exitPrice').value);
+  if(!exitPrice){ alert('請填寫出場價'); return; }
+  const pnlPct = d.direction==='long'
+    ? (exitPrice - d.entryPrice)/d.entryPrice*100
+    : (d.entryPrice - exitPrice)/d.entryPrice*100;
+  const holdDays = Math.max(1, Math.round((Date.now()-new Date(d.createdAt).getTime())/86400000));
+  const mistakes = [...document.querySelectorAll('#cf-mistake button')]
+    .filter(b=>b.style.color.includes('255, 76') || b.style.background.includes('255, 76'))
+    .map(b=>b.dataset.mistake);
+
+  const updated = { ...d,
+    status:'closed', exitPrice, exitAt:new Date().toISOString(),
+    pnlPct:+pnlPct.toFixed(2), holdDays,
+    disciplined: window._closeState.disciplined,
+    mistake: mistakes,
+    reviewNote: document.getElementById('cf-review').value.trim(),
+  };
+  const okSave = await _saveDecisionToKV(updated);
+  if(!okSave){ alert('儲存失敗'); return; }
+  const idx = _journalData.findIndex(x=>x.id===id);
+  if(idx>=0) _journalData[idx]=updated;
+  _closeDecisionForm();
+  _renderOpenList(); _renderTrackList(); _updateJournalSummary();
+  switchJournalTab('track');
+}
+
+// 渲染已結算列表
+function _renderTrackList(){
+  const el = document.getElementById('trackDecisionsList');
+  if(!el) return;
+  const closed = _journalData.filter(d=>d.status==='closed').sort((a,b)=>b.exitAt>a.exitAt?1:-1);
+  if(!closed.length){ el.innerHTML='<div style="text-align:center;padding:30px 0;color:var(--text3);font-size:12px">尚無已結算的決策<br>在「紀錄」頁結算出場後會出現在這</div>'; return; }
+  el.innerHTML = closed.map(d=>{
+    const win = (d.pnlPct||0)>=0;
+    const dirTxt = d.direction==='long'?'多':'空';
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">${d.stockName}</span>
+          <span style="font-size:9px;padding:1px 6px;border-radius:4px;background:${d.direction==='long'?'var(--red)':'var(--green)'};color:#fff">${dirTxt}</span>
+        </div>
+        <span style="font-size:16px;font-weight:800;color:${win?'var(--red)':'var(--green)'}">${win?'+':''}${d.pnlPct}%</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px">${d.entryPrice} → ${d.exitPrice} · 持有${d.holdDays}天 · ${d.disciplined?'<span style="color:var(--accent)">✓有紀律</span>':'<span style="color:var(--red)">✗破功</span>'}</div>
+      ${d.mistake?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${d.mistake.map(m=>`<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(255,76,106,.12);color:var(--red)">${m}</span>`).join('')}</div>`:''}
+      ${d.reviewNote?`<div style="font-size:10px;color:var(--text3);line-height:1.5;font-style:italic">「${d.reviewNote}」</div>`:''}
+      <div style="margin-top:7px"><button onclick="_deleteDecision('${d.id}')" style="font-size:10px;padding:4px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text3);cursor:pointer">刪除</button></div>
+    </div>`;
+  }).join('');
+}
+
+// ── 模組3：統計儀表板（用數據看清決策品質）──────────
+function _renderStatsDashboard(){
+  const el = document.getElementById('statsDashboard');
+  if(!el) return;
+  const closed = _journalData.filter(d=>d.status==='closed' && d.pnlPct!=null);
+
+  if(closed.length < 1){
+    el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--text3);font-size:12px">尚無已結算資料<br>累積幾筆後這裡會顯示統計</div>';
+    return;
+  }
+
+  // 核心指標
+  const wins = closed.filter(d=>d.pnlPct>0);
+  const losses = closed.filter(d=>d.pnlPct<=0);
+  const winRate = (wins.length/closed.length*100);
+  const avgWin = wins.length ? wins.reduce((s,d)=>s+d.pnlPct,0)/wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((s,d)=>s+d.pnlPct,0)/losses.length : 0;
+  // 期望值 = 勝率×平均獲利 + 敗率×平均虧損
+  const expectancy = (winRate/100)*avgWin + (1-winRate/100)*avgLoss;
+  // 賺賠比
+  const profitFactor = avgLoss !== 0 ? Math.abs(avgWin/avgLoss) : 0;
+  // 累積報酬（簡單相加，非複利）
+  const totalPnl = closed.reduce((s,d)=>s+d.pnlPct,0);
+  // 最大回撤（用累積曲線）
+  let cum=0, peak=0, maxDD=0;
+  [...closed].sort((a,b)=>a.exitAt>b.exitAt?1:-1).forEach(d=>{
+    cum += d.pnlPct;
+    if(cum>peak) peak=cum;
+    const dd = peak - cum;
+    if(dd>maxDD) maxDD=dd;
+  });
+  // 紀律比例
+  const disciplinedCount = closed.filter(d=>d.disciplined).length;
+  const discRate = disciplinedCount/closed.length*100;
+
+  let h = '';
+  // 核心四指標
+  h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">`;
+  h += _statCard('勝率', winRate.toFixed(0)+'%', `${wins.length}勝 ${losses.length}敗`, winRate>=50?'var(--red)':'var(--text2)');
+  h += _statCard('期望值', (expectancy>=0?'+':'')+expectancy.toFixed(2)+'%', '每筆平均', expectancy>=0?'var(--red)':'var(--green)');
+  h += _statCard('賺賠比', profitFactor.toFixed(2), avgLoss!==0?`賺${avgWin.toFixed(1)}:賠${Math.abs(avgLoss).toFixed(1)}`:'—', profitFactor>=1.5?'var(--red)':profitFactor>=1?'var(--gold)':'var(--green)');
+  h += _statCard('最大回撤', '-'+maxDD.toFixed(1)+'%', '累積最大跌幅', 'var(--green)');
+  h += `</div>`;
+
+  // 期望值解讀（最重要的誠實提醒）
+  const expColor = expectancy>=0?'var(--accent)':'var(--red)';
+  h += `<div style="background:rgba(124,108,255,.08);border:1px solid rgba(124,108,255,.2);border-radius:10px;padding:11px;margin-bottom:12px">`;
+  h += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">💡 期望值解讀（比勝率更重要）</div>`;
+  h += `<div style="font-size:10px;color:var(--text2);line-height:1.6">`;
+  if(expectancy>=0){
+    h += `每筆決策平均<span style="color:${expColor};font-weight:700">賺 ${expectancy.toFixed(2)}%</span>，長期為正期望。`;
+    if(winRate<50) h += `雖然勝率不到5成，但賺賠比${profitFactor.toFixed(2)}（賺多賠少）撐起獲利——這是健康的交易型態。`;
+  } else {
+    h += `每筆決策平均<span style="color:${expColor};font-weight:700">賠 ${Math.abs(expectancy).toFixed(2)}%</span>，目前為負期望。`;
+    if(winRate>=50) h += `勝率雖過半，但賠的時候賠太多（賺賠比僅${profitFactor.toFixed(2)}）——問題在「賺小賠大」，要檢討停損紀律。`;
+    else h += `勝率與賺賠比都需改善。`;
+  }
+  h += `</div></div>`;
+
+  // 累積報酬
+  h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px;text-align:center">`;
+  h += `<div style="font-size:10px;color:var(--text3)">累積報酬（${closed.length}筆加總，未計複利）</div>`;
+  h += `<div style="font-size:24px;font-weight:800;color:${totalPnl>=0?'var(--red)':'var(--green)'}">${totalPnl>=0?'+':''}${totalPnl.toFixed(1)}%</div>`;
+  h += `<div style="font-size:9px;color:var(--text3)">紀律執行率 ${discRate.toFixed(0)}%</div>`;
+  h += `</div>`;
+
+  // 哪種訊號勝率高
+  const basisStats = {};
+  closed.forEach(d=>{
+    (d.basis||[]).forEach(b=>{
+      if(!basisStats[b]) basisStats[b]={total:0,win:0,pnl:0};
+      basisStats[b].total++;
+      if(d.pnlPct>0) basisStats[b].win++;
+      basisStats[b].pnl += d.pnlPct;
+    });
+  });
+  const basisArr = Object.entries(basisStats).filter(([k,v])=>v.total>=2)
+    .map(([k,v])=>({basis:k, winRate:v.win/v.total*100, avgPnl:v.pnl/v.total, total:v.total}))
+    .sort((a,b)=>b.avgPnl-a.avgPnl);
+  if(basisArr.length){
+    h += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:7px">🎯 哪種依據表現好？（≥2筆）</div>`;
+    basisArr.forEach(b=>{
+      const c = b.avgPnl>=0?'var(--red)':'var(--green)';
+      h += `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--card);border-radius:8px;margin-bottom:5px">`;
+      h += `<span style="font-size:11px;color:var(--text2)">${b.basis}</span>`;
+      h += `<span style="font-size:10px;color:var(--text3)">勝率${b.winRate.toFixed(0)}% · 均<span style="color:${c};font-weight:700">${b.avgPnl>=0?'+':''}${b.avgPnl.toFixed(1)}%</span> · ${b.total}筆</span>`;
+      h += `</div>`;
+    });
+    h += `<div style="font-size:9px;color:var(--text3);margin:5px 0 12px">↑ 樣本數少時僅供參考，多累積才有統計意義</div>`;
+  }
+
+  // 最常犯的錯
+  const mistakeStats = {};
+  closed.forEach(d=>(d.mistake||[]).forEach(m=>{ mistakeStats[m]=(mistakeStats[m]||0)+1; }));
+  const mistakeArr = Object.entries(mistakeStats).sort((a,b)=>b[1]-a[1]);
+  if(mistakeArr.length){
+    h += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:7px">⚠️ 最常犯的系統性錯誤</div>`;
+    mistakeArr.forEach(([m,c])=>{
+      h += `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:rgba(255,76,106,.06);border-radius:8px;margin-bottom:5px">`;
+      h += `<span style="font-size:11px;color:var(--text2)">${m}</span>`;
+      h += `<span style="font-size:11px;color:var(--red);font-weight:700">${c} 次</span>`;
+      h += `</div>`;
+    });
+  }
+
+  el.innerHTML = h;
+}
+
+function _statCard(label, value, sub, color){
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px;text-align:center">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div>
+    <div style="font-size:20px;font-weight:800;color:${color}">${value}</div>
+    <div style="font-size:9px;color:var(--text3);margin-top:2px">${sub}</div>
+  </div>`;
+}
+
+// ── 模組4：每日復盤（回顧 + AI 輔助）──────────────────
+function _renderReview(){
+  const el = document.getElementById('reviewContent');
+  if(!el) return;
+  const closed = _journalData.filter(d=>d.status==='closed' && d.pnlPct!=null);
+  const open = _journalData.filter(d=>d.status==='open');
+
+  let h = '';
+
+  // 持倉提醒
+  if(open.length){
+    h += `<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">📍 持倉中（${open.length}筆，記得檢視）</div>`;
+    open.forEach(d=>{
+      h += `<div style="display:flex;justify-content:space-between;padding:8px 11px;background:var(--card);border-radius:8px;margin-bottom:5px">`;
+      h += `<span style="font-size:11px;color:var(--text2)">${d.stockName} ${d.direction==='long'?'多':'空'} @ ${d.entryPrice}</span>`;
+      h += `<span style="font-size:10px;color:var(--text3)">${d.stopLoss?'停損 '+d.stopLoss:'未設停損'}</span>`;
+      h += `</div>`;
+    });
+    h += `<div style="margin-bottom:16px"></div>`;
+  }
+
+  // 近7日結算回顧
+  const weekAgo = Date.now() - 7*86400000;
+  const recentClosed = closed.filter(d=>new Date(d.exitAt).getTime() > weekAgo);
+  if(recentClosed.length){
+    const wins = recentClosed.filter(d=>d.pnlPct>0).length;
+    const weekPnl = recentClosed.reduce((s,d)=>s+d.pnlPct,0);
+    h += `<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">📅 近7日回顧</div>`;
+    h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:16px">`;
+    h += `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--text3)">結算筆數</span><span style="font-size:11px;color:var(--text)">${recentClosed.length} 筆（${wins}勝${recentClosed.length-wins}敗）</span></div>`;
+    h += `<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--text3)">本週損益</span><span style="font-size:13px;font-weight:700;color:${weekPnl>=0?'var(--red)':'var(--green)'}">${weekPnl>=0?'+':''}${weekPnl.toFixed(1)}%</span></div>`;
+    h += `</div>`;
+  }
+
+  // AI 復盤分析
+  h += `<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">🤖 AI 復盤建議</div>`;
+  if(closed.length < 3){
+    h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;color:var(--text3);font-size:11px">累積至少 3 筆結算後，AI 才能分析你的決策模式<br>（目前 ${closed.length} 筆）</div>`;
+  } else {
+    h += `<button onclick="_runAIReview()" id="aiReviewBtn" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,var(--purple),var(--accent));border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px">分析我的決策模式</button>`;
+    h += `<div id="aiReviewResult"></div>`;
+  }
+
+  el.innerHTML = h;
+}
+
+async function _runAIReview(){
+  const btn = document.getElementById('aiReviewBtn');
+  const result = document.getElementById('aiReviewResult');
+  if(btn){ btn.textContent='分析中…'; btn.disabled=true; }
+
+  const closed = _journalData.filter(d=>d.status==='closed' && d.pnlPct!=null);
+  // 準備數據摘要給 AI
+  const wins = closed.filter(d=>d.pnlPct>0);
+  const losses = closed.filter(d=>d.pnlPct<=0);
+  const winRate = (wins.length/closed.length*100).toFixed(0);
+  const avgWin = wins.length?(wins.reduce((s,d)=>s+d.pnlPct,0)/wins.length).toFixed(1):0;
+  const avgLoss = losses.length?(losses.reduce((s,d)=>s+d.pnlPct,0)/losses.length).toFixed(1):0;
+  const mistakeStats = {};
+  closed.forEach(d=>(d.mistake||[]).forEach(m=>{ mistakeStats[m]=(mistakeStats[m]||0)+1; }));
+  const discRate = (closed.filter(d=>d.disciplined).length/closed.length*100).toFixed(0);
+
+  const summary = `總結算${closed.length}筆，勝率${winRate}%，平均獲利${avgWin}%，平均虧損${avgLoss}%，紀律執行率${discRate}%。常犯錯誤：${Object.entries(mistakeStats).map(([m,c])=>m+'×'+c).join('、')||'無記錄'}。`;
+
+  const prompt = `你是交易心理與紀律教練。以下是一位交易者的決策統計：
+${summary}
+
+請基於這些「真實數據」給出客觀建議（不要空泛鼓勵，要具體可執行）：
+1. 最該優先改善的1個系統性問題
+2. 一個具體的執行建議
+3. 一句提醒（關於紀律或心態）
+務必誠實，若數據顯示「賺小賠大」或「紀律不足」要直接指出。不要預測未來行情。
+只輸出JSON：{"problem":"最該改善的問題40字內","action":"具體建議40字內","reminder":"提醒30字內"}`;
+
+  try{
+    const r = await fetchWithTimeout(`${API}/v1/messages`, 30000, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        messages:[{role:'user',content:prompt}],
+        max_tokens:500
+      })
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    const txt = (data?.content || []).filter(c=>c.type==='text').map(c=>c.text).join('') || '';
+    const mm = txt.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/);
+    if(mm){
+      const a = JSON.parse(mm[0]);
+      result.innerHTML = `
+        <div style="background:linear-gradient(135deg,rgba(124,108,255,.1),rgba(0,212,170,.05));border:1px solid rgba(124,108,255,.25);border-radius:10px;padding:13px">
+          <div style="margin-bottom:9px"><div style="font-size:10px;color:var(--purple);font-weight:700;margin-bottom:3px">🎯 最該改善</div><div style="font-size:11px;color:var(--text2);line-height:1.5">${a.problem||''}</div></div>
+          <div style="margin-bottom:9px"><div style="font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px">✅ 具體建議</div><div style="font-size:11px;color:var(--text2);line-height:1.5">${a.action||''}</div></div>
+          <div><div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:3px">💭 提醒</div><div style="font-size:11px;color:var(--text2);line-height:1.5">${a.reminder||''}</div></div>
+        </div>`;
+    } else {
+      result.innerHTML = '<div style="color:var(--text3);font-size:11px;padding:10px">分析回傳格式異常，請重試</div>';
+    }
+  }catch(e){
+    result.innerHTML = '<div style="color:var(--text3);font-size:11px;padding:10px">AI分析失敗：'+e.message+'</div>';
+  }finally{
+    if(btn){ btn.textContent='重新分析'; btn.disabled=false; }
+  }
+}
+
+
+
+
+
 // 題材分析：收合切換
 function _toggleThemeCollapse(){
   const card = document.getElementById('themeAnalysisCard');
