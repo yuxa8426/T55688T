@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606271200';
+  const APP_VER = '202606271800';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -11021,6 +11021,91 @@ function _removeFromWL(id){
   _renderStockQuickAccess();
 }
 
+// ════════════════════════════════════════════════════
+// 自選股盤後分析（讀盤後掃描 fullRank → 技術+基本面+買賣傾向）
+// 誠實定位：訊號參考，非投資建議、非預測保證。紅漲綠跌。
+// ════════════════════════════════════════════════════
+let _wlAnaMap = null, _wlAnaTs = 0, _wlAnaDate = '';
+async function _loadWLAnalysis(force){
+  // 盤後掃描每日更新，前端快取 30 分鐘
+  if(!force && _wlAnaMap && Date.now()-_wlAnaTs < 30*60*1000) return _wlAnaMap;
+  try{
+    const r = await fetchWithTimeout(`${API}/scan-result`, 15000);
+    if(r.ok){
+      const d = await r.json();
+      const map = {};
+      (d.fullRank||[]).forEach(s=>{ if(s&&s.id) map[s.id]=s; });
+      _wlAnaMap = map; _wlAnaTs = Date.now(); _wlAnaDate = d.dataDate||d.date||'';
+    }
+  }catch(e){ /* 靜默，維持舊值 */ }
+  return _wlAnaMap || {};
+}
+
+// 規則式買賣傾向（依綜合分；非保證）
+function _wlSuggest(entry){
+  if(!entry || entry.score==null) return null;
+  const sc = entry.score;
+  let label, color, tone;
+  if(sc >= 65){ label='偏多'; color='var(--red)'; tone='訊號偏多，可留意'; }
+  else if(sc >= 52){ label='中性偏多'; color='#ff9800'; tone='略偏多'; }
+  else if(sc >= 42){ label='中性'; color='var(--text3)'; tone='方向不明，觀望'; }
+  else { label='偏弱'; color='var(--green)'; tone='訊號偏弱，留意風險'; }
+  return { label, color, tone, score: sc };
+}
+
+// 技術+基本面訊號標籤（t=偏多紅 / b=偏空綠 / n=中性灰）
+function _wlChips(entry){
+  if(!entry) return [];
+  const chips = [];
+  const kd = entry.kd;
+  if(kd==='golden'||kd==='golden_high') chips.push(['KD金叉','t']);
+  else if(kd==='dead') chips.push(['KD死叉','b']);
+  else if(kd==='oversold') chips.push(['KD低檔','n']);
+  else if(kd==='overbought') chips.push(['KD高檔','b']);
+  const macd = entry.macd;
+  if(macd==='bull_strong'||macd==='bull_turn'||macd==='bull') chips.push(['MACD多','t']);
+  else if(macd==='bear'||macd==='bear_turn') chips.push(['MACD空','b']);
+  if(entry.bullAlign) chips.push(['均線多頭','t']);
+  if((entry.foreignBuyDays||0) >= 3) chips.push(['外資連買'+entry.foreignBuyDays+'日','t']);
+  else if((entry.foreignNet||0) > 0) chips.push(['外資買超','t']);
+  else if((entry.foreignNet||0) < 0) chips.push(['外資賣超','b']);
+  if(entry.revYoY != null) chips.push(['營收YoY'+(entry.revYoY>=0?'+':'')+Math.round(entry.revYoY)+'%', entry.revYoY>=0?'t':'b']);
+  if(entry.pe != null && entry.pe>0) chips.push(['PE'+entry.pe.toFixed(1),'n']);
+  return chips.slice(0,5);
+}
+
+// 填入垂直自選面板的分析（renderWLPanel 後呼叫）
+async function _fillWLPanelAnalysis(){
+  const map = await _loadWLAnalysis();
+  const wl = getMyWL();
+  wl.forEach(s=>{
+    const id  = s.id||s.t||String(s);
+    const box = document.getElementById('wlana-'+id);
+    if(!box) return;
+    const e  = map[id];
+    const sg = _wlSuggest(e);
+    if(!sg){
+      box.innerHTML = '<span style="font-size:11px;color:var(--text3)">盤後分析更新中…（冷門股於下次盤後掃描後出現）</span>';
+      return;
+    }
+    const chips = _wlChips(e).map(c=>{
+      const col = c[1]==='t'?'var(--red)':c[1]==='b'?'var(--green)':'var(--text3)';
+      const bg  = c[1]==='t'?'rgba(255,76,106,.12)':c[1]==='b'?'rgba(0,200,120,.12)':'rgba(255,255,255,.06)';
+      return '<span style="font-size:10px;color:'+col+';background:'+bg+';padding:2px 6px;border-radius:6px;margin:3px 4px 0 0;display:inline-block">'+c[0]+'</span>';
+    }).join('');
+    const reasons = (e.reasons||[]).length
+      ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">依據：'+e.reasons.join('、')+'</div>' : '';
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<span style="font-size:12px;font-weight:800;color:'+sg.color+'">'+sg.label+'</span>'
+      + '<span style="font-size:10px;color:var(--text3)">綜合分 '+sg.score+'</span>'
+      + '<span style="font-size:10px;color:var(--text3)">'+sg.tone+'</span>'
+      + '</div>'
+      + (chips?('<div style="margin-top:2px">'+chips+'</div>'):'')
+      + reasons;
+  });
+}
+
 function _renderStockQuickAccess(){
   const listEl = document.getElementById('stockQuickList');
   if(!listEl) return;
@@ -11057,6 +11142,7 @@ function _renderStockQuickAccess(){
       +'<div style="font-size:10px;color:var(--text3);font-weight:600">'+id+'</div>'
       +'<div style="font-size:13px;font-weight:700;margin-top:2px;color:var(--text)">'+name+'</div>'
       +'<div id="sqp-'+id+'" style="font-size:10px;color:var(--text3);margin-top:2px">—</div>'
+      +'<div id="sqs-'+id+'" style="font-size:9px;font-weight:700;margin-top:1px;color:var(--text3)"></div>'
       +'</button></div>';
   }).join('');
 
@@ -11080,6 +11166,17 @@ function _renderStockQuickAccess(){
       }catch(e){}
     }
   }, 800);
+
+  // 背景載入盤後買賣傾向（讀掃描 fullRank）
+  _loadWLAnalysis().then(map=>{
+    wl.slice(0,30).forEach(s=>{
+      const id = s.id||s.t||s;
+      const el3 = document.getElementById('sqs-'+id);
+      if(!el3) return;
+      const sg = _wlSuggest(map[id]);
+      if(sg){ el3.textContent = sg.label; el3.style.color = sg.color; }
+    });
+  });
 }
 
 async function pickStockPage(n, ticker){
@@ -20705,14 +20802,24 @@ function renderWLPanel(){
     const id   = s.id||s.t||String(s);
     const name = s.n||s.name||id;
     const sn   = name.replace(/'/g,"\'");
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">'
+    return '<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between">'
       +'<div style="cursor:pointer;flex:1" onclick="selectStock(null,\''+sn+'\',\''+id+'.TW\');switchPage(\'stock\')">'
       +'<span style="font-size:14px;font-weight:600;color:var(--text)">'+id+'</span>'
       +'<span style="font-size:12px;color:var(--text3);margin-left:8px">'+name+'</span>'
       +'</div>'
       +'<button onclick="wlRemoveStock(\''+id+'\')" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 4px">✕</button>'
+      +'</div>'
+      +'<div id="wlana-'+id+'" style="margin-top:5px">'
+      +'<span style="font-size:11px;color:var(--text3)">分析載入中…</span></div>'
       +'</div>';
   }).join('');
+  // 盤後分析資料來源 + 免責（誠實定位）
+  listEl.insertAdjacentHTML('beforeend',
+    '<div style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
+    + '盤後訊號參考，整合 KD／MACD／均線／法人／營收綜合評分（每交易日盤後自動更新）。<br>'
+    + '⚠️ 此為技術訊號傾向，非投資建議、非漲跌保證，請自行判斷並控管風險。</div>');
+  _fillWLPanelAnalysis();
 }
 
 
