@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606241143';
+  const APP_VER = '202606270314';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -845,10 +845,24 @@
           <span style="text-decoration:underline;text-underline-offset:2px">點此修改名稱</span>
         </button>
       </div>
-      <button onclick="switchPage('explore')"
-        style="font-size:11px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit">
-        探索更多 →
-      </button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="_toggleWLEdit()" id="wlEditBtn"
+          style="font-size:11px;color:var(--purple);background:none;border:none;cursor:pointer;font-family:inherit">
+          ✏️ 編輯
+        </button>
+        <button onclick="switchPage('explore')"
+          style="font-size:11px;color:var(--green);background:none;border:none;cursor:pointer;font-family:inherit">
+          探索更多 →
+        </button>
+      </div>
+    </div>
+    <!-- 編輯模式：新增搜尋框（預設隱藏）-->
+    <div id="wlEditPanel" style="display:none;margin-bottom:10px">
+      <div style="position:relative">
+        <input id="wlQuickAddInput" oninput="_onWLQuickSearch(this.value)" placeholder="🔍 搜尋代號或名稱加入自選股…"
+          style="width:100%;padding:9px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:12px">
+        <div id="wlQuickAddResults" style="margin-top:6px"></div>
+      </div>
     </div>
     <div id="stockQuickList" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
       <div style="color:var(--text3);font-size:12px;padding:8px 0">載入中…</div>
@@ -10885,6 +10899,90 @@ function _editWLName(){
   });
 }
 
+// ── 自選股編輯模式（增減）──────────────────────────
+let _wlEditMode = false;
+
+function _toggleWLEdit(){
+  _wlEditMode = !_wlEditMode;
+  const panel = document.getElementById('wlEditPanel');
+  const btn = document.getElementById('wlEditBtn');
+  if(panel) panel.style.display = _wlEditMode ? 'block' : 'none';
+  if(btn) btn.textContent = _wlEditMode ? '✓ 完成' : '✏️ 編輯';
+  if(!_wlEditMode){
+    // 退出編輯：清空搜尋
+    const inp = document.getElementById('wlQuickAddInput');
+    if(inp) inp.value = '';
+    const res = document.getElementById('wlQuickAddResults');
+    if(res) res.innerHTML = '';
+  }
+  _renderStockQuickAccess();  // 重繪（編輯模式顯示刪除鈕）
+}
+
+// 搜尋股票（用 NAME_MAP 全表）
+function _onWLQuickSearch(kw){
+  const res = document.getElementById('wlQuickAddResults');
+  if(!res) return;
+  kw = (kw||'').trim();
+  if(!kw){ res.innerHTML=''; return; }
+
+  // 目前自選股（避免重複）
+  let wl = [];
+  try{ wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]'); }catch(e){}
+  const wlIds = new Set(wl.map(s=>s.id||s.t||s));
+
+  // 搜尋 NAME_MAP（代號或名稱比對）
+  const matches = [];
+  for(const [id, name] of Object.entries(NAME_MAP)){
+    if(matches.length >= 8) break;
+    if(id.includes(kw) || name.includes(kw)){
+      matches.push({ id, name, inWL: wlIds.has(id) });
+    }
+  }
+
+  if(!matches.length){
+    res.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text3);text-align:center">找不到相符的股票</div>';
+    return;
+  }
+  res.innerHTML = matches.map(m=>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface);border-radius:8px;margin-bottom:4px">
+      <div><span style="font-size:11px;color:var(--text3)">${m.id}</span> <span style="font-size:12px;color:var(--text);font-weight:600;margin-left:5px">${m.name}</span></div>
+      ${m.inWL
+        ? '<span style="font-size:10px;color:var(--text3)">已加入</span>'
+        : `<button onclick="_addToWL('${m.id}','${m.name}')" style="font-size:11px;padding:4px 12px;border-radius:6px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer;font-weight:700">＋ 加入</button>`}
+    </div>`
+  ).join('');
+}
+
+// 加入自選股
+function _addToWL(id, name){
+  let wl = [];
+  try{ wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]'); }catch(e){}
+  if(wl.some(s=>(s.id||s.t||s)===id)){ return; }  // 已存在
+  if(wl.length >= 30){ showToast('自選股最多 30 檔'); return; }
+  wl.push({ id, n: name });
+  localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
+  kvPut('mywatchlist', wl).catch(()=>{});
+  if(typeof showToast==='function') showToast(name+' 已加入自選股');
+  // 重繪
+  _renderStockQuickAccess();
+  // 刷新搜尋結果（更新「已加入」狀態）
+  const inp = document.getElementById('wlQuickAddInput');
+  if(inp && inp.value) _onWLQuickSearch(inp.value);
+}
+
+// 移除自選股
+function _removeFromWL(id){
+  let wl = [];
+  try{ wl = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]'); }catch(e){}
+  const removed = wl.find(s=>(s.id||s.t||s)===id);
+  wl = wl.filter(s=>(s.id||s.t||s)!==id);
+  localStorage.setItem(MY_WL_KEY, JSON.stringify(wl));
+  kvPut('mywatchlist', wl).catch(()=>{});
+  const nm = removed?.n || removed?.name || id;
+  if(typeof showToast==='function') showToast(nm+' 已移除');
+  _renderStockQuickAccess();
+}
+
 function _renderStockQuickAccess(){
   const listEl = document.getElementById('stockQuickList');
   if(!listEl) return;
@@ -10900,18 +10998,34 @@ function _renderStockQuickAccess(){
     wl = defaults;
   }
 
-  listEl.innerHTML = wl.slice(0,8).map(s=>{
+  // 是否有真實自選股（非預設）——只有真實自選股才能刪
+  let hasRealWL = false;
+  try{ hasRealWL = JSON.parse(localStorage.getItem(MY_WL_KEY)||'[]').length > 0; }catch(e){}
+
+  listEl.innerHTML = wl.slice(0,30).map(s=>{
     const id   = s.id||s.t||s;
     const name = s.n||s.name||NAME_MAP[id]||id;
-    return '<button onclick="pickStockPage(\''+name+'\',\''+id+'\')"'
-      +' style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);'
-      +'border-radius:10px;padding:8px 12px;cursor:pointer;font-family:inherit;'
+    // 編輯模式 + 有真實自選股 → 顯示刪除鈕
+    const delBtn = (_wlEditMode && hasRealWL)
+      ? '<div onclick="event.stopPropagation();_removeFromWL(\''+id+'\')" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.3)">✕</div>'
+      : '';
+    const clickAttr = _wlEditMode ? '' : 'onclick="pickStockPage(\''+name+'\',\''+id+'\')"';
+    return '<div style="position:relative;flex-shrink:0">'
+      + delBtn
+      + '<button '+clickAttr
+      +' style="background:var(--surface);border:1px solid '+(_wlEditMode&&hasRealWL?'rgba(255,76,106,.3)':'var(--border)')+';'
+      +'border-radius:10px;padding:8px 12px;cursor:'+(_wlEditMode?'default':'pointer')+';font-family:inherit;'
       +'text-align:center;min-width:70px;-webkit-tap-highlight-color:transparent">'
       +'<div style="font-size:10px;color:var(--text3);font-weight:600">'+id+'</div>'
       +'<div style="font-size:13px;font-weight:700;margin-top:2px;color:var(--text)">'+name+'</div>'
       +'<div id="sqp-'+id+'" style="font-size:10px;color:var(--text3);margin-top:2px">—</div>'
-      +'</button>';
+      +'</button></div>';
   }).join('');
+
+  // 編輯模式但還是預設股（沒真實自選股）→ 提示
+  if(_wlEditMode && !hasRealWL){
+    listEl.innerHTML = '<div style="padding:14px;font-size:11px;color:var(--text3);text-align:center;width:100%">目前顯示的是預設熱門股<br>用上方搜尋框加入你的自選股，加入後即可管理</div>';
+  }
 
   // 背景載入即時價格
   setTimeout(async ()=>{
