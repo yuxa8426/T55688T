@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606270532';
+  const APP_VER = '202606271200';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -4098,7 +4098,7 @@ function switchJournalTab(tab){
 // 從雲端 KV 載入
 async function loadJournalData(){
   try{
-    const r = await fetchWithTimeout(`${API}/journal`, 15000);
+    const r = await fetchWithTimeout(`${API}/journal?uid=${getUID()}`, 15000);
     if(r.ok){
       const d = await r.json();
       _journalData = d.decisions || [];
@@ -4113,7 +4113,7 @@ async function _saveDecisionToKV(dec){
   try{
     const r = await fetchWithTimeout(`${API}/journal/save`, 15000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ decision: dec })
+      body: JSON.stringify({ uid: getUID(), decision: dec })
     });
     return r.ok;
   }catch(e){ return false; }
@@ -4125,7 +4125,7 @@ async function _deleteDecision(id){
   try{
     await fetchWithTimeout(`${API}/journal/delete`, 15000, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ uid: getUID(), id })
     });
     _journalData = _journalData.filter(d=>d.id!==id);
     _renderOpenList(); _renderTrackList(); _updateJournalSummary();
