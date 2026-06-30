@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606271830';
+  const APP_VER = '202606271900';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -2827,7 +2827,7 @@
 
   <!-- ═══ 決策日誌 Modal（全螢幕，四模組）═══ -->
   <div id="journalModal" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;overflow-y:auto">
-    <div style="max-width:480px;margin:0 auto;padding:16px 16px 80px">
+    <div style="max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px 80px">
       <!-- 標題列 -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-top:8px">
         <h1 style="font-size:20px;font-weight:700">📓 決策日誌</h1>
