@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606271800';
+  const APP_VER = '202606271830';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -4146,6 +4146,7 @@ function _updateJournalSummary(){
 const BASIS_OPTIONS = ['B/S共振','籌碼買超','題材熱度','突破型態','均線多頭','法人連買','基本面佳','技術超賣','其他'];
 
 function _showDecisionForm(prefill){
+  if(typeof _ensureFullStockList==='function') _ensureFullStockList();  // 預載全市場清單（含冷門股），供標的連動搜尋
   _editingDecisionId = prefill?.id || null;
   const d = prefill || {};
   const basisChecked = d.basis || [];
@@ -4156,16 +4157,17 @@ function _showDecisionForm(prefill){
     </div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:12px">📌 進場前先填寫，強迫自己講清楚決策理由（避免事後合理化）</div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
       <div>
         <label style="font-size:10px;color:var(--text3)">股票代號</label>
-        <input id="jf-stockId" value="${d.stockId||''}" placeholder="2330" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+        <input id="jf-stockId" value="${d.stockId||''}" placeholder="2330" autocomplete="off" oninput="_jfStockSearch(this.value)" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
       </div>
       <div>
         <label style="font-size:10px;color:var(--text3)">股票名稱</label>
-        <input id="jf-stockName" value="${d.stockName||''}" placeholder="台積電" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
+        <input id="jf-stockName" value="${d.stockName||''}" placeholder="台積電" autocomplete="off" oninput="_jfStockSearch(this.value)" style="width:100%;padding:8px;margin-top:3px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px">
       </div>
     </div>
+    <div id="jf-stockResults" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;max-height:200px;overflow-y:auto"></div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div>
@@ -4220,6 +4222,56 @@ function _showDecisionForm(prefill){
 }
 
 function _closeDecisionForm(){ document.getElementById('decisionFormModal').style.display='none'; }
+
+// ── 決策紀錄：標的代號⇄名稱自動連動（沿用 NAME_MAP + 全市場清單，含冷門股）──
+function _jfStockSource(){
+  return Object.assign({}, (typeof NAME_MAP!=='undefined'?NAME_MAP:{}), _fullStockList || {});
+}
+function _jfStockSearch(kw){
+  const res    = document.getElementById('jf-stockResults');
+  const idEl   = document.getElementById('jf-stockId');
+  const nameEl = document.getElementById('jf-stockName');
+  if(!res) return;
+  kw = (kw||'').trim();
+  if(!kw){ res.innerHTML=''; res.style.display='none'; return; }
+  const source = _jfStockSource();
+
+  // 即時連動：輸入完整代號 → 自動帶名稱（名稱空白才帶，不蓋掉手動輸入）
+  if(source[kw] && nameEl && !nameEl.value.trim()) nameEl.value = source[kw];
+  // 即時連動：輸入完整名稱 → 自動帶代號（唯一符合且代號空白才帶）
+  const exactByName = Object.entries(source).filter(([id,nm])=>nm===kw);
+  if(exactByName.length===1 && idEl && !idEl.value.trim()) idEl.value = exactByName[0][0];
+
+  // 下拉候選（完整代號優先，再代號/名稱包含）
+  const matches=[], seen=new Set();
+  if(source[kw]){ matches.push({id:kw,name:source[kw]}); seen.add(kw); }
+  for(const [id,nm] of Object.entries(source)){
+    if(matches.length>=8) break;
+    if(seen.has(id)) continue;
+    if(id.includes(kw)||nm.includes(kw)){ matches.push({id,name:nm}); seen.add(id); }
+  }
+
+  res.style.display='block';
+  if(!matches.length){
+    const looksLikeId = /^\d{4,6}[A-Z]?$/.test(kw);
+    res.innerHTML = looksLikeId
+      ? '<div onclick="_jfPickStock(\''+kw+'\',\''+kw+'\')" style="padding:9px 11px;cursor:pointer;font-size:12px;color:var(--text)">直接使用代號 <b>'+kw+'</b>（名稱可於個股頁確認）</div>'
+      : '<div style="padding:9px 11px;font-size:11px;color:var(--text3)">找不到相符股票，可直接輸入代號（如 4576）</div>';
+    return;
+  }
+  res.innerHTML = matches.map(m=>{
+    const sn = m.name.replace(/'/g,"\\'");
+    return '<div onclick="_jfPickStock(\''+m.id+'\',\''+sn+'\')" style="padding:9px 11px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">'
+      +'<span style="color:var(--text3);font-size:11px">'+m.id+'</span>'
+      +'<span style="font-weight:600;margin-left:6px;color:var(--text)">'+m.name+'</span></div>';
+  }).join('');
+}
+function _jfPickStock(id, name){
+  const idEl=document.getElementById('jf-stockId'), nameEl=document.getElementById('jf-stockName'), res=document.getElementById('jf-stockResults');
+  if(idEl) idEl.value=id;
+  if(nameEl) nameEl.value=name;
+  if(res){ res.innerHTML=''; res.style.display='none'; }
+}
 function _setJfDir(dir){
   window._jfState.direction = dir;
   document.getElementById('jf-dir-long').style.background = dir==='long'?'rgba(255,76,106,.2)':'var(--surface)';
