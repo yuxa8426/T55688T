@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606272100';
+  const APP_VER = '202606272200';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -11077,7 +11077,7 @@ function _removeFromWL(id){
 // 自選股盤後分析（讀盤後掃描 fullRank → 技術+基本面+買賣傾向）
 // 誠實定位：訊號參考，非投資建議、非預測保證。紅漲綠跌。
 // ════════════════════════════════════════════════════
-let _wlAnaMap = null, _wlAnaTs = 0, _wlAnaDate = '';
+let _wlAnaMap = null, _wlAnaTs = 0, _wlAnaDate = '', _wlRegime = null;
 async function _loadWLAnalysis(force){
   // 盤後掃描每日更新，前端快取 30 分鐘
   if(!force && _wlAnaMap && Date.now()-_wlAnaTs < 30*60*1000) return _wlAnaMap;
@@ -11088,6 +11088,7 @@ async function _loadWLAnalysis(force){
       const map = {};
       (d.fullRank||[]).forEach(s=>{ if(s&&s.id) map[s.id]=s; });
       _wlAnaMap = map; _wlAnaTs = Date.now(); _wlAnaDate = d.dataDate||d.date||'';
+      _wlRegime = d.regime || null;
     }
   }catch(e){ /* 靜默，維持舊值 */ }
   return _wlAnaMap || {};
@@ -11122,13 +11123,30 @@ function _wlChips(entry){
   else if((entry.foreignNet||0) > 0) chips.push(['外資買超','t']);
   else if((entry.foreignNet||0) < 0) chips.push(['外資賣超','b']);
   if(entry.revYoY != null) chips.push(['營收YoY'+(entry.revYoY>=0?'+':'')+Math.round(entry.revYoY)+'%', entry.revYoY>=0?'t':'b']);
+  if(entry.rs != null){
+    if(entry.rs >= 5)      chips.push(['強過大盤+'+Math.round(entry.rs)+'%','t']);
+    else if(entry.rs <= -5) chips.push(['弱於大盤'+Math.round(entry.rs)+'%','b']);
+  }
+  if(entry.atrPct != null) chips.push(['波動'+entry.atrPct+'%', entry.atrPct>7?'b':'n']);
   if(entry.pe != null && entry.pe>0) chips.push(['PE'+entry.pe.toFixed(1),'n']);
-  return chips.slice(0,5);
+  return chips.slice(0,6);
 }
 
 // 填入垂直自選面板的分析（renderWLPanel 後呼叫）
 async function _fillWLPanelAnalysis(){
   const map = await _loadWLAnalysis();
+  // 大盤régime徽章
+  const rgEl = document.getElementById('wlRegimeBadge');
+  if(rgEl && _wlRegime && _wlRegime.state && _wlRegime.state!=='未知'){
+    const st = _wlRegime.state;
+    const col = st==='多頭'?'var(--red)':st==='空頭'?'var(--green)':'var(--text3)';
+    const bg  = st==='多頭'?'rgba(255,76,106,.12)':st==='空頭'?'rgba(0,200,120,.12)':'rgba(255,255,255,.06)';
+    const note = st==='多頭'?'順風，訊號可信度較高':st==='空頭'?'逆風，做多訊號已自動保守化':'方向不明，訊號需保守看待';
+    rgEl.innerHTML = '<span style="font-size:11px;color:var(--text3)">大盤趨勢</span>'
+      + '<span style="font-size:12px;font-weight:800;color:'+col+';background:'+bg+';padding:2px 8px;border-radius:6px;margin-left:6px">'+st+'</span>'
+      + '<span style="font-size:10px;color:var(--text3);margin-left:6px">'+note+'</span>';
+    rgEl.style.display = 'block';
+  }
   const wl = getMyWL();
   wl.forEach(s=>{
     const id  = s.id||s.t||String(s);
@@ -11147,6 +11165,10 @@ async function _fillWLPanelAnalysis(){
     }).join('');
     const reasons = (e.reasons||[]).length
       ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">依據：'+e.reasons.join('、')+'</div>' : '';
+    // ATR 部位管理：建議停損距離 = 2×ATR%（誠實：僅為波動基準，非目標價）
+    const risk = (e.atrPct != null && e.atrPct > 0)
+      ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">部位管理：波動(ATR) '+e.atrPct+'%，建議停損距離約 '+(e.atrPct*2).toFixed(1)+'%（2×ATR）'+(e.atrPct>7?'，波動偏高宜減碼':'')+'</div>'
+      : '';
     box.innerHTML =
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       + '<span style="font-size:12px;font-weight:800;color:'+sg.color+'">'+sg.label+'</span>'
@@ -11154,7 +11176,7 @@ async function _fillWLPanelAnalysis(){
       + '<span style="font-size:10px;color:var(--text3)">'+sg.tone+'</span>'
       + '</div>'
       + (chips?('<div style="margin-top:2px">'+chips+'</div>'):'')
-      + reasons;
+      + reasons + risk;
   });
 }
 
@@ -15681,8 +15703,20 @@ async function runMultiAgentSignal(){
 
   const agentUIIds = ['agent-tech','agent-fund','agent-chip','agent-macro'];
 
+  // 大盤régime + 個股RS/ATR（正交特徵：讓AI把判斷條件化於市場狀態）
+  let regimeCtx = '';
+  try{
+    await _loadWLAnalysis();
+    const e = (_wlAnaMap||{})[stockId];
+    const rgTxt = (_wlRegime && _wlRegime.state && _wlRegime.state!=='未知')
+      ? `${_wlRegime.state}（加權${_wlRegime.close}／季線${_wlRegime.ma60??'—'}／年線${_wlRegime.ma200??'—'}）` : '未知';
+    const rsTxt  = (e && e.rs!=null)     ? `${e.rs>=0?'+':''}${e.rs}%（vs大盤20日）` : '—';
+    const atrTxt = (e && e.atrPct!=null) ? `${e.atrPct}%` : '—';
+    regimeCtx = `\n\n【大盤環境】趨勢régime：${rgTxt}；本股相對強弱RS：${rsTxt}；波動ATR%：${atrTxt}。請將各Agent判斷「條件化」於此市場狀態：空頭régime下對做多訊號更保守、RS偏弱者降評、高ATR%者提高停損與部位風險意識。`;
+  }catch(_){}
+
   // ══ 單次呼叫：把4個 Agent + 仲裁者合併為一個 prompt，節省 80% 配額 ══
-  const combinedPrompt = `你是台股多代理人交易分析系統。請扮演以下4個分析師角色，對 ${name}(${stockId}) 現價 ${price} 進行協同分析。
+  const combinedPrompt = `你是台股多代理人交易分析系統。請扮演以下4個分析師角色，對 ${name}(${stockId}) 現價 ${price} 進行協同分析。${regimeCtx}
 
 【技術面 Agent-01】RSI：${techData.rsi||'無'} MA20：${techData.ma20} 5日：${techData.ret5} 量能比：${techData.volRatio} 長線分：${techData.longScore} 短線分：${techData.shortScore}
 
@@ -20906,7 +20940,7 @@ function renderWLPanel(){
     listEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">尚無自選股，輸入股票代號新增</div>';
     return;
   }
-  listEl.innerHTML = wl.map(s=>{
+  listEl.innerHTML = '<div id="wlRegimeBadge" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--surface);border-radius:8px"></div>' + wl.map(s=>{
     const id   = s.id||s.t||String(s);
     const name = s.n||s.name||id;
     const sn   = name.replace(/'/g,"\'");
