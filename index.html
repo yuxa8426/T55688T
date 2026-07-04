@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606272030';
+  const APP_VER = '202606272100';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -15709,8 +15709,13 @@ async function runMultiAgentSignal(){
     try {
       parsed = await _maCall(WORKER, combinedPrompt, 1600);
     } catch (e1) {
-      console.warn('[MA] 首次解析失敗，重試：', e1.message);
-      parsed = await _maCall(WORKER, combinedPrompt + '\n\n請務必輸出「完整且合法」的 JSON，各欄位務必精簡、勿被截斷。', 2000);
+      // 僅在「解析失敗/截斷」時重試；速率/配額錯誤不重試，避免加重限流
+      if (/解析|截斷/.test(e1.message)) {
+        console.warn('[MA] 解析失敗，重試：', e1.message);
+        parsed = await _maCall(WORKER, combinedPrompt + '\n\n請務必輸出「完整且合法」的 JSON，各欄位務必精簡、勿被截斷。', 2000);
+      } else {
+        throw e1;
+      }
     }
 
     // 解析4個 Agent 結果
