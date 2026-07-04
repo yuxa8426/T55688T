@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606271930';
+  const APP_VER = '202606272000';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -15503,6 +15503,45 @@ function _detectChipAnomaly(chipData){
 // ══════════════════════════════════════════════════════
 let _maCache = {};  // 快取30分鐘
 
+// 容錯 JSON 解析：去圍籬 → 抓 {…} 範圍 → 截斷時補齊引號/括號救回已完成部分
+function _extractJSON(raw){
+  let s = String(raw||'').replace(/```json/gi,'').replace(/```/g,'').trim();
+  const i = s.indexOf('{'), j = s.lastIndexOf('}');
+  if(i >= 0 && j > i) s = s.slice(i, j+1);
+  else if(i >= 0) s = s.slice(i);  // 只有開頭沒收尾（被截斷）
+  return s;
+}
+function _parseLooseJSON(raw){
+  const s = _extractJSON(raw);
+  try{ return JSON.parse(s); }catch(_){}
+  // 修補被截斷的 JSON：從尾端找引號成對的位置，補齊未閉合的括號後嘗試解析
+  const stops = [];
+  for(let k=0;k<s.length;k++){ const c=s[k]; if(c==='}'||c==='"'||c===']') stops.push(k+1); }
+  for(let si=stops.length-1; si>=0 && si>stops.length-300; si--){
+    let t = s.slice(0, stops[si]).replace(/[,\s]*$/,'');
+    if(((t.match(/"/g)||[]).length) % 2) continue;  // 引號需成對
+    const o=(t.match(/{/g)||[]).length, c=(t.match(/}/g)||[]).length;
+    const oa=(t.match(/\[/g)||[]).length, ca=(t.match(/\]/g)||[]).length;
+    for(let k=0;k<oa-ca;k++) t += ']';
+    for(let k=0;k<o-c;k++)  t += '}';
+    try{ return JSON.parse(t); }catch(_){}
+  }
+  throw new Error('JSON 解析失敗（回應可能被截斷）');
+}
+// 呼叫 Gemini proxy 並容錯解析
+async function _maCall(WORKER, prompt, maxTok){
+  const resp = await fetchWithTimeout(WORKER, 40000, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ max_tokens:maxTok||1600, messages:[{role:'user',content:prompt}] })
+  });
+  if(!resp.ok) throw new Error('HTTP '+resp.status);
+  const data = await resp.json();
+  if(data.error) throw new Error(data.error);
+  const text = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
+  if(!text) throw new Error('AI 回應為空');
+  return _parseLooseJSON(text);
+}
+
 function _setAgentCard(id, status, signal, label){
   const card = document.getElementById(id);
   if(!card) return;
@@ -15649,18 +15688,13 @@ async function runMultiAgentSignal(){
   _stratProgress && _stratProgress(60,'分析中…','🧠',null);
 
   try{
-    const resp = await fetchWithTimeout(WORKER, 40000, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ max_tokens:600, messages:[{role:'user',content:combinedPrompt}] })
-    });
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const data = await resp.json();
-    if(data.error) throw new Error(data.error);
-    const text  = (data.content||[]).map(b=>b.type==='text'?b.text:'').join('').trim();
-    let clean = text.replace(/`{3}json/g,'').replace(/`{3}/g,'').trim();
-')+1,m.lastIndexOf('
-
-    const parsed = JSON.parse(clean);
+    let parsed;
+    try {
+      parsed = await _maCall(WORKER, combinedPrompt, 1600);
+    } catch (e1) {
+      console.warn('[MA] 首次解析失敗，重試：', e1.message);
+      parsed = await _maCall(WORKER, combinedPrompt + '\n\n請務必輸出「完整且合法」的 JSON，各欄位務必精簡、勿被截斷。', 2000);
+    }
 
     // 解析4個 Agent 結果
     const agentIds = ['tech','fund','chip','macro'];
