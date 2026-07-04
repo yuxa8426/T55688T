@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606272000';
+  const APP_VER = '202606272030';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -12555,6 +12555,7 @@ async function selectStock(el, name, ticker){
   currentName   = name;
   const stockId = currentTicker.replace('.TW','');
   _longDataLoaded = ''; // 重置長期資料快取，讓新股票重新載入
+  _resetMultiAgentPanel(); // 重置多代理人面板，避免顯示上一檔的分析
 
   // 立即顯示名稱佔位，清空法人卡片
   document.getElementById('chartTitle').textContent = name + ' 走勢圖';
@@ -15555,6 +15556,22 @@ function _setAgentCard(id, status, signal, label){
     signalEl.textContent = signal||'—';
     signalEl.style.color = signal==='偏多'?'var(--red)':signal==='偏空'?'var(--green)':signal==='中立'?'var(--gold)':'var(--text3)';
   }
+}
+
+// 切換股票時重置多代理人面板，避免殘留上一檔的分析
+function _resetMultiAgentPanel(){
+  const panel = document.getElementById('multiAgentPanel');
+  if(panel) panel.style.display = 'none';
+  const err = document.getElementById('multiAgentError');
+  if(err) err.style.display = 'none';
+  const btn = document.getElementById('btn-multiagent');
+  if(btn) btn.disabled = false;
+  ['agent-tech','agent-fund','agent-chip','agent-macro'].forEach(id=>{
+    _setAgentCard(id, '', '—', '分析中…');
+    const card = document.getElementById(id);
+    const r = card && card.querySelector('.agent-reason');
+    if(r) r.textContent = '';
+  });
 }
 
 async function runMultiAgentSignal(){
