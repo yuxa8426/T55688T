@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606272200';
+  const APP_VER = '202606272230';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1751,6 +1751,21 @@
       <div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">載入中…</div>
     </div><!-- /intlNewsPanel -->
 
+    </div>
+
+    <!-- ═══ 散戶情緒指數（俗稱韭菜指數）═══ -->
+    <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <h2>🌡️ 散戶情緒指數</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="rsUpdateTime" style="font-size:9px;color:var(--text3)"></span>
+        <button onclick="loadRetailSentiment(true)" id="rsRefreshBtn"
+          style="font-size:11px;padding:4px 12px;border-radius:8px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer">
+          更新
+        </button>
+      </div>
+    </div>
+    <div id="retailSentimentCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
+      <div id="rsContent" style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">載入中…</div>
     </div>
 
     <!-- ═══ 題材熱度分析 ═══ -->
@@ -4763,6 +4778,73 @@ function _loadThemeCache(){
   }catch(e){}
 }
 
+// ═══ 散戶情緒指數（俗稱韭菜指數）═══
+// 誠實定位：合成參考分，非官方指數、非買賣訊號。分數越高＝散戶越擁擠/情緒越熱。
+let _rsLoaded = false;
+async function loadRetailSentiment(force){
+  const box = document.getElementById('rsContent');
+  const timeEl = document.getElementById('rsUpdateTime');
+  if(!box) return;
+  if(_rsLoaded && !force) return;
+  box.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px">分析中…</div>';
+  try{
+    const r = await fetchWithTimeout(`${API}/retail-sentiment${force?'?refresh=1':''}`, 20000);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    _rsLoaded = true;
+    _renderRetailSentiment(d);
+    if(timeEl) timeEl.textContent = '資料日 '+(d.dataDate||'—');
+  }catch(e){
+    box.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px">⚠️ 讀取失敗：'+(e.message||e)+'</div>';
+  }
+}
+function _renderRetailSentiment(d){
+  const box = document.getElementById('rsContent');
+  if(!box) return;
+  const score = d.score;
+  const band = d.band || '—';
+  const col = score==null ? 'var(--text3)'
+    : score>=70 ? 'var(--red)' : score>=50 ? '#ff9800' : score>=30 ? 'var(--text3)' : 'var(--green)';
+  const bandNote = {'過熱':'散戶擁擠，留意追高反轉風險','偏熱':'情緒偏熱','中性':'情緒中性','冷清':'散戶退場、情緒低迷'}[band] || '';
+  const gauge = score==null ? '' :
+    '<div style="margin:10px 0 4px">'
+    + '<div style="position:relative;height:8px;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--text3),#ff9800,var(--red))">'
+    + '<div style="position:absolute;top:-3px;left:calc('+score+'% - 2px);width:4px;height:14px;border-radius:2px;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.6)"></div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px"><span>冷清</span><span>中性</span><span>過熱</span></div>'
+    + '</div>';
+  const rows = (d.components||[]).map(c=>{
+    if(c.error) return '<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text3)">'+c.label+'：讀取失敗</div>';
+    if(c.value==null){
+      return '<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--text3)">'
+        +'<div style="display:flex;justify-content:space-between"><span>'+c.label+'</span><span>—</span></div>'
+        +(c.note?'<div style="font-size:10px;color:var(--text3);margin-top:2px">'+c.note+'</div>':'')+'</div>';
+    }
+    const sub = c.subScore;
+    const subCol = sub==null?'var(--text3)':sub>=70?'var(--red)':sub>=50?'#ff9800':sub>=30?'var(--text3)':'var(--green)';
+    const val = (c.value>=0&&c.unit==='%'?'+':'')+c.value+(c.unit==='x'?'x':c.unit==='%'?'%':'');
+    return '<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<span style="font-size:12px;color:var(--text);font-weight:600">'+c.label+'</span>'
+      + '<span style="font-size:13px;font-weight:800;color:'+subCol+'">'+val+'</span>'
+      + '</div>'
+      + '<div style="position:relative;height:4px;border-radius:3px;background:rgba(255,255,255,.08);margin-top:4px"><div style="height:100%;border-radius:3px;width:'+(sub||0)+'%;background:'+subCol+'"></div></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:3px">'
+      + '<span>'+(c.hint||'')+'</span><span>權重'+Math.round((c.weight||0)*100)+'% · '+(c.source||'')+' · '+(c.date||'')+'</span>'
+      + '</div></div>';
+  }).join('');
+  box.innerHTML =
+    '<div style="display:flex;align-items:baseline;gap:10px">'
+    + '<span style="font-size:40px;font-weight:800;color:'+col+';line-height:1">'+(score==null?'—':score)+'</span>'
+    + '<div><div style="font-size:15px;font-weight:800;color:'+col+'">'+band+'</div>'
+    + '<div style="font-size:10px;color:var(--text3)">'+bandNote+'</div></div>'
+    + '</div>'
+    + gauge
+    + '<div style="margin-top:8px">'+rows+'</div>'
+    + '<div style="font-size:10px;color:var(--text3);line-height:1.6;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
+    + '⚠️ 此為多項真實籌碼/量能指標的<b>合成參考分</b>，<b>非官方「韭菜指數」、非買賣訊號</b>。分數越高代表散戶越擁擠、情緒越熱，反轉風險相對升高，僅供情緒面判讀。</div>';
+}
+
 async function loadThemeAnalysis(cachedData, cachedTime){
   const btn = document.getElementById('themeRefreshBtn');
   const content = document.getElementById('themeContent');
@@ -4952,6 +5034,8 @@ function switchPage(n){
     // 載入國際財經新聞（快取4小時，不重複請求）
     // 國際新聞：延遲 2 秒（讓核心先載入）
   setTimeout(()=>loadIntlNews(false), 2000);
+    // 散戶情緒指數（每日更新，快取於後端）：延遲載入
+    setTimeout(()=>loadRetailSentiment(false), 2500);
   }
 }
 
