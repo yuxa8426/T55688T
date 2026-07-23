@@ -87,7 +87,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202606272230';
+  const APP_VER = '202607230900';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -243,6 +243,14 @@
       <span id="taiexUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
       <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
     </div>
+  </div>
+  <!-- ═══ 市場狀態（大盤趨勢 × 散戶情緒，兩軸合併判讀）═══ -->
+  <div id="marketStateCard" class="chart-card" style="margin:0 0 14px;display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:800">市場狀態</div>
+      <span id="msUpdated" style="font-size:9px;color:var(--text3)"></span>
+    </div>
+    <div id="marketStateBody"></div>
   </div>
   <!-- 常駐免責聲明 -->
   <div style="margin:0 16px 10px;padding:7px 12px;background:rgba(255,255,255,.08);border-radius:8px;border-left:3px solid rgba(245,200,66,.5)">
@@ -3517,6 +3525,8 @@ function _deletePosition(){
 
 // 股票代號輸入：觸發 preview 更新
 document.addEventListener('DOMContentLoaded', ()=>{
+  // 首頁市場狀態卡（大盤régime × 散戶情緒）：延遲載入，不擋核心
+  setTimeout(()=>{ if(typeof loadMarketStateCard==='function') loadMarketStateCard(); }, 3000);
   ['modalCostPrice','modalShares'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', _updateModalPreview);
@@ -4308,6 +4318,62 @@ function _toggleBasis(btn){
   btn.style.color = on?'var(--text3)':'var(--purple)';
 }
 
+// ═══ 首頁市場狀態卡（大盤régime × 散戶情緒，兩軸交叉判讀）═══
+async function loadMarketStateCard(){
+  const card = document.getElementById('marketStateCard');
+  const body = document.getElementById('marketStateBody');
+  if(!card || !body) return;
+  try{
+    await _loadWLAnalysis();                 // régime
+    const rs = await _loadRSForJournal();    // 情緒分
+    const regime = (_wlRegime && _wlRegime.state && _wlRegime.state!=='未知') ? _wlRegime.state : null;
+    const sc = rs?.score ?? null;
+    const band = rs?.band || null;
+    if(regime==null && sc==null) return;     // 都沒有就不顯示，不造假
+
+    const rCol = regime==='多頭'?'var(--red)':regime==='空頭'?'var(--green)':'var(--text3)';
+    const sCol = sc==null?'var(--text3)':sc>=70?'var(--red)':sc>=50?'#ff9800':sc>=30?'var(--text3)':'var(--green)';
+
+    // 兩軸交叉判讀（方向 × 擁擠度）——這是合併後才有的資訊
+    let combo = '';
+    if(regime && sc!=null){
+      const hot = sc>=50;
+      if(regime==='多頭')      combo = hot ? '多頭但散戶擁擠，追高風險升高，留意過熱反轉。' : '多頭且情緒未過熱，相對健康的上行環境。';
+      else if(regime==='空頭') combo = hot ? '空頭卻情緒偏熱，散戶仍在承接，風險最高。' : '空頭且情緒低迷，可能處於築底階段，仍需訊號確認。';
+      else                     combo = hot ? '盤整但情緒偏熱，易追高被套，宜降低頻率。' : '盤整且情緒清淡，方向不明，觀望為宜。';
+    }
+
+    body.innerHTML =
+      '<div style="display:flex;gap:8px">'
+      + '<div style="flex:1;background:var(--surface);border-radius:10px;padding:9px 11px">'
+      +   '<div style="font-size:9px;color:var(--text3)">大盤趨勢</div>'
+      +   '<div style="font-size:17px;font-weight:800;color:'+rCol+';margin-top:2px">'+(regime||'—')+'</div>'
+      +   '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+(_wlRegime?.close?('加權 '+_wlRegime.close+(_wlRegime.ma60?' / 季線 '+_wlRegime.ma60:'')):'—')+'</div>'
+      + '</div>'
+      + '<div style="flex:1;background:var(--surface);border-radius:10px;padding:9px 11px">'
+      +   '<div style="font-size:9px;color:var(--text3)">散戶情緒</div>'
+      +   '<div style="font-size:17px;font-weight:800;color:'+sCol+';margin-top:2px">'+(sc==null?'—':sc)+(band?'<span style="font-size:11px;margin-left:4px">'+band+'</span>':'')+'</div>'
+      +   '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+(sc==null?'—':'越高＝散戶越擁擠')+'</div>'
+      + '</div></div>'
+      + (combo?('<div style="font-size:10px;color:var(--text2);line-height:1.6;margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'+combo+'</div>'):'')
+      + '<div style="font-size:9px;color:var(--text3);margin-top:6px">⚠️ 市場環境參考，非買賣訊號。</div>';
+    const up = document.getElementById('msUpdated');
+    if(up) up.textContent = rs?.dataDate ? ('資料日 '+rs.dataDate) : '';
+    card.style.display = 'block';
+  }catch(_){ /* 靜默，不顯示卡片 */ }
+}
+
+// 散戶情緒分讀取（日誌記錄 / 首頁市場狀態卡共用，快取30分鐘）
+let _rsShared = null, _rsSharedTs = 0;
+async function _loadRSForJournal(force){
+  if(!force && _rsShared && Date.now()-_rsSharedTs < 30*60*1000) return _rsShared;
+  try{
+    const r = await fetchWithTimeout(`${API}/retail-sentiment`, 15000);
+    if(r.ok){ _rsShared = await r.json(); _rsSharedTs = Date.now(); }
+  }catch(_){}
+  return _rsShared;
+}
+
 async function _submitDecision(){
   const stockId = document.getElementById('jf-stockId').value.trim();
   const stockName = document.getElementById('jf-stockName').value.trim();
@@ -4319,6 +4385,22 @@ async function _submitDecision(){
     .map(b=>b.dataset.basis);
 
   const existing = _editingDecisionId ? _journalData.find(d=>d.id===_editingDecisionId) : null;
+  // 自動記錄「決策當下的市場狀態」（régime 方向 + 散戶情緒擁擠度）
+  // 編輯既有決策時保留原值 —— 當初的市場環境不應被事後竄改
+  let mkt = existing?.market;
+  if(!mkt){
+    try{
+      await _loadWLAnalysis();  // 取得 régime
+      const rs = await _loadRSForJournal();
+      mkt = {
+        regime: (_wlRegime && _wlRegime.state && _wlRegime.state!=='未知') ? _wlRegime.state : null,
+        sentiment: rs?.score ?? null,
+        sentimentBand: rs?.band || null,
+        at: new Date().toISOString(),
+      };
+      if(mkt.regime==null && mkt.sentiment==null) mkt = null;  // 都抓不到就不存，不造假
+    }catch(_){ mkt = null; }
+  }
   const dec = {
     id: _editingDecisionId || ('dec_'+Date.now()),
     createdAt: existing?.createdAt || new Date().toISOString(),
@@ -4331,6 +4413,7 @@ async function _submitDecision(){
     takeProfit: parseFloat(document.getElementById('jf-takeProfit').value) || null,
     note: document.getElementById('jf-note').value.trim(),
     status: existing?.status || 'open',
+    market: mkt,   // 決策當下市場狀態（供統計分組：不同市場環境下的勝率/期望值）
     // 保留結算資料（編輯時）
     exitPrice: existing?.exitPrice, exitAt: existing?.exitAt,
     pnl: existing?.pnl, pnlPct: existing?.pnlPct, holdDays: existing?.holdDays,
@@ -4367,6 +4450,7 @@ function _renderOpenList(){
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:7px">進場 ${d.entryPrice}${d.stopLoss?` · 停損 ${d.stopLoss}`:''}${d.takeProfit?` · 停利 ${d.takeProfit}`:''}</div>
       ${d.basis?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px">${d.basis.map(b=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(124,108,255,.12);color:var(--purple)">${b}</span>`).join('')}</div>`:''}
+      ${d.market&&(d.market.regime||d.market.sentiment!=null)?`<div style="font-size:9px;color:var(--text3);margin-bottom:7px">決策當下：${d.market.regime?`大盤${d.market.regime}`:''}${d.market.regime&&d.market.sentiment!=null?' · ':''}${d.market.sentiment!=null?`情緒${d.market.sentiment}（${d.market.sentimentBand||''}）`:''}</div>`:''}
       ${d.note?`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">${d.note}</div>`:''}
       <div style="display:flex;gap:6px">
         <button onclick="_showCloseForm('${d.id}')" style="flex:1;font-size:11px;padding:7px;border-radius:8px;background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);color:var(--accent);cursor:pointer;font-weight:700">結算出場</button>
@@ -4574,6 +4658,53 @@ function _renderStatsDashboard(){
   h += `<div style="font-size:24px;font-weight:800;color:${totalPnl>=0?'var(--red)':'var(--green)'}">${totalPnl>=0?'+':''}${totalPnl.toFixed(1)}%</div>`;
   h += `<div style="font-size:9px;color:var(--text3)">紀律執行率 ${discRate.toFixed(0)}%</div>`;
   h += `</div>`;
+
+  // ═══ 市場環境分析：在什麼市場狀態下進場，表現如何 ═══
+  // 核心用途：找出「總在情緒過熱時進場」這類系統性盲點
+  const withMkt = closed.filter(d=>d.market && (d.market.regime || d.market.sentiment!=null));
+  if(withMkt.length >= 2){
+    const grp = (arr)=>{
+      if(!arr.length) return null;
+      const w = arr.filter(d=>d.pnlPct>0).length;
+      const aw = arr.filter(d=>d.pnlPct>0);
+      const al = arr.filter(d=>d.pnlPct<=0);
+      const avgW = aw.length ? aw.reduce((s,d)=>s+d.pnlPct,0)/aw.length : 0;
+      const avgL = al.length ? al.reduce((s,d)=>s+d.pnlPct,0)/al.length : 0;
+      const wr = w/arr.length*100;
+      return { n:arr.length, winRate:wr, exp:(wr/100)*avgW+(1-wr/100)*avgL };
+    };
+    const rows = [];
+    // 依 régime 分組
+    ['多頭','盤整','空頭'].forEach(st=>{
+      const g = grp(withMkt.filter(d=>d.market.regime===st));
+      if(g) rows.push({label:'大盤'+st, ...g});
+    });
+    // 依情緒擁擠度分組（過熱/偏熱 vs 中性/冷清）
+    const hot  = grp(withMkt.filter(d=>d.market.sentiment!=null && d.market.sentiment>=50));
+    const cool = grp(withMkt.filter(d=>d.market.sentiment!=null && d.market.sentiment<50));
+    if(hot)  rows.push({label:'情緒偏熱時進場', ...hot});
+    if(cool) rows.push({label:'情緒中性/冷清時進場', ...cool});
+
+    if(rows.length){
+      h += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:7px">🌡️ 市場環境分析（${withMkt.length}筆有記錄）</div>`;
+      h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px 11px;margin-bottom:8px">`;
+      rows.forEach(r=>{
+        const col = r.exp>=0?'var(--red)':'var(--green)';
+        h += `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">`
+          + `<span style="font-size:11px;color:var(--text)">${r.label}<span style="color:var(--text3);font-size:9px;margin-left:4px">${r.n}筆</span></span>`
+          + `<span style="font-size:11px"><span style="color:var(--text3)">勝率${r.winRate.toFixed(0)}%</span>`
+          + `<span style="color:${col};font-weight:700;margin-left:8px">期望值${r.exp>=0?'+':''}${r.exp.toFixed(2)}%</span></span></div>`;
+      });
+      h += `</div>`;
+      // 誠實提醒：小樣本不可過度解讀
+      const minN = Math.min(...rows.map(r=>r.n));
+      if(minN < 5){
+        h += `<div style="font-size:9px;color:var(--text3);line-height:1.5;margin-bottom:12px">⚠️ 部分分組樣本仍少（最少${minN}筆），差異可能只是隨機波動，累積更多筆後再判讀較可靠。</div>`;
+      } else {
+        h += `<div style="font-size:9px;color:var(--text3);line-height:1.5;margin-bottom:12px">若「情緒偏熱時進場」期望值明顯較差，代表可能有追高習慣——這是可修正的系統性盲點。</div>`;
+      }
+    }
+  }
 
   // 哪種訊號勝率高
   const basisStats = {};
