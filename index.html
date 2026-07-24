@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607241200';
+  const APP_VER = '202607241600';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -250,7 +250,7 @@
       <span style="font-size:10px;color:var(--text3)">TWSE 官方資料</span>
     </div>
   </div>
-  <!-- ═══ 市場狀態（大盤趨勢 × 散戶情緒，兩軸合併判讀）═══ -->
+  <!-- ═══ 市場狀態（大盤趨勢 × 散戶擁擠度，兩軸合併判讀）═══ -->
   <div id="marketStateCard" class="chart-card" style="margin:0 0 14px;display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div style="font-size:13px;font-weight:800">市場狀態</div>
@@ -346,12 +346,33 @@
     </div>
   </div>
 
-  <!-- 資料更新說明 -->
-  <div style="background:rgba(212,160,0,.06);border:1px solid rgba(212,160,0,.2);
-              border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:10px;color:var(--text3)">
-    ⏰ 所有指標均為<strong style="color:var(--gold)">盤後資料</strong>，
-    每日收盤後 <strong style="color:var(--text2)">16:00~19:00</strong> 由交易所公告，FinMind 同步更新。
-    當日數字標示 <span style="color:var(--red);font-weight:700">紅色</span>，前日數字標示 <span style="color:var(--gold)">橘色</span>。
+  <!-- 資料更新說明（精簡單行，詳細說明併入此處）-->
+  <div style="margin:0 16px 8px;font-size:9px;color:var(--text3);line-height:1.5">
+    ⏰ 均為盤後資料（收盤後 16:00~19:00 交易所公告）·<span style="color:var(--red)">紅</span>=當日 <span style="color:var(--gold)">橘</span>=前日
+  </div>
+
+  <!-- 四合一速覽列：四項核心數值一眼看完，點擊跳至該分頁看細節 -->
+  <div id="leadSummary" style="display:flex;gap:6px;margin:0 16px 10px">
+    <div onclick="_jumpLeadTab('option')" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 4px;text-align:center;cursor:pointer">
+      <div style="font-size:9px;color:var(--text3)">PCR</div>
+      <div id="ls-pcr" style="font-size:14px;font-weight:800;color:var(--text3);line-height:1.25">—</div>
+      <div id="ls-pcr-t" style="font-size:8px;color:var(--text3)">—</div>
+    </div>
+    <div onclick="_jumpLeadTab('futures')" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 4px;text-align:center;cursor:pointer">
+      <div style="font-size:9px;color:var(--text3)">外資淨部位</div>
+      <div id="ls-fut" style="font-size:14px;font-weight:800;color:var(--text3);line-height:1.25">—</div>
+      <div id="ls-fut-t" style="font-size:8px;color:var(--text3)">—</div>
+    </div>
+    <div onclick="_jumpLeadTab('margin')" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 4px;text-align:center;cursor:pointer">
+      <div style="font-size:9px;color:var(--text3)">券資比</div>
+      <div id="ls-margin" style="font-size:14px;font-weight:800;color:var(--text3);line-height:1.25">—</div>
+      <div id="ls-margin-t" style="font-size:8px;color:var(--text3)">—</div>
+    </div>
+    <div onclick="_jumpLeadTab('mxf')" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 4px;text-align:center;cursor:pointer">
+      <div style="font-size:9px;color:var(--text3)">小台散戶</div>
+      <div id="ls-mxf" style="font-size:14px;font-weight:800;color:var(--text3);line-height:1.25">—</div>
+      <div id="ls-mxf-t" style="font-size:8px;color:var(--text3)">—</div>
+    </div>
   </div>
 
   <!-- Tab 切換列 -->
@@ -596,9 +617,9 @@
 
       <!-- 數值卡片列 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-        <!-- 散戶情緒 -->
+        <!-- 小台散戶多空（期貨部位，與首頁「散戶擁擠度」為不同資料源）-->
         <div style="background:rgba(245,200,66,.06);border:1px solid rgba(245,200,66,.25);border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">散戶情緒</div>
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:4px">散戶多空</div>
           <div style="font-size:18px;font-weight:800;line-height:1.2;white-space:nowrap" id="mxfRetailSentiment">—</div>
           <div style="font-size:9px;margin-top:3px;color:var(--text3)" id="mxfRetailLabel">—</div>
         </div>
@@ -668,8 +689,11 @@
 </div>
 
   <!-- VIX 恐慌指數 -->
-  <div class="sec" style="padding-bottom:6px"><h2>😨 VIX 恐慌指數</h2></div>
-<div class="vix-wrap">
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center;padding-bottom:6px">
+    <h2>😨 VIX 恐慌指數</h2>
+    <button onclick="_homeFold('vix')" id="fold-btn-vix" style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:3px 9px;cursor:pointer;font-family:inherit">展開 ▾</button>
+  </div>
+<div class="vix-wrap" id="fold-vix">
     <div class="vix-top">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
         <div>
@@ -707,9 +731,12 @@
   
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <h2>市場成交量</h2>
-    <span id="mktVolUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span id="mktVolUpdateTime" style="font-size:10px;color:var(--text3)">—</span>
+      <button onclick="_homeFold('vol')" id="fold-btn-vol" style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:3px 9px;cursor:pointer;font-family:inherit">展開 ▾</button>
+    </div>
   </div>
-  <div class="vol-card">
+  <div class="vol-card" id="fold-vol">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:4px">台股今日成交額</div>
@@ -796,12 +823,12 @@
         id="marketNewsToggleBtn"
         style="font-size:11px;color:var(--text3);background:rgba(255,255,255,.06);
                border:1px solid var(--border);border-radius:8px;padding:3px 9px;
-               cursor:pointer;font-family:inherit">收合 ▴</button>
+               cursor:pointer;font-family:inherit">展開 ▾</button>
       <button onclick="loadMarketNewsSection(true)"
         style="background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer">↻</button>
     </div>
   </div>
-  <div id="marketNewsPanel">
+  <div id="marketNewsPanel" style="display:none">
     <div id="marketNewsList">
       <div style="padding:14px 16px;color:var(--text3);font-size:12px">載入中…</div>
     </div>
@@ -1762,9 +1789,9 @@
 
     </div>
 
-    <!-- ═══ 散戶情緒指數（俗稱韭菜指數）═══ -->
+    <!-- ═══ 散戶擁擠度（融資/券資比/量能合成）═══ -->
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
-      <h2>🌡️ 散戶情緒指數</h2>
+      <h2>🌡️ 散戶擁擠度</h2>
       <div style="display:flex;align-items:center;gap:8px">
         <span id="rsUpdateTime" style="font-size:9px;color:var(--text3)"></span>
         <button onclick="loadRetailSentiment(true)" id="rsRefreshBtn"
@@ -3528,6 +3555,10 @@ function _deletePosition(){
 document.addEventListener('DOMContentLoaded', ()=>{
   // 首頁市場狀態卡（大盤régime × 散戶情緒）：延遲載入，不擋核心
   setTimeout(()=>{ if(typeof loadMarketStateCard==='function') loadMarketStateCard(); }, 3000);
+  // 先行指標四合一速覽列：綁定鏡射
+  setTimeout(()=>{ if(typeof _initLeadSummary==='function') _initLeadSummary(); }, 1200);
+  // 首頁次要區塊收合狀態還原
+  setTimeout(()=>{ if(typeof _initHomeFolds==='function') _initHomeFolds(); }, 300);
   ['modalCostPrice','modalShares'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', _updateModalPreview);
@@ -4319,7 +4350,7 @@ function _toggleBasis(btn){
   btn.style.color = on?'var(--text3)':'var(--purple)';
 }
 
-// ═══ 首頁市場狀態卡（大盤régime × 散戶情緒，兩軸交叉判讀）═══
+// ═══ 首頁市場狀態卡（大盤régime × 散戶擁擠度，兩軸交叉判讀）═══
 async function loadMarketStateCard(){
   const card = document.getElementById('marketStateCard');
   const body = document.getElementById('marketStateBody');
@@ -4339,9 +4370,9 @@ async function loadMarketStateCard(){
     let combo = '';
     if(regime && sc!=null){
       const hot = sc>=50;
-      if(regime==='多頭')      combo = hot ? '多頭但散戶擁擠，追高風險升高，留意過熱反轉。' : '多頭且情緒未過熱，相對健康的上行環境。';
-      else if(regime==='空頭') combo = hot ? '空頭卻情緒偏熱，散戶仍在承接，風險最高。' : '空頭且情緒低迷，可能處於築底階段，仍需訊號確認。';
-      else                     combo = hot ? '盤整但情緒偏熱，易追高被套，宜降低頻率。' : '盤整且情緒清淡，方向不明，觀望為宜。';
+      if(regime==='多頭')      combo = hot ? '多頭但融資擁擠，追高風險升高，留意過熱反轉。' : '多頭且擁擠度不高，相對健康的上行環境。';
+      else if(regime==='空頭') combo = hot ? '空頭卻融資擁擠，散戶仍在承接，風險最高。' : '空頭且擁擠度低，可能處於築底階段，仍需訊號確認。';
+      else                     combo = hot ? '盤整但融資擁擠，易追高被套，宜降低頻率。' : '盤整且擁擠度低，方向不明，觀望為宜。';
     }
 
     body.innerHTML =
@@ -4352,9 +4383,9 @@ async function loadMarketStateCard(){
       +   '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+(_wlRegime?.close?('加權 '+_wlRegime.close+(_wlRegime.ma60?' / 季線 '+_wlRegime.ma60:'')):'—')+'</div>'
       + '</div>'
       + '<div style="flex:1;background:var(--surface);border-radius:10px;padding:9px 11px">'
-      +   '<div style="font-size:9px;color:var(--text3)">散戶情緒</div>'
+      +   '<div style="font-size:9px;color:var(--text3)">散戶擁擠度</div>'
       +   '<div style="font-size:17px;font-weight:800;color:'+sCol+';margin-top:2px">'+(sc==null?'—':sc)+(band?'<span style="font-size:11px;margin-left:4px">'+band+'</span>':'')+'</div>'
-      +   '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+(sc==null?'—':'越高＝散戶越擁擠')+'</div>'
+      +   '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+(sc==null?'—':'越高＝融資越擁擠')+'</div>'
       + '</div></div>'
       + (combo?('<div style="font-size:10px;color:var(--text2);line-height:1.6;margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'+combo+'</div>'):'')
       + '<div style="font-size:9px;color:var(--text3);margin-top:6px">⚠️ 市場環境參考，非買賣訊號。</div>';
@@ -4451,7 +4482,7 @@ function _renderOpenList(){
       </div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:7px">進場 ${d.entryPrice}${d.stopLoss?` · 停損 ${d.stopLoss}`:''}${d.takeProfit?` · 停利 ${d.takeProfit}`:''}</div>
       ${d.basis?.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px">${d.basis.map(b=>`<span style="font-size:9px;padding:2px 7px;border-radius:5px;background:rgba(124,108,255,.12);color:var(--purple)">${b}</span>`).join('')}</div>`:''}
-      ${d.market&&(d.market.regime||d.market.sentiment!=null)?`<div style="font-size:9px;color:var(--text3);margin-bottom:7px">決策當下：${d.market.regime?`大盤${d.market.regime}`:''}${d.market.regime&&d.market.sentiment!=null?' · ':''}${d.market.sentiment!=null?`情緒${d.market.sentiment}（${d.market.sentimentBand||''}）`:''}</div>`:''}
+      ${d.market&&(d.market.regime||d.market.sentiment!=null)?`<div style="font-size:9px;color:var(--text3);margin-bottom:7px">決策當下：${d.market.regime?`大盤${d.market.regime}`:''}${d.market.regime&&d.market.sentiment!=null?' · ':''}${d.market.sentiment!=null?`擁擠度${d.market.sentiment}（${d.market.sentimentBand||''}）`:''}</div>`:''}
       ${d.note?`<div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">${d.note}</div>`:''}
       <div style="display:flex;gap:6px">
         <button onclick="_showCloseForm('${d.id}')" style="flex:1;font-size:11px;padding:7px;border-radius:8px;background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);color:var(--accent);cursor:pointer;font-weight:700">結算出場</button>
@@ -4683,8 +4714,8 @@ function _renderStatsDashboard(){
     // 依情緒擁擠度分組（過熱/偏熱 vs 中性/冷清）
     const hot  = grp(withMkt.filter(d=>d.market.sentiment!=null && d.market.sentiment>=50));
     const cool = grp(withMkt.filter(d=>d.market.sentiment!=null && d.market.sentiment<50));
-    if(hot)  rows.push({label:'情緒偏熱時進場', ...hot});
-    if(cool) rows.push({label:'情緒中性/冷清時進場', ...cool});
+    if(hot)  rows.push({label:'擁擠度偏高時進場', ...hot});
+    if(cool) rows.push({label:'擁擠度偏低時進場', ...cool});
 
     if(rows.length){
       h += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:7px">🌡️ 市場環境分析（${withMkt.length}筆有記錄）</div>`;
@@ -4702,7 +4733,7 @@ function _renderStatsDashboard(){
       if(minN < 5){
         h += `<div style="font-size:9px;color:var(--text3);line-height:1.5;margin-bottom:12px">⚠️ 部分分組樣本仍少（最少${minN}筆），差異可能只是隨機波動，累積更多筆後再判讀較可靠。</div>`;
       } else {
-        h += `<div style="font-size:9px;color:var(--text3);line-height:1.5;margin-bottom:12px">若「情緒偏熱時進場」期望值明顯較差，代表可能有追高習慣——這是可修正的系統性盲點。</div>`;
+        h += `<div style="font-size:9px;color:var(--text3);line-height:1.5;margin-bottom:12px">若「擁擠度偏高時進場」期望值明顯較差，代表可能有追高習慣——這是可修正的系統性盲點。</div>`;
       }
     }
   }
@@ -4910,7 +4941,7 @@ function _loadThemeCache(){
   }catch(e){}
 }
 
-// ═══ 散戶情緒指數（俗稱韭菜指數）═══
+// ═══ 散戶擁擠度（融資/券資比/量能合成，俗稱韭菜指數）═══
 // 誠實定位：合成參考分，非官方指數、非買賣訊號。分數越高＝散戶越擁擠/情緒越熱。
 let _rsLoaded = false;
 async function loadRetailSentiment(force){
@@ -8922,6 +8953,71 @@ function switchLeadingTab(btn, panel){
   document.getElementById('li-'+panel).style.display='block';
 }
 
+// ── 首頁次要區塊收合（預設收合，記住使用者偏好）──
+const _FOLD_KEY = 'stockai_home_folds';
+function _foldState(){ try{ return JSON.parse(localStorage.getItem(_FOLD_KEY)||'{}'); }catch(_){ return {}; } }
+function _applyFold(key, open){
+  const box = document.getElementById('fold-'+key);
+  const btn = document.getElementById('fold-btn-'+key);
+  if(box) box.style.display = open ? '' : 'none';
+  if(btn) btn.textContent = open ? '收合 ▴' : '展開 ▾';
+}
+function _homeFold(key){
+  const st = _foldState();
+  const open = !(st[key] === true);   // 預設收合：未記錄視為關閉
+  st[key] = open;
+  try{ localStorage.setItem(_FOLD_KEY, JSON.stringify(st)); }catch(_){}
+  _applyFold(key, open);
+}
+function _initHomeFolds(){
+  const st = _foldState();
+  ['vix','vol'].forEach(k=> _applyFold(k, st[k] === true));
+}
+
+// ── 四合一速覽列：鏡射四個分頁核心數值，日常一眼掃完免逐頁點擊 ──
+const _LEAD_MIRROR = [
+  { main:'pcrVal',             sub:'pcrChg',         dm:'ls-pcr',    ds:'ls-pcr-t'    },
+  { main:'futNetPos',          sub:'futNetChg',      dm:'ls-fut',    ds:'ls-fut-t'    },
+  { main:'marginRatio',        sub:'marginChg',      dm:'ls-margin', ds:'ls-margin-t' },
+  { main:'mxfRetailSentiment', sub:'mxfRetailLabel', dm:'ls-mxf',    ds:'ls-mxf-t'    },
+];
+function _syncLeadSummary(){
+  _LEAD_MIRROR.forEach(m=>{
+    const src = document.getElementById(m.main), dst = document.getElementById(m.dm);
+    if(src && dst){
+      const t = (src.textContent||'').trim();
+      if(t){ dst.textContent = t; dst.style.color = src.style.color || 'var(--text)'; }
+    }
+    const ssrc = document.getElementById(m.sub), sdst = document.getElementById(m.ds);
+    if(ssrc && sdst){
+      const t2 = (ssrc.textContent||'').trim();
+      if(t2) sdst.textContent = t2.replace('日變化','').trim() || '—';
+    }
+  });
+}
+function _initLeadSummary(){
+  if(!window.MutationObserver) return;
+  const opt = { childList:true, characterData:true, subtree:true, attributes:true, attributeFilter:['style'] };
+  _LEAD_MIRROR.forEach(m=>{
+    [m.main, m.sub].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) new MutationObserver(_syncLeadSummary).observe(el, opt);
+    });
+  });
+  _syncLeadSummary();
+}
+// 點速覽卡 → 跳到對應分頁看細節
+function _jumpLeadTab(panel){
+  const order = ['option','futures','margin','mxf'];
+  const btns  = document.querySelectorAll('.li-tab');
+  const i = order.indexOf(panel);
+  if(i>=0 && btns[i] && typeof switchLeadingTab==='function'){
+    switchLeadingTab(btns[i], panel);
+    const el = document.getElementById('li-'+panel);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+}
+
 // 主載入入口（初始化 + 手動重整）
 // ══════════════════════════════════════════════════════
 // 加權指數走勢圖 + 成交量（大盤頁）
@@ -12897,7 +12993,7 @@ async function selectStock(el, name, ticker){
 // ════════════════════════════════════════════════════
 // ── 市場總覽新聞（個股頁，顯示大盤相關消息）───────────────
 let _marketNewsLoaded = false;
-let _marketNewsCollapsed = false;
+let _marketNewsCollapsed = true;   // 預設收合（首頁簡潔化，需要時展開）
 
 function _toggleMarketNews(btn){
   const panel = document.getElementById('marketNewsPanel');
