@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607241600';
+  const APP_VER = '202607281400';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -5694,13 +5694,19 @@ async function getQuoteWithIntraday(stockId){
 
   if(intra && intra.pts.length > 2){
     const rawLast  = intra.pts[intra.pts.length-1];
-    const prevClose= q.prevClose && q.prevClose > 0 ? q.prevClose : q.price;
+    // 昨收基準：優先用與即時價「同源」的 Yahoo chartPreviousClose（交易所提供、最準），
+    // 避免用 Yahoo 即時價配 FinMind 昨收 —— 除權息時 FinMind 還原股價昨收會偏移，
+    // 導致漲跌幅算出超過 ±10% 的假象。同源不可得才退回 FinMind 昨收。
+    const prevClose= (intra.prevClose && intra.prevClose > 0)
+      ? intra.prevClose
+      : (q.prevClose && q.prevClose > 0 ? q.prevClose : q.price);
     const refPts   = intra.pts.slice(-6,-1).filter(v=>v>0);
     const refAvg   = refPts.length ? refPts.reduce((a,b)=>a+b,0)/refPts.length : prevClose;
     const livePrice= refAvg > 0 && Math.abs(rawLast-refAvg)/refAvg > 0.08
       ? intra.pts.slice(0,-1).filter(v=>v>0).slice(-1)[0] || rawLast
       : rawLast;
     q.price     = livePrice;
+    q.prevClose = prevClose;
     q.change    = livePrice - prevClose;
     q.changePct = prevClose > 0 ? (livePrice-prevClose)/prevClose*100 : 0;
   }
