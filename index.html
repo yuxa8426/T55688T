@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607281400';
+  const APP_VER = '202607282000';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1802,6 +1802,28 @@
     </div>
     <div id="retailSentimentCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
       <div id="rsContent" style="color:var(--text3);font-size:12px;text-align:center;padding:20px 0">載入中…</div>
+    </div>
+
+    <!-- ═══ 尾盤異動（收盤前15分鐘，含尾盤集合競價；手動觸發）═══ -->
+    <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <h2>⚡ 尾盤異動</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="tailUpdateTime" style="font-size:9px;color:var(--text3)"></span>
+        <div id="tailRangeSel" style="display:flex;gap:2px;background:var(--surface);border-radius:8px;padding:2px">
+          <button onclick="_setTailRange(50)"  data-r="50"  style="font-size:10px;padding:3px 8px;border:none;border-radius:6px;background:var(--purple);color:#fff;cursor:pointer">前50</button>
+          <button onclick="_setTailRange(100)" data-r="100" style="font-size:10px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">前100</button>
+          <button onclick="_setTailRange(300)" data-r="300" style="font-size:10px;padding:3px 8px;border:none;border-radius:6px;background:transparent;color:var(--text3);cursor:pointer">前300</button>
+        </div>
+        <button onclick="runTailScan()" id="tailScanBtn"
+          style="font-size:11px;padding:4px 12px;border-radius:8px;background:rgba(124,108,255,.15);border:1px solid rgba(124,108,255,.3);color:var(--purple);cursor:pointer">
+          掃描
+        </button>
+      </div>
+    </div>
+    <div id="tailMoversCard" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px">
+      <div id="tailContent" style="color:var(--text3);font-size:12px;text-align:center;padding:16px 0">
+        選範圍後點「掃描」，抓當日尾盤拉升／殺跌股（市值前N＋自選股）。預設前50最快省資源。
+      </div>
     </div>
 
     <!-- ═══ 題材熱度分析 ═══ -->
@@ -3956,6 +3978,8 @@ const TREND_SIGNALS = {
   foreign:  { label:'🏦 法人買超', cls:'foreign',  desc:'近5日三大法人累積淨買超' },
   volume:   { label:'📊 量能放大', cls:'volume',   desc:'今日成交量高於20日均量1.5倍以上' },
   momentum: { label:'📈 動能持續', cls:'momentum', desc:'近5日漲幅持續，收盤連續走高' },
+  tailUp:   { label:'🔺 尾盤拉升', cls:'breakout', desc:'收盤前15分鐘（含尾盤集合競價）資金明顯承接，收盤走強' },
+  tailDown: { label:'🔻 尾盤殺跌', cls:'momentum', desc:'收盤前15分鐘（含尾盤集合競價）資金明顯出脫，收盤走弱' },
 };
 
 let _trendCache = null;
@@ -4941,6 +4965,69 @@ function _loadThemeCache(){
   }catch(e){}
 }
 
+// ═══ 尾盤異動掃描（探索頁，手動觸發，範圍可調）═══
+let _tailRange = 50;  // 預設前50，最快省資源
+function _setTailRange(n){
+  _tailRange = n;
+  document.querySelectorAll('#tailRangeSel button').forEach(b=>{
+    const on = parseInt(b.dataset.r)===n;
+    b.style.background = on ? 'var(--purple)' : 'transparent';
+    b.style.color = on ? '#fff' : 'var(--text3)';
+  });
+}
+async function runTailScan(force){
+  const btn = document.getElementById('tailScanBtn');
+  const box = document.getElementById('tailContent');
+  const timeEl = document.getElementById('tailUpdateTime');
+  if(!box) return;
+  if(force===undefined) force = true;  // 按鈕預設觸發重抓
+  const est = _tailRange<=50?'約20-30秒':_tailRange<=100?'約30-45秒':'約60-90秒';
+  if(btn){ btn.disabled=true; btn.textContent = force?'掃描中…':'讀取中…'; }
+  box.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text3);font-size:12px">'+(force?('🔄 抓取前'+_tailRange+'大＋自選股的分鐘K計算尾盤動能中（'+est+'）…'):'讀取中…')+'</div>';
+  try{
+    if(force){
+      const t = await fetchWithTimeout(`${API}/tail-scan?secret=842600&limit=${_tailRange}`, 120000);
+      if(!t.ok) throw new Error('HTTP '+t.status);
+    }
+    const r = await fetchWithTimeout(`${API}/tail-scan-result`, 15000);
+    const d = await r.json();
+    _renderTailMovers(d);
+    if(timeEl) timeEl.textContent = d.dataDate ? ('資料日 '+d.dataDate) : '';
+  }catch(e){
+    box.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text3);font-size:12px">⚠️ '+(e.message||e)+'</div>';
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='掃描'; }
+  }
+}
+function _nameOf(id){
+  const src = (typeof _jfStockSource==='function') ? _jfStockSource() : (typeof NAME_MAP!=='undefined'?NAME_MAP:{});
+  return src[id] || id;
+}
+function _renderTailMovers(d){
+  const box = document.getElementById('tailContent');
+  if(!box) return;
+  if(!d || !d.ok || (!d.up?.length && !d.down?.length)){
+    box.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text3);font-size:12px">'+(d?.note||'尚無尾盤異動資料，點「掃描」執行')+'</div>';
+    return;
+  }
+  const rowsOf = (arr, isUp)=> (arr.map(s=>{
+    const col = isUp ? 'var(--red)' : 'var(--green)';
+    const nm = _nameOf(s.id).replace(/'/g,'');
+    return '<div onclick="selectStock(null,\''+nm+'\',\''+s.id+'.TW\');switchPage(\'stock\')" '
+      + 'style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">'
+      + '<span style="font-size:12px;color:var(--text)"><span style="color:var(--text3);font-size:10px">'+s.id+'</span> '+nm+'</span>'
+      + '<span style="font-size:12px;font-weight:800;color:'+col+'">'+(s.tailRet>0?'+':'')+s.tailRet+'%</span></div>';
+  }).join('')) || '<div style="font-size:11px;color:var(--text3);padding:6px 0">無</div>';
+
+  box.innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    + '<div><div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:4px">🔺 尾盤拉升 '+(d.up?.length||0)+'</div>'+rowsOf(d.up||[],true)+'</div>'
+    + '<div><div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:4px">🔻 尾盤殺跌 '+(d.down?.length||0)+'</div>'+rowsOf(d.down||[],false)+'</div>'
+    + '</div>'
+    + '<div style="font-size:9px;color:var(--text3);line-height:1.6;margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">'
+    + '掃描範圍：市值前'+(d.topN||'—')+'＋自選股（共 '+(d.universe||'—')+' 檔，命中 '+(d.hit||0)+'）。尾盤＝收盤前15分鐘（含尾盤集合競價）相對當日振幅的異動，⚠️ 訊號參考非投資建議。</div>';
+}
+
 // ═══ 散戶擁擠度（融資/券資比/量能合成，俗稱韭菜指數）═══
 // 誠實定位：合成參考分，非官方指數、非買賣訊號。分數越高＝散戶越擁擠/情緒越熱。
 let _rsLoaded = false;
@@ -5199,6 +5286,8 @@ function switchPage(n){
   setTimeout(()=>loadIntlNews(false), 2000);
     // 散戶情緒指數（每日更新，快取於後端）：延遲載入
     setTimeout(()=>loadRetailSentiment(false), 2500);
+    // 尾盤異動：只讀既有結果（不自動重抓，避免耗時/配額），要更新按「掃描」
+    setTimeout(()=>{ if(typeof runTailScan==='function') runTailScan(false); }, 2800);
   }
 }
 
@@ -6280,8 +6369,37 @@ function renderStockHeader(name, ticker, price, changePct, isUp, dataDate){
   if(trendBar) trendBar.innerHTML = '';
 }
 
+// ── 尾盤動能（收盤前15分鐘，含13:25尾盤集合競價）──
+// 誠實原則：只用當日分鐘K計算，且需資料已含尾盤時段才判定；否則回 null 不顯示。
+// 衡量「尾盤區間報酬」相對「當日振幅」的偏離 —— 是尾盤的相對強弱，非絕對漲跌。
+function _calcTailMomentum(intra){
+  if(!intra || !Array.isArray(intra.pts) || !Array.isArray(intra.times)) return null;
+  const pts = intra.pts, times = intra.times;
+  const n = pts.length;
+  if(n < 20) return null;
+  // 需為「當日」資料：最後一筆時間需達尾盤（≥13:15）才判定，否則盤中未到尾盤不顯示
+  const lastT = times[n-1] || '';
+  const toMin = t => { const [h,m]=(t||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
+  if(toMin(lastT) < 13*60+15) return null;          // 尚未進入尾盤時段
+  // 尾盤起點：時間 ≥ 13:15 的第一筆
+  let startIdx = -1;
+  for(let i=0;i<n;i++){ if(toMin(times[i]) >= 13*60+15){ startIdx=i; break; } }
+  if(startIdx < 0 || startIdx >= n-1) return null;
+  const tailStart = pts[startIdx], close = pts[n-1];
+  if(!(tailStart>0) || !(close>0)) return null;
+  const tailRet = (close - tailStart) / tailStart * 100;   // 尾盤區間報酬%
+  // 當日振幅當作基準（過濾整天平淡時的雜訊）
+  const dayPts = pts.filter(v=>v>0);
+  const hi = Math.max(...dayPts), lo = Math.min(...dayPts);
+  const dayRange = lo>0 ? (hi-lo)/lo*100 : 0;
+  // 判定門檻：尾盤區間報酬絕對值 ≥ 0.6%，且達當日振幅的一定比例（避免趨勢延續誤判為尾盤異動）
+  const strong = Math.abs(tailRet) >= 0.6 && (dayRange < 0.5 || Math.abs(tailRet) >= dayRange*0.35);
+  if(!strong) return null;
+  return { dir: tailRet>0 ? 'up' : 'down', tailRet:+tailRet.toFixed(2), tailStart:+tailStart.toFixed(1), close:+close.toFixed(1) };
+}
+
 // 個股趨勢標籤列（selectStock 時呼叫）
-function updateStockTrendBar(stockId, histData, instData){
+function updateStockTrendBar(stockId, histData, instData, intra){
   const bar = document.getElementById('stockTrendBar');
   if(!bar) return;
   bar.innerHTML = '';
@@ -6293,6 +6411,13 @@ function updateStockTrendBar(stockId, histData, instData){
   if(n < 6) return;
 
   const tags = [];
+
+  // 尾盤動能（收盤前15分鐘，含尾盤集合競價）—— 當日最即時的資金訊號，放最前
+  const tail = _calcTailMomentum(intra);
+  if(tail){
+    tags.push({ sig: tail.dir==='up' ? 'tailUp' : 'tailDown',
+      tip:`尾盤（13:15→收盤）${tail.tailRet>0?'+':''}${tail.tailRet}%：${tail.tailStart} → ${tail.close}` });
+  }
 
   // A. 均線多頭排列
   const ma = (arr, p) => arr.length>=p ? arr.slice(-p).reduce((a,b)=>a+b,0)/p : null;
@@ -12977,7 +13102,7 @@ async function selectStock(el, name, ticker){
     }
     updateInstCard(instData, name);
     updateAI(name, {...quoteData, closes: histData?.close||[], dates: histData?.dates||[], inst: instData});
-    updateStockTrendBar(stockId, histData, instData);
+    updateStockTrendBar(stockId, histData, instData, intra);
     showToast('✅ '+name+' 資料：'+quoteData.date);
     // 背景執行：籌碼 + 新聞（不阻塞主流程）
     // 確保法人籌碼趨勢圖有20日資料
