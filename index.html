@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607282000';
+  const APP_VER = '202607282200';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -5012,7 +5012,7 @@ function _renderTailMovers(d){
   }
   const rowsOf = (arr, isUp)=> (arr.map(s=>{
     const col = isUp ? 'var(--red)' : 'var(--green)';
-    const nm = _nameOf(s.id).replace(/'/g,'');
+    const nm = (s.name || _nameOf(s.id)).replace(/'/g,'');
     return '<div onclick="selectStock(null,\''+nm+'\',\''+s.id+'.TW\');switchPage(\'stock\')" '
       + 'style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">'
       + '<span style="font-size:12px;color:var(--text)"><span style="color:var(--text3);font-size:10px">'+s.id+'</span> '+nm+'</span>'
