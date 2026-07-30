@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607282200';
+  const APP_VER = '202607291100';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1806,7 +1806,7 @@
 
     <!-- ═══ 尾盤異動（收盤前15分鐘，含尾盤集合競價；手動觸發）═══ -->
     <div class="sec" style="padding:16px 0 6px;display:flex;justify-content:space-between;align-items:center">
-      <h2>⚡ 尾盤異動</h2>
+      <h2>⚡ 尾盤異動 <span onclick="_toggleTailInfo()" style="font-size:12px;color:var(--text3);cursor:pointer;border:1px solid var(--border);border-radius:50%;padding:0 5px;font-weight:400" title="判斷依據">ⓘ</span></h2>
       <div style="display:flex;align-items:center;gap:8px">
         <span id="tailUpdateTime" style="font-size:9px;color:var(--text3)"></span>
         <div id="tailRangeSel" style="display:flex;gap:2px;background:var(--surface);border-radius:8px;padding:2px">
@@ -1824,6 +1824,24 @@
       <div id="tailContent" style="color:var(--text3);font-size:12px;text-align:center;padding:16px 0">
         選範圍後點「掃描」，抓當日尾盤拉升／殺跌股（市值前N＋自選股）。預設前50最快省資源。
       </div>
+    </div>
+    <!-- 判斷依據說明（預設收合）-->
+    <div id="tailInfoPanel" style="display:none;background:rgba(124,108,255,.05);border:1px solid rgba(124,108,255,.2);border-radius:12px;padding:13px 15px;margin-bottom:8px;font-size:11px;color:var(--text2);line-height:1.75">
+      <div style="font-weight:800;color:var(--text);margin-bottom:6px">📐 判斷依據（收盤前15分鐘相對動能）</div>
+      資料源：Yahoo 當日 1 分鐘K。對每檔股票：<br>
+      1. 以 <b>13:15</b> 後第一筆為尾盤起點，算「尾盤區間報酬」＝(收盤 − 尾盤起點) ÷ 尾盤起點。<br>
+      2. 需同時滿足：尾盤報酬絕對值 <b>≥ 0.6%</b>，<b>且</b> 佔當日振幅 <b>≥ 35%</b>（整天幾乎沒動則放寬）。<br>
+      3. 正值＝🔺拉升、負值＝🔻殺跌；不符合則不列出。<br>
+      <span style="color:var(--text3)">→ 核心是抓「尾盤相對全天的異常集中」，而非單純尾盤漲跌——全天順勢慢漲、尾盤沒特別放量的不會被標記。</span>
+
+      <div style="font-weight:800;color:var(--text);margin:10px 0 6px">⚠️ 三個盲點（務必知道）</div>
+      • <b>抓不到集合競價的瞬間偷襲</b>：13:25–13:30 集合競價只產生一個收盤價，法人掛大單那「一下」會被壓縮成最後一筆跳動，需逐筆委託才看得到（資料源沒有）。<br>
+      • <b>資料可能缺尾筆</b>：Yahoo 偶爾漏傳 13:30 收盤，會少算集合競價跳動，導致真有異動的股票<b>漏抓</b>。<br>
+      • <b>只知「發生了」，不知「誰做的」</b>：拉升可能是法人、ETF調倉、指數權重調整、當沖回補、或隔日沖做價——隔日意義完全不同，指標一律標成拉升。
+
+      <div style="font-weight:800;color:var(--text);margin:10px 0 6px">🎯 正確用法</div>
+      當<b>篩選器/雷達</b>，不當進場訊號。它幫你從幾百檔圈出「尾盤有異常資金集中」的少數幾檔以縮小研究範圍；圈出後仍需配合法人買賣超、當沖比、是否ETF成分股判斷屬於哪一種。<br>
+      <span style="color:var(--text3)">別單獨用它決策、也別統計它的「隔日勝率」照著做——單一尾盤動作隔日大概率接近隨機，那樣是過擬合。</span>
     </div>
 
     <!-- ═══ 題材熱度分析 ═══ -->
@@ -4966,6 +4984,10 @@ function _loadThemeCache(){
 }
 
 // ═══ 尾盤異動掃描（探索頁，手動觸發，範圍可調）═══
+function _toggleTailInfo(){
+  const p = document.getElementById('tailInfoPanel');
+  if(p) p.style.display = (p.style.display==='none' || !p.style.display) ? 'block' : 'none';
+}
 let _tailRange = 50;  // 預設前50，最快省資源
 function _setTailRange(n){
   _tailRange = n;
@@ -5012,12 +5034,18 @@ function _renderTailMovers(d){
   }
   const rowsOf = (arr, isUp)=> (arr.map(s=>{
     const col = isUp ? 'var(--red)' : 'var(--green)';
-    const nm = (s.name || _nameOf(s.id)).replace(/'/g,'');
+    // 名稱救援：worker 回傳的 name 若等於代號（沒查到），再試前端本地清單
+    let nm = s.name || s.id;
+    if(nm === s.id){ const local = _nameOf(s.id); if(local && local !== s.id) nm = local; }
+    nm = String(nm).replace(/'/g,'');
+    const pct = (s.tailRet>0?'+':'')+s.tailRet+'%';
     return '<div onclick="selectStock(null,\''+nm+'\',\''+s.id+'.TW\');switchPage(\'stock\')" '
-      + 'style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">'
-      + '<span style="font-size:12px;color:var(--text)"><span style="color:var(--text3);font-size:10px">'+s.id+'</span> '+nm+'</span>'
-      + '<span style="font-size:12px;font-weight:800;color:'+col+'">'+(s.tailRet>0?'+':'')+s.tailRet+'%</span></div>';
-  }).join('')) || '<div style="font-size:11px;color:var(--text3);padding:6px 0">無</div>';
+      + 'style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer">'
+      + '<span style="flex:0 0 42px;font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums">'+s.id+'</span>'
+      + '<span style="flex:1;min-width:0;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nm+'</span>'
+      + '<span style="flex:0 0 auto;font-size:12px;font-weight:800;color:'+col+';font-variant-numeric:tabular-nums;text-align:right">'+pct+'</span>'
+      + '</div>';
+  }).join('')) || '<div style="font-size:11px;color:var(--text3);padding:8px 0">無</div>';
 
   box.innerHTML =
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
@@ -5287,6 +5315,8 @@ function switchPage(n){
     // 散戶情緒指數（每日更新，快取於後端）：延遲載入
     setTimeout(()=>loadRetailSentiment(false), 2500);
     // 尾盤異動：只讀既有結果（不自動重抓，避免耗時/配額），要更新按「掃描」
+    // 尾盤異動：先預載名稱清單，再只讀既有結果（不自動重抓）
+    if(typeof _ensureFullStockList==='function') _ensureFullStockList();
     setTimeout(()=>{ if(typeof runTailScan==='function') runTailScan(false); }, 2800);
   }
 }
