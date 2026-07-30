@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607291100';
+  const APP_VER = '202607301400';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -4996,6 +4996,7 @@ function _setTailRange(n){
     b.style.background = on ? 'var(--purple)' : 'transparent';
     b.style.color = on ? '#fff' : 'var(--text3)';
   });
+  runTailScan(false);  // 讀此範圍的既有結果（不重抓）；沒有會提示按「掃描」
 }
 async function runTailScan(force){
   const btn = document.getElementById('tailScanBtn');
@@ -5011,7 +5012,7 @@ async function runTailScan(force){
       const t = await fetchWithTimeout(`${API}/tail-scan?secret=842600&limit=${_tailRange}`, 120000);
       if(!t.ok) throw new Error('HTTP '+t.status);
     }
-    const r = await fetchWithTimeout(`${API}/tail-scan-result`, 15000);
+    const r = await fetchWithTimeout(`${API}/tail-scan-result?limit=${_tailRange}`, 15000);
     const d = await r.json();
     _renderTailMovers(d);
     if(timeEl) timeEl.textContent = d.dataDate ? ('資料日 '+d.dataDate) : '';
@@ -5029,7 +5030,8 @@ function _renderTailMovers(d){
   const box = document.getElementById('tailContent');
   if(!box) return;
   if(!d || !d.ok || (!d.up?.length && !d.down?.length)){
-    box.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text3);font-size:12px">'+(d?.note||'尚無尾盤異動資料，點「掃描」執行')+'</div>';
+    const rangeTxt = d?.topN ? ('前'+d.topN) : ('前'+_tailRange);
+    box.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text3);font-size:12px">'+(d?.note||(rangeTxt+' 尚無資料'))+'（'+rangeTxt+'）<br>點「掃描」執行</div>';
     return;
   }
   const rowsOf = (arr, isUp)=> (arr.map(s=>{
