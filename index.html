@@ -88,7 +88,7 @@
 
 <script>
 (function(){
-  const APP_VER = '202607301400';
+  const APP_VER = '202607301800';
   const STORED  = localStorage.getItem('stockai_app_ver');
   if(STORED !== APP_VER){
     localStorage.setItem('stockai_app_ver', APP_VER);
@@ -1328,6 +1328,10 @@
               <div style="background:var(--card);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">最新 EPS</div><div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-eps">—</div><div style="font-size:9px;margin-top:3px" id="fund-eps-yoy">年增 —</div></div>
               <div style="background:var(--card);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">毛利率</div><div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-gpm">—</div><div style="font-size:9px;margin-top:3px" id="fund-gpm-trend">—</div></div>
               <div style="background:var(--card);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">淨利率</div><div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-npm">—</div><div style="font-size:9px;margin-top:3px" id="fund-npm-trend">—</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+              <div style="background:var(--card);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">ROE（年化）</div><div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-roe">—</div><div style="font-size:9px;margin-top:3px;color:var(--text3)">股東權益報酬率</div></div>
+              <div style="background:var(--card);border-radius:10px;padding:10px 10px 8px;border:1px solid var(--border)"><div style="font-size:9px;color:var(--text3);margin-bottom:4px;font-weight:600">負債比</div><div style="font-size:18px;font-weight:900;color:var(--text)" id="fund-debt">—</div><div style="font-size:9px;margin-top:3px;color:var(--text3)" id="fund-debt-note">總負債/總資產</div></div>
             </div>
             <div style="background:var(--card);border-radius:10px;padding:10px 12px;border:1px solid var(--border)">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:var(--text2)">月營收趨勢</div><div style="font-size:10px;color:var(--text3)" id="fund-rev-month">—</div></div>
@@ -15049,11 +15053,39 @@ function _updateFundBadge(section, badges){
   ).join('');
 }
 
+// ROE / 負債比填入（來源：盤後掃描 fullRank，worker 已算好並驗證）
+async function _fillROEDebt(stockId){
+  try{
+    const map = await _loadWLAnalysis();
+    const e = (map||{})[stockId];
+    const roeEl = document.getElementById('fund-roe');
+    const debtEl = document.getElementById('fund-debt');
+    const debtNoteEl = document.getElementById('fund-debt-note');
+    if(roeEl){
+      if(e && e.roe!=null){
+        roeEl.textContent = (e.roe>0?'':'')+e.roe+'%';
+        // ROE 越高越好：≥20紅(強)、10-20金、<10或負綠
+        roeEl.style.color = e.roe>=20?'var(--red)':e.roe>=10?'var(--gold)':e.roe>0?'var(--text)':'var(--green)';
+      } else { roeEl.textContent='—'; }
+    }
+    if(debtEl){
+      if(e && e.debtRatio!=null){
+        debtEl.textContent = e.debtRatio+'%';
+        // 負債比：>60高風險紅、40-60中性、<40穩健
+        debtEl.style.color = e.debtRatio>60?'var(--red)':e.debtRatio>=40?'var(--text)':'var(--green)';
+        if(debtNoteEl) debtNoteEl.textContent = e.debtRatio>60?'偏高，留意槓桿':'總負債/總資產';
+      } else { debtEl.textContent='—'; }
+    }
+  }catch(_){}
+}
+
 async function loadFundamentals(stockId){
   const card = document.getElementById('fundamentalCard');
   if(!card) return;
   card.style.display='block';
   fundReset();
+  // ROE / 負債比：取自盤後掃描 fullRank（worker 已算好，年化ROE＋Liabilities_per，已驗證）
+  _fillROEDebt(stockId);
 
   const today   = todayStr();
   const yr2ago  = nDaysAgo(730);   // 財報取2年
